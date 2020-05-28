@@ -1,0 +1,4 @@
+lo,hi in loops
+dxc,dxf,dyc,dyf,dzc,dzf
+makehalo(idir,halo) in initmpi
+updthalo(idir,halo,nghost,var) ! and use var(1-nghost,...)
