@@ -1,7 +1,11 @@
 module mod_initmpi
   use mpi
   use mod_types
+<<<<<<< HEAD
   use mod_common_mpi, only: ierr,halos
+=======
+  use mod_common_mpi, only: ierr
+>>>>>>> 51cb76c38f8f0634c2272d98ac2fbb8a56c5a2fb
   implicit none
   private
   public initmpi
@@ -12,7 +16,10 @@ module mod_initmpi
     character(len=1), intent(in), dimension(0:1,3) :: bc
     logical, dimension(3) :: periods
     integer, dimension(3) :: n
+<<<<<<< HEAD
     integer, dimension(3) :: coords
+=======
+>>>>>>> 51cb76c38f8f0634c2272d98ac2fbb8a56c5a2fb
     integer :: idir
     !
     periods(:) = .false.
@@ -22,6 +29,7 @@ module mod_initmpi
     call MPI_CART_COORDS(comm_cart,myid,3,coords)
     lo(:) = 1    + coord(:)*n(:)
     hi(:) = n(:) + coord(:)*n(:)
+<<<<<<< HEAD
     do idir=1,3
       call MPI_CART_SHIFT(comm_cart,idir-1,1,nb(0,idir),nb(1,idir),ierr)
       is_bound(:,idir) = .false.
@@ -29,6 +37,14 @@ module mod_initmpi
     enddo
     do idir=1,3
       call makehalo(idir,1,n,halos(idir))
+=======
+    !
+    call MPI_CART_SHIFT(comm_cart,0,1,left,right,ierr)
+    call MPI_CART_SHIFT(comm_cart,1,1,front,back,ierr)
+    !
+    do idir=1,3
+      call makehalo(idir,1,n,halo(idir))
+>>>>>>> 51cb76c38f8f0634c2272d98ac2fbb8a56c5a2fb
     enddo
     return
   end subroutine initmpi
@@ -47,6 +63,9 @@ module mod_initmpi
       call MPI_TYPE_VECTOR(          1,nghost*nn(1)*nn(2),nn(1)*nn(2)*nn(3),MPI_REAL_RP,halo,ierr)
     end select
     return
+<<<<<<< HEAD
     call MPI_TYPE_COMMIT(halo,ierr)
+=======
+>>>>>>> 51cb76c38f8f0634c2272d98ac2fbb8a56c5a2fb
   end subroutine makehalo
 end module mod_initmpi
