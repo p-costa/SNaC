@@ -1,0 +1,7 @@
+lo,hi in loops
+dxc,dxf,dyc,dyf,dzc,dzf
+makehalo(idir,halo) in initmpi
+updthalo(idir,halo,nghost,var) ! and use var(1-nghost,...)
+one single 'mom', unifying imp and explicit (more storage but fine)
+one scalar transport routine
+one output with MPI_CREATE_SUBARRAY accounting for the halo regions
