@@ -1,50 +1,33 @@
 module mod_initmpi
   use mpi
   use mod_types
-<<<<<<< HEAD
-  use mod_common_mpi, only: ierr,halos
-=======
-  use mod_common_mpi, only: ierr
->>>>>>> 51cb76c38f8f0634c2272d98ac2fbb8a56c5a2fb
+  use mod_common_mpi, only: ierr,myid,nb,is_bound,halos
   implicit none
   private
   public initmpi
   contains
-  subroutine initmpi(ng,dims,lo,hi)
+  subroutine initmpi(ng,dims,bc,lo,hi)
     implicit none
-    integer, intent(in), dimension(3) :: ng
+    integer, intent(in ), dimension(3) :: ng,dims
     character(len=1), intent(in), dimension(0:1,3) :: bc
+    integer, intent(out), dimension(3) :: lo,hi
     logical, dimension(3) :: periods
-    integer, dimension(3) :: n
-<<<<<<< HEAD
-    integer, dimension(3) :: coords
-=======
->>>>>>> 51cb76c38f8f0634c2272d98ac2fbb8a56c5a2fb
+    integer, dimension(3) :: n,coords
     integer :: idir
+    integer :: comm_cart
     !
     periods(:) = .false.
-    forall (bc(0,:)//bc(1,:).eq.'PP') periods(:) = .true.
+    where (bc(0,:)//bc(1,:).eq.'PP') periods(:) = .true.
+    call MPI_CART_CREATE(MPI_COMM_WORLD,3,dims,periods,.true.,comm_cart,ierr)
+    call MPI_CART_COORDS(comm_cart,myid,3,coords,ierr)
     n(:) = ng(:)/dims(:)
-    call MPI_CART_CREATE(MPI_COMM_WORLD,2,dims,periods,.true.,comm_cart,ierr)
-    call MPI_CART_COORDS(comm_cart,myid,3,coords)
-    lo(:) = 1    + coord(:)*n(:)
-    hi(:) = n(:) + coord(:)*n(:)
-<<<<<<< HEAD
+    lo(:) = 1    + coords(:)*n(:)
+    hi(:) = n(:) + coords(:)*n(:)
     do idir=1,3
       call MPI_CART_SHIFT(comm_cart,idir-1,1,nb(0,idir),nb(1,idir),ierr)
       is_bound(:,idir) = .false.
       where(nb(0:1,idir).eq.MPI_PROC_NULL) is_bound(0:1,idir) = .true.
-    enddo
-    do idir=1,3
       call makehalo(idir,1,n,halos(idir))
-=======
-    !
-    call MPI_CART_SHIFT(comm_cart,0,1,left,right,ierr)
-    call MPI_CART_SHIFT(comm_cart,1,1,front,back,ierr)
-    !
-    do idir=1,3
-      call makehalo(idir,1,n,halo(idir))
->>>>>>> 51cb76c38f8f0634c2272d98ac2fbb8a56c5a2fb
     enddo
     return
   end subroutine initmpi
@@ -53,7 +36,7 @@ module mod_initmpi
     integer, intent(in ), dimension(3) :: n
     integer, intent(out) :: halo
     integer, dimension(3) :: nn
-    nn(:) = nn(:) + 2*nghost
+    nn(:) = n(:) + 2*nghost
     select case(idir)
     case(1)
       call MPI_TYPE_VECTOR(nn(2)*nn(3),nghost            ,nn(1)            ,MPI_REAL_RP,halo,ierr)
@@ -63,9 +46,6 @@ module mod_initmpi
       call MPI_TYPE_VECTOR(          1,nghost*nn(1)*nn(2),nn(1)*nn(2)*nn(3),MPI_REAL_RP,halo,ierr)
     end select
     return
-<<<<<<< HEAD
     call MPI_TYPE_COMMIT(halo,ierr)
-=======
->>>>>>> 51cb76c38f8f0634c2272d98ac2fbb8a56c5a2fb
   end subroutine makehalo
 end module mod_initmpi
