@@ -20,7 +20,8 @@ real(rp), parameter, dimension(3)   :: rkcoeff12 = rkcoeff(1,:)+rkcoeff(2,:)
 !
 ! variables to be determined from the input file 'dns.in'
 !
-real(rp) :: gr
+integer , dimension(3) :: gt
+real(rp), dimension(3) :: gr
 real(rp) :: cfl,dtmin
 real(rp) :: uref,lref,rey,visc
 !
@@ -62,7 +63,8 @@ contains
       if( ierr.eq.0 ) then
         read(iunit,*) ng(1),ng(2),ng(3)
         read(iunit,*) l(1),l(2),l(3)
-        read(iunit,*) gr
+        read(iunit,*) gt(1),gt(2),gt(3)
+        read(iunit,*) gr(1),gr(2),gr(3)
         read(iunit,*) cfl,dtmin
         read(iunit,*) uref,lref,rey
         read(iunit,*) inivel

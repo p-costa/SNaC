@@ -1,9 +1,10 @@
 64 64 64                 ! itot, jtot, ktot
 3. 1.5 1.                ! lx, ly, lz
-0.                       ! gr
+0 0 0                    ! gt(1) gt(2) gt(3)
+0. 0. 0.                 ! gr(1) gr(2) gr(3)
 .95 1.0e5                ! cfl, dtmin
 1. 1. 1000.              ! uref, lref, rey
-log                      ! inivel
+zer                      ! inivel
 F                        ! is_wallturb
 100000 100. 0.1          ! nstep,time_max,tw_max
 T F F                    ! stop_type(1:3)
