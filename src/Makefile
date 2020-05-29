@@ -10,7 +10,7 @@ PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
 TARGET = cans
 #
-OBJ = common_mpi.o fillps.o initmpi.o param.o types.o
+OBJ = common_mpi.o correc.o fillps.o initmpi.o param.o types.o
 #
 LIBS =
 #
@@ -34,6 +34,8 @@ clean:
 	rm -rf *.o *.mod *dSYM $(TARGET)
 # dependencies
 common_mpi.o: common_mpi.f90
+	$(FC) $(FFLAGS) -cpp -c  $<
+correc.o: correc.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 fillps.o: fillps.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<

@@ -22,22 +22,19 @@ module mod_fillps
     real(rp), intent(in) :: dt
     real(rp), intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: up,vp,wp
     real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
-    integer :: i,j,k,im,jm,km
+    integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP SHARED(hi,lo,p,up,vp,wp,dt,dxf,dyf,dzf) &
-    !$OMP PRIVATE(i,j,k,im,jm,km)
+    !$OMP PRIVATE(i,j,k)
     do k=lo(3),hi(3)
-      km = k-1
       do j=lo(2),hi(2)
-        jm = j-1
         do i=lo(1),hi(1)
-          im = i-1
           p(i,j,k) = ( &
-                      (wp(i,j,k)-wp(i,j,km))/dzf(k)/dt + &
-                      (vp(i,j,k)-vp(i,jm,k))/dyf(j)/dt + &
-                      (up(i,j,k)-up(im,j,k))/dxf(i)/dt &
-                     )
+                      (wp(i,j,k)-wp(i,j,k-1))/dzf(k) + &
+                      (vp(i,j,k)-vp(i,j-1,k))/dyf(j) + &
+                      (up(i,j,k)-up(i-1,j,k))/dxf(i) &
+                     )/dt
         enddo
       enddo
     enddo
