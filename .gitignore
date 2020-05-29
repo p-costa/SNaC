@@ -1,0 +1,13 @@
+*.o
+*.mod
+*.out
+*.bin
+*.MOD
+*.log
+*dSYM
+*.xdmf
+*.xmf
+cans
+run/
+src/data/*.*
+run/data/*.*
