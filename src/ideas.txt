@@ -1,5 +1,3 @@
-lo,hi in loops
-dxc,dxf,dyc,dyf,dzc,dzf
 updthalo(idir,halo,nghost,var) ! and use var(1-nghost,...)
 one single 'mom', unifying imp and explicit (more storage but fine)
 one scalar transport routine
