@@ -10,7 +10,7 @@ PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
 TARGET = cans
 #
-OBJ = chkdt.o common_mpi.o correc.o fillps.o initmpi.o param.o types.o
+OBJ = chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o param.o types.o
 #
 LIBS =
 #
@@ -33,7 +33,9 @@ run: $(TARGET)
 clean:
 	rm -rf *.o *.mod *dSYM $(TARGET)
 # dependencies
-chkdt.o: chkdt.f90 common_mpi.o types.o
+chkdiv.o: chkdiv.f90 types.o
+	$(FC) $(FFLAGS) -cpp -c  $<
+chkdt.o: chkdt.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 common_mpi.o: common_mpi.f90
 	$(FC) $(FFLAGS) -cpp -c  $<
@@ -43,7 +45,7 @@ fillps.o: fillps.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 initmpi.o: initmpi.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
-param.o: param.f90
+param.o: param.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 types.o: types.f90
 	$(FC) $(FFLAGS) -cpp -c  $<
