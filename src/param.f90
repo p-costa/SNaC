@@ -1,5 +1,5 @@
 module mod_param
-use mod_types, only:rp
+use mod_types
 implicit none
 public
 !
