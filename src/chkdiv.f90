@@ -21,8 +21,8 @@ module mod_chkdiv
     integer  :: i,j,k
     integer  :: ierr
     !
-    divtot = 0.
-    divmax = 0.
+    divtot = 0._rp
+    divmax = 0._rp
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP SHARED(lo,hi,u,v,w,dxf,dyf,dzf,l) &
     !$OMP PRIVATE(i,j,k,div) &
