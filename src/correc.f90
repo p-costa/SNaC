@@ -19,7 +19,7 @@ module mod_correc
     integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP SHARED(lo,hi,dxc,dyc,dzc,u,v,w,up,vp,wp,p) &
+    !$OMP SHARED(lo,hi,dt,dxc,dyc,dzc,u,v,w,up,vp,wp,p) &
     !$OMP PRIVATE(i,j,k)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
