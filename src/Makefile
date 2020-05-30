@@ -10,7 +10,7 @@ PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
 TARGET = cans
 #
-OBJ = initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o param.o types.o
+OBJ = bound.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o param.o types.o
 #
 LIBS =
 #
@@ -33,6 +33,8 @@ run: $(TARGET)
 clean:
 	rm -rf *.o *.mod *dSYM $(TARGET)
 # dependencies
+bound.o: bound.f90 types.o
+	$(FC) $(FFLAGS) -cpp -c  $<
 chkdiv.o: chkdiv.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 chkdt.o: chkdt.f90 types.o
