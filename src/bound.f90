@@ -244,8 +244,8 @@ module mod_bound
           elseif(ibound.eq.1) then
             !$OMP WORKSHARE
             !p(n,:,:) = 1./3.*(-2.*factor+4.*p(n-1,:,:)-p(n-2,:,:))
-            p(hi(idir),:,:) = factor + p(hi(idir)-1,:,:)
-            p(hi(idir)+1,:,:) = p(hi(idir),:,:) ! not needed
+            p(hi(idir)  ,:,:) = factor + p(hi(idir)-1,:,:)
+            p(hi(idir)+1,:,:) =          p(hi(idir)  ,:,:) ! not needed
             !$OMP END WORKSHARE
           endif
         case(2)
@@ -257,8 +257,8 @@ module mod_bound
           elseif(ibound.eq.1) then
             !$OMP WORKSHARE
             !p(:,n,:) = 1./3.*(-2.*factor+4.*p(:,n-1,:)-p(:,n-2,:))
-            p(:,hi(idir),:) = factor + p(:,hi(idir)-1,:)
-            p(:,hi(idir)+1,:) = p(:,hi(idir),:) ! not needed
+            p(:,hi(idir)  ,:) = factor + p(:,hi(idir)-1,:)
+            p(:,hi(idir)+1,:) =          p(:,hi(idir)  ,:) ! not needed
             !$OMP END WORKSHARE
           endif
         case(3)
@@ -270,8 +270,8 @@ module mod_bound
           elseif(ibound.eq.1) then
             !$OMP WORKSHARE
             !p(:,:,n) = 1./3.*(-2.*factor+4.*p(:,:,n-1)-p(:,:,n-2))
-            p(:,:,hi(idir)) = factor + p(:,:,hi(idir)-1)
-            p(:,:,hi(idir)+1) = p(:,:,hi(idir)) ! not needed
+            p(:,:,hi(idir)  ) = factor + p(:,:,hi(idir)-1)
+            p(:,:,hi(idir)+1) =          p(:,:,hi(idir)  ) ! not needed
             !$OMP END WORKSHARE
           endif
         end select
