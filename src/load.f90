@@ -101,7 +101,7 @@ module mod_load
       disp = disp+product(ng)*lenr
       !
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
-      fldinfo = (/time,istep/)
+      fldinfo = [time,istep]
       nreals_myid = 0
       if(myid.eq.0) nreals_myid = 2
       time  = fldinfo(1)
