@@ -1,5 +1,5 @@
 # fortran compiler
-FC   = mpif90
+FC   = mpifort
 # flags
 BIG :=
 DBG := -g -fbacktrace -Wall -O0 -Wextra -pedantic -fcheck=all
@@ -10,7 +10,7 @@ PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
 TARGET = cans
 #
-OBJ = bound.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o param.o types.o
+OBJ = bound.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o load.o param.o types.o
 #
 LIBS =
 #
@@ -48,6 +48,8 @@ fillps.o: fillps.f90 types.o
 initgrid.o: initgrid.f90 param.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 initmpi.o: initmpi.f90 common_mpi.o types.o
+	$(FC) $(FFLAGS) -cpp -c  $<
+load.o: load.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 param.o: param.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<

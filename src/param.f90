@@ -88,10 +88,10 @@ contains
         read(iunit,*) dims(1),dims(2),dims(3)
         read(iunit,*) nthreadsmax
       else
-        if(myid.eq.0) print*, 'Error reading the input file' 
-        if(myid.eq.0) print*, 'Aborting...'
+        if(myid.eq.0) write(error_unit,*) '*** Error reading the input file *** ' 
+        if(myid.eq.0) write(error_unit,*) 'Aborting...'
         call MPI_FINALIZE(ierr)
-        call exit
+        error stop
     endif
     close(iunit)
     dl(:)  = l(:)/(1._rp*ng(:))

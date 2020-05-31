@@ -1,10 +1,12 @@
 module mod_types
-  use mpi
+  use, intrinsic :: iso_fortran_env
+  use, intrinsic :: iso_fortran_env, sp => real32
+  use, intrinsic :: iso_fortran_env, dp => real64
 #ifdef SINGLE_PRECISION
-  integer, parameter, public :: rp = KIND(0.0)
-  integer, parameter, public :: MPI_REAL_RP = MPI_REAL
+  use, intrinsic :: iso_fortran_env, rp => real32
+  use :: mpi, MPI_REAL_RP => MPI_REAL
 #else
-  integer, parameter, public :: rp = KIND(0.0D0)
-  integer, parameter, public :: MPI_REAL_RP = MPI_DOUBLE_PRECISION
+  use, intrinsic :: iso_fortran_env, rp => real64
+  use :: mpi, MPI_REAL_RP => MPI_DOUBLE_PRECISION
 #endif
 end module mod_types
