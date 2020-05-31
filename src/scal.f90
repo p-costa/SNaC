@@ -46,8 +46,8 @@ module mod_scal
     real(rp), intent(in ), dimension(lo(1)-1:) :: dxf
     real(rp), intent(in ), dimension(lo(2)-1:) :: dyf
     real(rp), intent(in ), dimension(lo(3)-1:) :: dzf
-    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in) :: u,v,w,s
-    real(rp), dimension(:,:,:), intent(inout) :: dsdt
+    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in   ) :: u,v,w,s
+    real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(inout) :: dsdt
     real(rp) :: usip,usim,vsjp,vsjm,wskp,wskm
     integer  :: i,j,k
     !

@@ -10,7 +10,7 @@ PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
 TARGET = cans
 #
-OBJ = bound.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o load.o param.o scal.o types.o
+OBJ = bound.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o load.o mom.o param.o scal.o types.o
 #
 LIBS =
 #
@@ -50,6 +50,8 @@ initgrid.o: initgrid.f90 param.o types.o
 initmpi.o: initmpi.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 load.o: load.f90 types.o
+	$(FC) $(FFLAGS) -cpp -c  $<
+mom.o: mom.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 param.o: param.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
