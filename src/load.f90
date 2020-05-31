@@ -52,7 +52,7 @@ module mod_load
       istep = fldinfo(2)
       call MPI_FILE_READ(fh,fldinfo,nreals_myid,MPI_REAL_RP,MPI_STATUS_IGNORE,ierr)
       call MPI_FILE_CLOSE(fh,ierr)
-      call MPI_BROADCAST(fldinfo,2,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+      call MPI_BCAST(fldinfo,2,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
     case('w')
       !
       ! write
