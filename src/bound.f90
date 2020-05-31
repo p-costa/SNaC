@@ -297,7 +297,7 @@ module mod_bound
       i = hi(idir)
       !$OMP PARALLEL DO DEFAULT(none) &
       !$OMP PRIVATE(j,k) &
-      !$OMP SHARED(n,i,u,v,w,dx,dyi,dzfi)
+      !$OMP SHARED(lo,hi,i,u,v,w,dxf,dyf,dzf)
       do k=lo(3),hi(3)
         do j=hi(2),hi(2)
           u(i  ,j,k) = u(i-1,j,k) - dxf(i)*((v(i,j,k)-v(i,j-1,k))*dyf(j)+(w(i,j,k)-w(i,j,k-1))*dzf(k))
@@ -309,7 +309,7 @@ module mod_bound
       j = hi(idir)
       !$OMP PARALLEL DO DEFAULT(none) &
       !$OMP PRIVATE(i,k) &
-      !$OMP SHARED(n,j,u,v,w,dy,dxi,dzfi)
+      !$OMP SHARED(lo,hi,j,u,v,w,dyf,dxf,dzf)
       do k=lo(3),hi(3)
         do i=lo(1),hi(1)
           v(i,j  ,k) = v(i,j-1,k) - dyf(j)*((u(i,j,k)-u(i-1,j,k))*dxf(i)+(w(i,j,k)-w(i,j,k-1))*dzf(k))
@@ -321,7 +321,7 @@ module mod_bound
       k = hi(idir)
       !$OMP PARALLEL DO DEFAULT(none) &
       !$OMP PRIVATE(i,j) &
-      !$OMP SHARED(n,k,u,v,w,dzf,dxi,dyi)
+      !$OMP SHARED(lo,hi,k,u,v,w,dzf,dxf,dyf)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           w(i,j,k  ) = w(i,j,k-1) - dzf(k)*((u(i,j,k)-u(i-1,j,k))/dxf(i)+(v(i,j,k)-v(i,j-1,k))/dyf(j))
@@ -333,7 +333,7 @@ module mod_bound
       i = lo(idir)-1
       !$OMP PARALLEL DO DEFAULT(none) &
       !$OMP PRIVATE(j,k) &
-      !$OMP SHARED(n,i,u,v,w,dx,dyi,dzfi)
+      !$OMP SHARED(lo,hi,i,u,v,w,dxf,dyf,dzf)
       do k=lo(3),hi(3)
         do j=lo(2),hi(2)
           u(i,j,k) = u(i+1,j,k) + dxf(i)*((v(i+1,j,k)-v(i+1,j-1,k))/dyf(j)+(w(i+1,j,k)-w(i+1,j,k-1))/dzf(k))
@@ -344,7 +344,7 @@ module mod_bound
       j = lo(idir)-1
       !$OMP PARALLEL DO DEFAULT(none) &
       !$OMP PRIVATE(i,k) &
-      !$OMP SHARED(n,j,u,v,w,dy,dxi,dzfi)
+      !$OMP SHARED(lo,hi,j,u,v,w,dyf,dxf,dzf)
       do k=lo(3),hi(3)
         do i=lo(1),hi(1)
           v(i,j,k) = v(i,j+1,k) + dyf(j)*((u(i,j+1,k)-u(i-1,j+1,k))/dxf(i)+(w(i,j+1,k)-w(i,j+1,k-1))/dzf(k))
@@ -355,7 +355,7 @@ module mod_bound
       k = lo(idir)-1
       !$OMP PARALLEL DO DEFAULT(none) &
       !$OMP PRIVATE(i,j) &
-      !$OMP SHARED(n,k,u,v,w,dzf,dxi,dyi)
+      !$OMP SHARED(lo,hi,k,u,v,w,dzf,dxf,dyf)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           w(i,j,k) = w(i,j,k+1) + dzf(k)*((u(i,j,k+1)-u(i-1,j,k+1))/dxf(i)+(v(i,j,k+1)-v(i,j-1,k+1))/dyf(j))
