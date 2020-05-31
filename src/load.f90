@@ -18,25 +18,9 @@ module mod_load
     real(rp), intent(inout), dimension(lo(1)-nghost:,lo(2)-nghost:,lo(3)-nghost:) :: u,v,w,p
     real(rp), intent(inout) :: time,istep
     real(rp), dimension(2) :: fldinfo
-    integer , dimension(3) :: n
-    integer :: fh,ierr,lenr,nreals_myid
+    integer :: fh,ierr,nreals_myid
     integer(kind=MPI_OFFSET_KIND) :: filesize,disp,good
-    integer, dimension(3) :: sizes,subsizes,starts
-    integer :: type_glob,type_loc
     !
-    n(:) = hi(:)-lo(:)+1
-    lenr = sizeof(time)
-    !
-    sizes(:)    = ng(:)
-    subsizes(:) = n(:)
-    starts(:)   = lo(:) - 1 ! starts from 0
-    call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_glob,ierr)
-    call MPI_TYPE_COMMIT(type_glob,ierr)
-    sizes(:)    = n(:) + nghost
-    subsizes(:) = n(:)
-    starts(:)   = 0 + nghost
-    call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_glob,ierr)
-    call MPI_TYPE_COMMIT(type_loc,ierr)
     select case(io)
     case('r')
       call MPI_FILE_OPEN(MPI_COMM_WORLD, filename, &
@@ -45,7 +29,7 @@ module mod_load
       ! check file size first
       !
       call MPI_FILE_GET_SIZE(fh,filesize,ierr)
-      good = (product(ng)*4+2)*lenr
+      good = (product(ng)*4+2)*sizeof(1._rp)
       if(filesize.ne.good) then
         if(myid.eq.0) write(error_unit,*) ''
         if(myid.eq.0) write(error_unit,*) '*** Simulation aborted due a checkpoint file with incorrect size ***'
@@ -57,19 +41,10 @@ module mod_load
       ! read
       !
       disp = 0_MPI_OFFSET_KIND
-      call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
-      call MPI_FILE_READ_ALL(fh,u,1,type_loc,MPI_STATUS_IGNORE,ierr)
-      disp = disp+product(ng)*lenr
-      call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
-      call MPI_FILE_READ_ALL(fh,v,1,type_loc,MPI_STATUS_IGNORE,ierr)
-      disp = disp+product(ng)*lenr
-      call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
-      call MPI_FILE_READ_ALL(fh,w,1,type_loc,MPI_STATUS_IGNORE,ierr)
-      disp = disp+product(ng)*lenr
-      call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
-      call MPI_FILE_READ_ALL(fh,p,1,type_loc,MPI_STATUS_IGNORE,ierr)
-      disp = disp+product(ng)*lenr
-      !
+      call io_field('r',fh,ng,lo,hi,nghost,disp,u)
+      call io_field('r',fh,ng,lo,hi,nghost,disp,v)
+      call io_field('r',fh,ng,lo,hi,nghost,disp,w)
+      call io_field('r',fh,ng,lo,hi,nghost,disp,p)
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       nreals_myid = 0
       if(myid.eq.0) nreals_myid = 2
@@ -87,19 +62,10 @@ module mod_load
       filesize = 0_MPI_OFFSET_KIND
       call MPI_FILE_SET_SIZE(fh,filesize,ierr)
       disp = 0_MPI_OFFSET_KIND
-      call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
-      call MPI_FILE_WRITE_ALL(fh,u,1,type_loc,MPI_STATUS_IGNORE,ierr)
-      disp = disp+product(ng)*lenr
-      call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
-      call MPI_FILE_WRITE_ALL(fh,v,1,type_loc,MPI_STATUS_IGNORE,ierr)
-      disp = disp+product(ng)*lenr
-      call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
-      call MPI_FILE_WRITE_ALL(fh,w,1,type_loc,MPI_STATUS_IGNORE,ierr)
-      disp = disp+product(ng)*lenr
-      call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
-      call MPI_FILE_WRITE_ALL(fh,p,1,type_loc,MPI_STATUS_IGNORE,ierr)
-      disp = disp+product(ng)*lenr
-      !
+      call io_field('w',fh,ng,lo,hi,nghost,disp,u)
+      call io_field('w',fh,ng,lo,hi,nghost,disp,v)
+      call io_field('w',fh,ng,lo,hi,nghost,disp,w)
+      call io_field('w',fh,ng,lo,hi,nghost,disp,p)
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       fldinfo = [time,istep]
       nreals_myid = 0
@@ -111,4 +77,38 @@ module mod_load
     end select
     return
   end subroutine load
+  subroutine io_field(io,fh,ng,lo,hi,nghost,disp,var)
+    implicit none
+    character(len=1), intent(in)                 :: io
+    integer , intent(in)                         :: fh
+    integer , intent(in), dimension(3)           :: ng,lo,hi
+    integer , intent(in)                         :: nghost
+    integer(kind=MPI_OFFSET_KIND), intent(inout) :: disp
+    real(rp), intent(out), dimension(lo(1)-nghost:,lo(2)-nghost:,lo(3)-nghost:) :: var
+    integer :: ierr
+    integer , dimension(3) :: n
+    integer , dimension(3) :: sizes,subsizes,starts
+    integer :: type_glob,type_loc
+    n(:)        = hi(:)-lo(:)+1
+    sizes(:)    = ng(:)
+    subsizes(:) = n(:)
+    starts(:)   = lo(:) - 1 ! starts from 0
+    call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_glob,ierr)
+    call MPI_TYPE_COMMIT(type_glob,ierr)
+    sizes(:)    = n(:) + nghost
+    subsizes(:) = n(:)
+    starts(:)   = 0 + nghost
+    call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_glob,ierr)
+    call MPI_TYPE_COMMIT(type_loc,ierr)
+      select case(io)
+      case('r')
+        call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
+        call MPI_FILE_READ_ALL(fh,var,1,type_loc,MPI_STATUS_IGNORE,ierr)
+      case('w')
+        call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
+        call MPI_FILE_WRITE_ALL(fh,var,1,type_loc,MPI_STATUS_IGNORE,ierr)
+      end select
+        disp = disp+product(ng)*sizeof(1._rp)
+      return
+  end subroutine io_field
 end module mod_load
