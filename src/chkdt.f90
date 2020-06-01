@@ -51,7 +51,7 @@ module mod_chkdt
     call mpi_allreduce(MPI_IN_PLACE,dti,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
     if(dti.eq.0._rp) dti = 1._rp
     dlmin     = min(minval(dxf),minval(dyf),minval(dzf))
-#ifdef IMPDIFF
+#ifdef _IMPDIFF
     dtmax = sqrt(3.)/dti
 #else
     dtmax = min(1.65_rp/12._rp/visc*dlmin**2,sqrt(3._rp)/dti)

@@ -15,17 +15,17 @@ module mod_fillps
     !          dz                    dy                    dx
     !
     implicit none
-    integer , intent(in), dimension(3) :: lo,hi
-    real(rp), intent(in), dimension(lo(1)-1:) :: dxf
-    real(rp), intent(in), dimension(lo(2)-1:) :: dyf
-    real(rp), intent(in), dimension(lo(3)-1:) :: dzf
-    real(rp), intent(in) :: dt
+    integer , intent(in ), dimension(3) :: lo,hi
+    real(rp), intent(in ), dimension(lo(1)-1:) :: dxf
+    real(rp), intent(in ), dimension(lo(2)-1:) :: dyf
+    real(rp), intent(in ), dimension(lo(3)-1:) :: dzf
+    real(rp), intent(in ) :: dt
     real(rp), intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: up,vp,wp
     real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP SHARED(hi,lo,p,up,vp,wp,dt,dxf,dyf,dzf) &
+    !$OMP SHARED(lo,hi,p,up,vp,wp,dt,dxf,dyf,dzf) &
     !$OMP PRIVATE(i,j,k)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)

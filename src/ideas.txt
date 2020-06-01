@@ -1,2 +1,2 @@
-one single 'mom', unifying imp and explicit (more storage but fine)
-one scalar transport routine
+review everything before going to solver and main (understand if it is good to break up some stuff into more functions)!
+add subroutine compute_tau in mom

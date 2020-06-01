@@ -9,12 +9,12 @@ module mod_correc
     ! corrects the velocity so that it is divergence free
     !
     implicit none
-    integer , intent(in), dimension(3) :: lo,hi
-    real(rp), intent(in), dimension(lo(1)-1:) :: dxc
-    real(rp), intent(in), dimension(lo(2)-1:) :: dyc
-    real(rp), intent(in), dimension(lo(3)-1:) :: dzc
-    real(rp), intent(in) :: dt
-    real(rp), intent(in) , dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p,up,vp,wp
+    integer , intent(in ), dimension(3) :: lo,hi
+    real(rp), intent(in ), dimension(lo(1)-1:) :: dxc
+    real(rp), intent(in ), dimension(lo(2)-1:) :: dyc
+    real(rp), intent(in ), dimension(lo(3)-1:) :: dzc
+    real(rp), intent(in ) :: dt
+    real(rp), intent(in ) , dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p,up,vp,wp
     real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
     integer :: i,j,k
     !
@@ -31,7 +31,6 @@ module mod_correc
       enddo
     enddo
     !$OMP END PARALLEL DO
-    !
     return
   end subroutine correc
 end module mod_correc

@@ -2,7 +2,7 @@ module mod_types
   use, intrinsic :: iso_fortran_env
   use, intrinsic :: iso_fortran_env, sp => real32
   use, intrinsic :: iso_fortran_env, dp => real64
-#ifdef SINGLE_PRECISION
+#ifdef _SINGLE_PRECISION
   use, intrinsic :: iso_fortran_env, rp          => real32
   use            :: mpi            , MPI_REAL_RP => MPI_REAL
 #else

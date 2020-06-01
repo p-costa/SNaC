@@ -5,7 +5,7 @@ module mod_mom
   private
   public momx_a,momy_a,momz_a,momx_d,momy_d,momz_d,momx_p,momy_p,momz_p
   contains
-  subroutine momx_a(hi,lo,dxf,dyf,dzf,u,v,w,dudt)
+  subroutine momx_a(lo,hi,dxf,dyf,dzf,u,v,w,dudt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxf
@@ -43,7 +43,7 @@ module mod_mom
     return
   end subroutine momx_a
   !
-  subroutine momy_a(hi,lo,dxf,dyf,dzf,u,v,w,dvdt)
+  subroutine momy_a(lo,hi,dxf,dyf,dzf,u,v,w,dvdt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxf
@@ -81,7 +81,7 @@ module mod_mom
     return
   end subroutine momy_a
   !
-  subroutine momz_a(hi,lo,dxf,dyf,dzf,u,v,w,dwdt)
+  subroutine momz_a(lo,hi,dxf,dyf,dzf,u,v,w,dwdt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxf
@@ -119,7 +119,7 @@ module mod_mom
     return
   end subroutine momz_a
   !
-  subroutine momx_d(hi,lo,dxc,dyc,dzc,dxf,dyf,dzf,visc,u,dudt)
+  subroutine momx_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,u,dudt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxc,dxf
@@ -134,7 +134,7 @@ module mod_mom
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dudxp,dudxm,dudyp,dudym,dudzp,dudzm) &
-    !$OMP SHARED(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,u,dudt)
+    !$OMP SHARED(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,u,dudt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -158,7 +158,7 @@ module mod_mom
     return
   end subroutine momx_d
   !
-  subroutine momy_d(hi,lo,dxc,dyc,dzc,dxf,dyf,dzf,visc,v,dvdt)
+  subroutine momy_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,v,dvdt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxc,dxf
@@ -173,7 +173,7 @@ module mod_mom
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dvdxp,dvdxm,dvdyp,dvdym,dvdzp,dvdzm) &
-    !$OMP SHARED(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,v,dvdt)
+    !$OMP SHARED(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,v,dvdt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -197,7 +197,7 @@ module mod_mom
     return
   end subroutine momy_d
   !
-  subroutine momz_d(hi,lo,dxc,dyc,dzc,dxf,dyf,dzf,visc,w,dwdt)
+  subroutine momz_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,w,dwdt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxc,dxf
@@ -212,7 +212,7 @@ module mod_mom
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dwdxp,dwdxm,dwdyp,dwdym,dwdzp,dwdzm) &
-    !$OMP SHARED(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,w,dwdt)
+    !$OMP SHARED(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,w,dwdt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -240,8 +240,8 @@ module mod_mom
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxc
     real(rp), intent(in) :: bforce
-    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in   ) :: p
-    real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(inout) :: dudt
+    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in ) :: p
+    real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(out) :: dudt
     integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
@@ -250,7 +250,7 @@ module mod_mom
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
-          dudt(i,j,k) = dudt(i,j,k) - ( p(i-1,j,k)-p(i,j,k) )/dxc(i) + bforce
+          dudt(i,j,k) = - ( p(i-1,j,k)-p(i,j,k) )/dxc(i) + bforce
         enddo
       enddo
     enddo
@@ -263,8 +263,8 @@ module mod_mom
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(2)-1:) :: dyc
     real(rp), intent(in) :: bforce
-    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in   ) :: p
-    real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(inout) :: dvdt
+    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in ) :: p
+    real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(out) :: dvdt
     integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
@@ -273,7 +273,7 @@ module mod_mom
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
-          dvdt(i,j,k) = dvdt(i,j,k) - ( p(i,j-1,k)-p(i,j,k) )/dyc(j) + bforce
+          dvdt(i,j,k) = - ( p(i,j-1,k)-p(i,j,k) )/dyc(j) + bforce
         enddo
       enddo
     enddo
@@ -286,8 +286,8 @@ module mod_mom
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(3)-1:) :: dzc
     real(rp), intent(in) :: bforce
-    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in   ) :: p
-    real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(inout) :: dwdt
+    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in ) :: p
+    real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(out) :: dwdt
     integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
@@ -296,7 +296,7 @@ module mod_mom
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
-          dwdt(i,j,k) = dwdt(i,j,k) - ( p(i,j,k-1)-p(i,j,k) )/dzc(k) + bforce
+          dwdt(i,j,k) = - ( p(i,j,k-1)-p(i,j,k) )/dzc(k) + bforce
         enddo
       enddo
     enddo

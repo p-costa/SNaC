@@ -7,12 +7,12 @@ module mod_scal
   subroutine scal_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,alpha,s,dsdt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
-    real(rp), intent(in ), dimension(lo(1)-1:) :: dxc,dxf
-    real(rp), intent(in ), dimension(lo(2)-1:) :: dyc,dyf
-    real(rp), intent(in ), dimension(lo(3)-1:) :: dzc,dzf
+    real(rp), intent(in), dimension(lo(1)-1:) :: dxc,dxf
+    real(rp), intent(in), dimension(lo(2)-1:) :: dyc,dyf
+    real(rp), intent(in), dimension(lo(3)-1:) :: dzc,dzf
     real(rp), intent(in) :: alpha
     real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in) :: s
-    real(rp), dimension(:,:,:), intent(inout) :: dsdt
+    real(rp), dimension(lo(1):  ,lo(2)  :,lo(3):  ), intent(inout) :: dsdt
     real(rp) :: dsdxp,dsdxm,dsdyp,dsdym,dsdzp,dsdzm
     integer  :: i,j,k
     !
@@ -43,9 +43,9 @@ module mod_scal
   subroutine scal_a(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
-    real(rp), intent(in ), dimension(lo(1)-1:) :: dxf
-    real(rp), intent(in ), dimension(lo(2)-1:) :: dyf
-    real(rp), intent(in ), dimension(lo(3)-1:) :: dzf
+    real(rp), intent(in), dimension(lo(1)-1:) :: dxf
+    real(rp), intent(in), dimension(lo(2)-1:) :: dyf
+    real(rp), intent(in), dimension(lo(3)-1:) :: dzf
     real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in   ) :: u,v,w,s
     real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(inout) :: dsdt
     real(rp) :: usip,usim,vsjp,vsjm,wskp,wskm

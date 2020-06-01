@@ -5,7 +5,7 @@ module mod_bound
   private
   public boundp,bounduvw,updt_rhs_b
   contains
-  subroutine bounduvw(cbc,hi,lo,bc,isoutflow,halo,is_bound,nb, &
+  subroutine bounduvw(cbc,lo,hi,bc,isoutflow,halo,is_bound,nb, &
                       dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
     !
     ! imposes velocity boundary conditions
@@ -84,14 +84,14 @@ module mod_bound
     !
     implicit none
     character(len=1), intent(in), dimension(0:1,3) :: cbc
-    integer , intent(in), dimension(3) :: lo,hi
-    real(rp)            , intent(in), dimension(0:1,3) :: bc
-    integer , intent(in), dimension(3    ) :: halo
-    logical , intent(in), dimension(0:1,3) :: is_bound
-    integer , intent(in), dimension(0:1,3) :: nb
-    real(rp), intent(in), dimension(lo(1)-1:) :: dxc
-    real(rp), intent(in), dimension(lo(2)-1:) :: dyc
-    real(rp), intent(in), dimension(lo(3)-1:) :: dzc
+    integer , intent(in   ), dimension(3    )      :: lo,hi
+    real(rp), intent(in   ), dimension(0:1,3)      :: bc
+    integer , intent(in   ), dimension(3    )      :: halo
+    logical , intent(in   ), dimension(0:1,3)      :: is_bound
+    integer , intent(in   ), dimension(0:1,3)      :: nb
+    real(rp), intent(in   ), dimension(lo(1)-1:)   :: dxc
+    real(rp), intent(in   ), dimension(lo(2)-1:)   :: dyc
+    real(rp), intent(in   ), dimension(lo(3)-1:)   :: dzc
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     !
     call updthalo(lo,hi,1,halo(1),nb(:,1),1,p)
@@ -122,11 +122,11 @@ module mod_bound
   subroutine set_bc(ctype,ibound,lo,hi,idir,centered,rvalue,dr,p)
     implicit none
     character(len=1), intent(in) :: ctype
-    integer , intent(in) :: ibound
-    integer , intent(in), dimension(3) :: lo,hi
-    integer , intent(in) :: idir
-    logical , intent(in) :: centered
-    real(rp), intent(in) :: rvalue,dr
+    integer , intent(in   ) :: ibound
+    integer , intent(in   ), dimension(3) :: lo,hi
+    integer , intent(in   ) :: idir
+    logical , intent(in   ) :: centered
+    real(rp), intent(in   ) :: rvalue,dr
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     real(rp) :: factor,sgn
     !
@@ -408,11 +408,11 @@ module mod_bound
     implicit none
     character, intent(in), dimension(3) :: c_or_f
     character(len=1), intent(in), dimension(0:1,3) :: cbc
-    integer , intent(in), dimension(3) :: lo,hi
-    logical , intent(in), dimension(0:1,3) :: is_bound
-    real(rp), intent(in), dimension(lo(2):,lo(3):,0:) :: rhsbx
-    real(rp), intent(in), dimension(lo(1):,lo(3):,0:) :: rhsby
-    real(rp), intent(in), dimension(lo(1):,lo(2):,0:) :: rhsbz
+    integer , intent(in   ), dimension(3) :: lo,hi
+    logical , intent(in   ), dimension(0:1,3) :: is_bound
+    real(rp), intent(in   ), dimension(lo(2):,lo(3):,0:) :: rhsbx
+    real(rp), intent(in   ), dimension(lo(1):,lo(3):,0:) :: rhsby
+    real(rp), intent(in   ), dimension(lo(1):,lo(2):,0:) :: rhsbz
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     integer , dimension(3) :: q
     integer :: idir
