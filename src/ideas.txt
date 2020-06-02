@@ -1,2 +1,3 @@
 review everything before going to solver and main (understand if it is good to break up some stuff into more functions)!
 add subroutine compute_tau in mom
+myid, ierr -> import from common_mpi always!

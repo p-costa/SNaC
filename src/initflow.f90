@@ -79,10 +79,10 @@ module mod_initflow
       call poiseuille(lo(3),hi(3),zc,l(3),uref,u1d)
       is_mean=.true.
     case default
-      if(myid.eq.0) write(error_unit,*) 'ERROR: invalid name for initial velocity field'
-      if(myid.eq.0) write(error_unit,*) ''
-      if(myid.eq.0) write(error_unit,*) '*** Simulation abortited due to errors in the case file ***'
-      if(myid.eq.0) write(error_unit,*) '    check INFO_INPUT.md'
+      if(myid.eq.0) write(stderr,*) 'ERROR: invalid name for initial velocity field'
+      if(myid.eq.0) write(stderr,*) ''
+      if(myid.eq.0) write(stderr,*) '*** Simulation abortited due to errors in the case file ***'
+      if(myid.eq.0) write(stderr,*) '    check INFO_INPUT.md'
       call MPI_FINALIZE(ierr)
       error stop
     end select

@@ -54,11 +54,11 @@ real(rp), dimension(3) :: dl
 real(rp), dimension(3) :: dli
 !
 contains 
-  subroutine read_input(myid)
+  subroutine read_input()
   use mpi
+  use mod_common_mpi, only:myid,ierr
   implicit none
-  integer, intent(in) :: myid
-  integer :: iunit,ierr
+  integer :: iunit
     open(newunit=iunit,file='dns.in',status='old',action='read',iostat=ierr)
       if( ierr.eq.0 ) then
         read(iunit,*) ng(1),ng(2),ng(3)
@@ -88,8 +88,8 @@ contains
         read(iunit,*) dims(1),dims(2),dims(3)
         read(iunit,*) nthreadsmax
       else
-        if(myid.eq.0) write(error_unit,*) '*** Error reading the input file *** ' 
-        if(myid.eq.0) write(error_unit,*) 'Aborting...'
+        if(myid.eq.0) write(stderr,*) '*** Error reading the input file *** ' 
+        if(myid.eq.0) write(stderr,*) 'Aborting...'
         call MPI_FINALIZE(ierr)
         error stop
     endif

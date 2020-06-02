@@ -1,24 +1,24 @@
 module mod_load
   use mpi
+  use mod_common_mpi, only:myid,ierr
   use mod_types
   implicit none
   private
-  public load
+  public load,io_field
   contains
-  subroutine load(io,myid,filename,ng,nghost,lo,hi,u,v,w,p,time,istep)
+  subroutine load(io,filename,ng,nghost,lo,hi,u,v,w,p,time,istep)
     !
     ! reads/writes a restart file
     !
     implicit none
     character(len=1), intent(in) :: io
-    integer         , intent(in) :: myid
     character(len=*), intent(in) :: filename
     integer , intent(in), dimension(3) :: ng,lo,hi
     integer , intent(in)               :: nghost
     real(rp), intent(inout), dimension(lo(1)-nghost:,lo(2)-nghost:,lo(3)-nghost:) :: u,v,w,p
     real(rp), intent(inout) :: time,istep
     real(rp), dimension(2) :: fldinfo
-    integer :: fh,ierr,nreals_myid
+    integer :: fh,nreals_myid
     integer(kind=MPI_OFFSET_KIND) :: filesize,disp,good
     !
     select case(io)
@@ -31,9 +31,9 @@ module mod_load
       call MPI_FILE_GET_SIZE(fh,filesize,ierr)
       good = (product(ng)*4+2)*sizeof(1._rp)
       if(filesize.ne.good) then
-        if(myid.eq.0) write(error_unit,*) ''
-        if(myid.eq.0) write(error_unit,*) '*** Simulation aborted due a checkpoint file with incorrect size ***'
-        if(myid.eq.0) write(error_unit,*) '    file: ', filename, ' | expected size: ', good, '| actual size: ', filesize
+        if(myid.eq.0) write(stderr,*) ''
+        if(myid.eq.0) write(stderr,*) '*** Simulation aborted due a checkpoint file with incorrect size ***'
+        if(myid.eq.0) write(stderr,*) '    file: ', filename, ' | expected size: ', good, '| actual size: ', filesize
         call MPI_FINALIZE(ierr)
         error stop
       endif
@@ -84,7 +84,7 @@ module mod_load
     integer , intent(in), dimension(3)           :: ng,lo,hi
     integer , intent(in)                         :: nghost
     integer(kind=MPI_OFFSET_KIND), intent(inout) :: disp
-    real(rp), intent(out), dimension(lo(1)-nghost:,lo(2)-nghost:,lo(3)-nghost:) :: var
+    real(rp), intent(in), dimension(lo(1)-nghost:,lo(2)-nghost:,lo(3)-nghost:) :: var
     integer :: ierr
     integer , dimension(3) :: n
     integer , dimension(3) :: sizes,subsizes,starts
