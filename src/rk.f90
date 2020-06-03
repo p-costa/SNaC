@@ -18,7 +18,7 @@ module mod_rk
     real(rp), intent(in   ), dimension(3) :: bforce
     logical , intent(in   ), dimension(3) :: is_forced
     real(rp), intent(in   ), dimension(3) :: velf
-    real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u ,v ,w,p
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u ,v ,w ,p
     real(rp), intent(inout), dimension(lo(1):  ,lo(2):  ,lo(3):  ) :: dudtrko,dvdtrko,dwdtrko
     real(rp), intent(out  ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: up,vp,wp
     real(rp), intent(out  ), dimension(3) :: f

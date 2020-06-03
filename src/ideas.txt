@@ -1,2 +1,2 @@
 review everything before going to main (understand if it is good to break up some stuff into more functions)!
-add subroutine compute_tau in mom
+add subroutine compute_tau in debug

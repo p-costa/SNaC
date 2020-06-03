@@ -19,7 +19,7 @@ module mod_solver
                          dx1,dx2,dy1,dy2,dz1,dz2,asolver)
     !
     ! corrects the velocity so that it is divergence free
-    ! NOTE: TO KEEP THIS MORE GENERIC, qskip and dxc,dxf are left to the user hi(:)-q(skip)
+    ! N.B.: TO KEEP THIS MORE GENERIC, qskip and dxc,dxf are left to the user hi(:)-q(skip)
     !
     implicit none
     integer, parameter :: nstencil = 7

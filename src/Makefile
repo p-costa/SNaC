@@ -36,7 +36,7 @@ clean:
 # dependencies
 bound.o: bound.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
-debug.o: debug.f90 types.o
+debug.o: debug.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 chkdiv.o: chkdiv.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
