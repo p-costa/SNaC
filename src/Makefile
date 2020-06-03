@@ -10,7 +10,7 @@ PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
 TARGET = cans
 #
-OBJ = bound.o debug.o initflow.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o load.o mom.o output.o param.o rk.o scal.o sanity.o solver.o types.o
+OBJ = bound.o debug.o initflow.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o load.o main.o mom.o output.o param.o rk.o scal.o sanity.o solver.o types.o
 #
 HYPRE_LIB_DIR=/home/pedro/software/hypre-2.11.2/lib
 LIBS = -L$(HYPRE_LIB_DIR) -lHYPRE
@@ -55,6 +55,8 @@ initgrid.o: initgrid.f90 param.o types.o
 initmpi.o: initmpi.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 load.o: load.f90 common_mpi.o types.o
+	$(FC) $(FFLAGS) -cpp -c  $<
+main.o: main.f90 bound.o debug.o initflow.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o load.o mom.o output.o param.o rk.o scal.o sanity.o solver.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 mom.o: mom.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
