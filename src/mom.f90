@@ -119,7 +119,7 @@ module mod_mom
     return
   end subroutine momz_a
   !
-  subroutine momx_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,u,dudt)
+  subroutine momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxc,dxf
@@ -134,7 +134,7 @@ module mod_mom
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dudxp,dudxm,dudyp,dudym,dudzp,dudzm) &
-    !$OMP SHARED(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,u,dudt)
+    !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -158,7 +158,7 @@ module mod_mom
     return
   end subroutine momx_d
   !
-  subroutine momy_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,v,dvdt)
+  subroutine momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxc,dxf
@@ -173,7 +173,7 @@ module mod_mom
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dvdxp,dvdxm,dvdyp,dvdym,dvdzp,dvdzm) &
-    !$OMP SHARED(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,v,dvdt)
+    !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -197,7 +197,7 @@ module mod_mom
     return
   end subroutine momy_d
   !
-  subroutine momz_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,w,dwdt)
+  subroutine momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxc,dxf
@@ -212,7 +212,7 @@ module mod_mom
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dwdxp,dwdxm,dwdyp,dwdym,dwdzp,dwdzm) &
-    !$OMP SHARED(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,w,dwdt)
+    !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)

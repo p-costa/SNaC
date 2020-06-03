@@ -4,7 +4,7 @@ module mod_rk
   private
   public rk_mom,rk_scal
   contains
-  subroutine rk_mom(rkpar,lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,l,dt,bforce,is_forced,velf,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,f)
+  subroutine rk_mom(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,l,dt,bforce,is_forced,velf,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,f)
     use mod_mom  , only: momx_a,momy_a,momz_a,momx_d,momy_d,momz_d,momx_p,momy_p,momz_p
     use mod_debug, only: chkmean
     implicit none
@@ -41,9 +41,9 @@ module mod_rk
     dvdtrk(:,:,:) = 0._rp
     dwdtrk(:,:,:) = 0._rp
     !$OMP END WORKSHARE
-    call momx_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,u,dudtrk)
-    call momy_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,v,dvdtrk)
-    call momz_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,w,dwdtrk)
+    call momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudtrk)
+    call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrk)
+    call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrk)
 #ifdef _IMPDIFF
     dudtrkd(:,:,:) = dudtrk(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
     dvdtrkd(:,:,:) = dvdtrk(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
@@ -126,7 +126,7 @@ module mod_rk
 #endif
     return
   end subroutine rk_mom
-  subroutine rk_scal(rkpar,lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,dt,alpha,u,v,w,dsdtrko,s)
+  subroutine rk_scal(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,alpha,u,v,w,dsdtrko,s)
     use mod_scal, only: scal_a,scal_d
     !
     ! low-storage 3rd-order Runge-Kutta scheme 
@@ -150,7 +150,7 @@ module mod_rk
     factor2 = rkpar(2)*dt
     factor12 = factor1 + factor2
     dsdtrk(:,:,:) = 0._rp
-    call scal_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,alpha,s,dsdtrk)
+    call scal_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,s,dsdtrk)
     call scal_a(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdtrk)
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &

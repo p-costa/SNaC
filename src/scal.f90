@@ -4,7 +4,7 @@ module mod_scal
   private
   public scal_a,scal_d
   contains
-  subroutine scal_d(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,alpha,s,dsdt)
+  subroutine scal_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,s,dsdt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxc,dxf
@@ -19,7 +19,7 @@ module mod_scal
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dsdxp,dsdxm,dsdyp,dsdym,dsdzp,dsdzm) &
-    !$OMP SHARED(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,alpha,s,dsdt)
+    !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,s,dsdt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)

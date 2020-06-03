@@ -8,7 +8,7 @@ module mod_initflow
   public initflow
   contains
   subroutine initflow(inivel,is_wallturb,lo,hi,ng,l,uref,lref,visc,bforce, &
-                      xc,yc,zc,xf,yf,zf,dxc,dyc,dzc,dxf,dyf,dzf,u,v,w,p)
+                      xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
     !
     ! computes initial conditions for the velocity field
     !

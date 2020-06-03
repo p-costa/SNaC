@@ -5,7 +5,7 @@ module mod_chkdt
   private
   public chkdt
   contains
-  subroutine chkdt(lo,hi,dxc,dyc,dzc,dxf,dyf,dzf,visc,u,v,w,dtmax)
+  subroutine chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
     !
     ! computes maximum allowed timestep
     !
@@ -24,7 +24,7 @@ module mod_chkdt
     !
     dti = 0._rp
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP SHARED(lo,hi,u,v,w,dxc,dyc,dzc,dxf,dyf,dzf) &
+    !$OMP SHARED(lo,hi,u,v,w,dxc,dxf,dyc,dyf,dzc,dzf) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(ux,uy,uz,vx,vy,vz,wx,wy,wz,dtix,dtiy,dtiz) &
     !$OMP REDUCTION(max:dti)
