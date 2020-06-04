@@ -1,7 +1,7 @@
 21 25 37                 ! itot, jtot, ktot
 3. 1.5 1.                ! lx, ly, lz
-0 0 0                    ! gt(1) gt(2) gt(3)
-0. 0. 0.                 ! gr(1) gr(2) gr(3)
+1 0 2                    ! gt(1) gt(2) gt(3)
+1. 2. 4.                 ! gr(1) gr(2) gr(3)
 .95 1.0e5                ! cfl, dtmin
 1. 1. 1000.              ! uref, lref, rey
 zer                      ! inivel

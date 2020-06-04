@@ -21,10 +21,12 @@
 program snac
   use mpi
   use mod_common_mpi, only: myid,ierr
+  use mod_initgrid  , only: initgrid,distribute_grid,save_grid
   use mod_initmpi   , only: initmpi
   use mod_fillps    , only: fillps
   use mod_load      , only: load
   use mod_param     , only: read_input, &
+                            datadir, &
                             ng,l,gt,gr,cfl,dtmin,uref,lref,rey,                  &
                             inivel,is_wallturb,nstep,time_max,tw_max,stop_type, &
                             restart,is_overwrite_save,                           &
@@ -108,18 +110,18 @@ program snac
            dzf(lo(3)-1:hi(3)+1), &
             zc(lo(3)-1:hi(3)+1), &
             zf(lo(3)-1:hi(3)+1))
-  allocate(dxc_g(ng(1)-1:ng(1)+1), &
-           dxf_g(ng(1)-1:ng(1)+1), &
-            xc_g(ng(1)-1:ng(1)+1), &
-            xf_g(ng(1)-1:ng(1)+1), &
-           dyc_g(ng(2)-1:ng(2)+1), &
-           dyf_g(ng(2)-1:ng(2)+1), &
-            yc_g(ng(2)-1:ng(2)+1), &
-            yf_g(ng(2)-1:ng(2)+1), &
-           dzc_g(ng(3)-1:ng(3)+1), &
-           dzf_g(ng(3)-1:ng(3)+1), &
-            zc_g(ng(3)-1:ng(3)+1), &
-            zf_g(ng(3)-1:ng(3)+1))
+  allocate(dxc_g(1-1:ng(1)+1), &
+           dxf_g(1-1:ng(1)+1), &
+            xc_g(1-1:ng(1)+1), &
+            xf_g(1-1:ng(1)+1), &
+           dyc_g(1-1:ng(2)+1), &
+           dyf_g(1-1:ng(2)+1), &
+            yc_g(1-1:ng(2)+1), &
+            yf_g(1-1:ng(2)+1), &
+           dzc_g(1-1:ng(3)+1), &
+           dzf_g(1-1:ng(3)+1), &
+            zc_g(1-1:ng(3)+1), &
+            zf_g(1-1:ng(3)+1))
   allocate(rhsbp%x(lo(2):hi(2),lo(3):hi(3),0:1), &
            rhsbp%y(lo(1):hi(1),lo(3):hi(3),0:1), &
            rhsbp%z(lo(1):hi(1),lo(2):hi(2),0:1))
@@ -140,6 +142,40 @@ program snac
     write(stdout,*) '*** beginning of simulation ***'
     write(stdout,*) '*******************************'
     write(stdout,*) ''
+  endif
+  !
+  ! generate grid
+  !
+  call initgrid(ng(1),lo(1),hi(1),gt(1),gr(1),l(1), &
+                dxc_g,dxf_g,xc_g,xf_g)
+  call initgrid(ng(2),lo(2),hi(2),gt(2),gr(2),l(2), &
+                dyc_g,dyf_g,yc_g,yf_g)
+  call initgrid(ng(3),lo(3),hi(3),gt(3),gr(3),l(3), &
+                dzc_g,dzf_g,zc_g,zf_g)
+  call save_grid(trim(datadir)//'grid_x',ng(1),xf_g,xc_g,dxf_g,dxc_g)
+  call save_grid(trim(datadir)//'grid_y',ng(2),yf_g,yc_g,dyf_g,dyc_g)
+  call save_grid(trim(datadir)//'grid_z',ng(3),zf_g,zc_g,dzf_g,dzc_g)
+  call distribute_grid(lo(1),hi(1),dxc_g,dxc)
+  call distribute_grid(lo(1),hi(1),dxf_g,dxf)
+  call distribute_grid(lo(1),hi(1), xc_g, xc)
+  call distribute_grid(lo(1),hi(1), xf_g, xf)
+  call distribute_grid(lo(2),hi(2),dyc_g,dyc)
+  call distribute_grid(lo(2),hi(2),dyf_g,dyf)
+  call distribute_grid(lo(2),hi(2), yc_g, yc)
+  call distribute_grid(lo(2),hi(2), yf_g, yf)
+  call distribute_grid(lo(3),hi(3),dzc_g,dzc)
+  call distribute_grid(lo(3),hi(3),dzf_g,dzf)
+  call distribute_grid(lo(3),hi(3), zc_g, zc)
+  call distribute_grid(lo(3),hi(3), zf_g, zf)
+  !
+  if(.not.restart) then
+    istep = 0
+    time = 0._rp
+    !call initflow(inivel,n,zc/lz,dzc/lz,dzf/lz,visc,u,v,w,p)
+    if(myid.eq.0) print*, '*** Initial condition succesfully set ***'
+  else
+    call load('r',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
+    if(myid.eq.0) write(stdout,*) '*** Checkpoint loaded at time = ', time, 'time step = ', istep, '. ***'
   endif
   !
   call MPI_FINALIZE(ierr)

@@ -32,7 +32,7 @@ module mod_output
     return
   end subroutine out0d
   !
-  subroutine out1d(fname,lo,hi,ng,idir,l,dx,dy,dz,x,y,z,p)
+  subroutine out1d(fname,lo,hi,ng,idir,l,dx,dy,dz,x,y,z,x_g,y_g,z_g,p)
     !
     ! writes the profile of a variable averaged
     ! over two domain directions
@@ -55,6 +55,9 @@ module mod_output
     real(rp), intent(in), dimension(lo(1)-1:) :: x,dx
     real(rp), intent(in), dimension(lo(2)-1:) :: y,dy
     real(rp), intent(in), dimension(lo(3)-1:) :: z,dz
+    real(rp), intent(in), dimension(1-1    :) :: x_g
+    real(rp), intent(in), dimension(1-1    :) :: y_g
+    real(rp), intent(in), dimension(1-1    :) :: z_g
     real(rp), intent(in), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     real(rp), allocatable, dimension(:) :: p1d
     integer :: i,j,k
@@ -75,7 +78,7 @@ module mod_output
       if(myid.eq.0) then
         open(newunit=iunit,file=fname)
         do k=1,ng(3)
-          write(iunit,'(2E15.7)') z(k),p1d(k)
+          write(iunit,'(2E15.7)') z_g(k),p1d(k)
         enddo
         close(iunit)
       endif
@@ -93,7 +96,7 @@ module mod_output
       if(myid.eq.0) then
         open(newunit=iunit,file=fname)
         do j=1,ng(2)
-          write(iunit,'(2E15.7)') y(j),p1d(j)
+          write(iunit,'(2E15.7)') y_g(j),p1d(j)
         enddo
         close(iunit)
       endif
@@ -111,7 +114,7 @@ module mod_output
       if(myid.eq.0) then
         open(newunit=iunit,file=fname)
         do i=1,ng(1)
-          write(iunit,'(2E15.7)') x(i),p1d(i)
+          write(iunit,'(2E15.7)') x_g(i),p1d(i)
         enddo
         close(iunit)
       endif
@@ -147,7 +150,7 @@ module mod_output
     filesize = 0_MPI_OFFSET_KIND
     call MPI_FILE_SET_SIZE(fh,filesize,ierr)
     disp = 0_MPI_OFFSET_KIND
-    call io_field('w',fh,ng,lo,hi,1,disp,p)
+    call io_field('w',fh,ng,lo,hi,[1,1,1],disp,p)
     call MPI_FILE_CLOSE(fh,ierr)
     return
   end subroutine out3d

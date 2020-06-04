@@ -12,3 +12,6 @@ For implicit diffusion:
 (3) change diagonal (new asolver, save the old one with) (every substep)
 (4) solve
 (5) destroy this this new asolver (but keep the old one!) (every substep)
+
+  ! CHANGE: CALL DISTRIBUTE GRID BELOW THREE TIMES
+  ! CHANGE: AND THEN CALL SAVEGRID BELOW THREE TIMES

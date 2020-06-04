@@ -13,9 +13,8 @@ module mod_load
     implicit none
     character(len=1), intent(in) :: io
     character(len=*), intent(in) :: filename
-    integer , intent(in), dimension(3) :: ng,lo,hi
-    integer , intent(in)               :: nghost
-    real(rp), intent(inout), dimension(lo(1)-nghost:,lo(2)-nghost:,lo(3)-nghost:) :: u,v,w,p
+    integer , intent(in), dimension(3) :: ng,lo,hi,nghost
+    real(rp), intent(inout), dimension(lo(1)-nghost(1):,lo(2)-nghost(2):,lo(3)-nghost(3):) :: u,v,w,p
     real(rp), intent(inout) :: time
     integer , intent(inout) :: istep
     real(rp), dimension(2) :: fldinfo
@@ -80,10 +79,9 @@ module mod_load
     implicit none
     character(len=1), intent(in)                 :: io
     integer , intent(in)                         :: fh
-    integer , intent(in), dimension(3)           :: ng,lo,hi
-    integer , intent(in)                         :: nghost
+    integer , intent(in), dimension(3)           :: ng,lo,hi,nghost
     integer(kind=MPI_OFFSET_KIND), intent(inout) :: disp
-    real(rp), intent(in), dimension(lo(1)-nghost:,lo(2)-nghost:,lo(3)-nghost:) :: var
+    real(rp), intent(in), dimension(lo(1)-nghost(1):,lo(2)-nghost(2):,lo(3)-nghost(3):) :: var
     integer :: ierr
     integer , dimension(3) :: n
     integer , dimension(3) :: sizes,subsizes,starts
@@ -94,9 +92,9 @@ module mod_load
     starts(:)   = lo(:) - 1 ! starts from 0
     call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_glob,ierr)
     call MPI_TYPE_COMMIT(type_glob,ierr)
-    sizes(:)    = n(:) + nghost
+    sizes(:)    = n(:) + nghost(:)
     subsizes(:) = n(:)
-    starts(:)   = 0 + nghost
+    starts(:)   = 0 + nghost(:)
     call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_loc ,ierr)
     call MPI_TYPE_COMMIT(type_loc,ierr)
       select case(io)

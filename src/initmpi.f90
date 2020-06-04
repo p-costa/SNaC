@@ -16,10 +16,15 @@ module mod_initmpi
     integer :: idir
     integer :: comm_cart
     !
+    ! generate Cartesian topology
+    !
     periods(:) = .false.
     where (bc(0,:)//bc(1,:).eq.'PP') periods(:) = .true.
     call MPI_CART_CREATE(MPI_COMM_WORLD,3,dims,periods,.true.,comm_cart,ierr)
     call MPI_CART_COORDS(comm_cart,myid,3,coords,ierr)
+    !
+    ! determine array extents for possibly uneven data
+    !
     n(:) = ng(:)/dims(:)
     where(coords(:)+1.le.mod(ng(:),dims(:))) n(:) = n(:) + 1
     lo(:) = 1    + coords(:)*n(:)
@@ -28,6 +33,9 @@ module mod_initmpi
       lo(:) = lo(:) + mod(ng(:),dims(:))
       hi(:) = hi(:) + mod(ng(:),dims(:))
     end where
+    !
+    ! generate neighbor arrays and derived types for halo regions
+    !
     do idir=1,3
       call MPI_CART_SHIFT(comm_cart,idir-1,1,nb(0,idir),nb(1,idir),ierr)
       is_bound(:,idir) = .false.

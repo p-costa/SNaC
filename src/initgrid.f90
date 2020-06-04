@@ -3,18 +3,16 @@ module mod_initgrid
   use mod_types
   implicit none
   private
-  public initgrid
+  public initgrid,distribute_grid,save_grid
   contains
-  subroutine initgrid(n,lo,hi,gt,gr,l,drc,drf,rc,rf,drc_g,drf_g,rc_g,rf_g,fname)
+  subroutine initgrid(n,lo,hi,gt,gr,l,drc_g,drf_g,rc_g,rf_g)
     !
     ! initializes a non-uniform grid
     !
     implicit none
-    integer         , intent(in )                   :: n,lo,hi,gt
-    real(rp)        , intent(in )                   :: gr,l
-    character(len=*), intent(in )                   :: fname
-    real(rp)        , intent(out), dimension(lo-1:) :: drc  ,drf  ,rc  ,rf
-    real(rp)        , intent(out), dimension(0:   ) :: drc_g,drf_g,rc_g,rf_g
+    integer         , intent(in )                  :: n,lo,hi,gt
+    real(rp)        , intent(in )                  :: gr,l
+    real(rp)        , intent(out), dimension(1-1:) :: drc_g,drf_g,rc_g,rf_g
     real(rp) :: r0
     integer :: q
     procedure (), pointer :: gridpoint => null()
@@ -62,32 +60,29 @@ module mod_initgrid
       rf_g(q) = rf_g(q-1) + drf_g(q)
     enddo
     !
-    ! step 5) extract portion of the global grid pertaining 
-    !         to the specific task
-    !
-    call distribute_grid(lo,hi,drc_g,drc)
-    call distribute_grid(lo,hi,drf_g,drf)
-    call distribute_grid(lo,hi, rc_g, rc)
-    call distribute_grid(lo,hi, rf_g, rf)
-    !
     return
   end subroutine initgrid
   subroutine distribute_grid(lo,hi,grid_g,grid)
     implicit none
     integer  :: lo,hi
-    real(rp), intent(in ), dimension(0   :) :: grid_g
+    real(rp), intent(in ), dimension(1-1 :) :: grid_g
     real(rp), intent(out), dimension(lo-1:) :: grid
     grid(lo-1:hi+1) = grid_g(lo-1:hi+1)
     return
   end subroutine distribute_grid
-  subroutine save_grid(fname,ng,rf,rc,drf,drc)
+  subroutine save_grid(fname,ng,rf_g,rc_g,drf_g,drc_g)
     implicit none
     character(len=*), intent(in) :: fname
     integer         , intent(in) :: ng
-    real(rp)        , intent(in), dimension(0:) :: rf,rc,drf,drc
-    integer :: iunit
-    open(newunit=iunit,file=trim(fname),access='direct',recl=4*ng*sizeof(1._rp))
-    write(iunit,rec=1) rf(1:ng),rc(1:ng),drf(1:ng),drc(1:ng)
+    real(rp)        , intent(in), dimension(1-1:) :: rf_g,rc_g,drf_g,drc_g
+    integer :: iunit,q
+    open(newunit=iunit,file=trim(fname)//'.bin',status='replace',access='direct',recl=4*ng*sizeof(1._rp))
+    write(iunit,rec=1) rf_g(1:ng),rc_g(1:ng),drf_g(1:ng),drc_g(1:ng)
+    close(iunit)
+    open(newunit=iunit,status='replace',file=trim(fname)//'.out')
+    do q=0,ng+1
+      write(iunit,'(5E15.7)') 0._rp,rf_g(q),rc_g(q),drf_g(q),drc_g(q)
+    enddo
     close(iunit)
     return
   end subroutine save_grid
