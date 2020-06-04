@@ -5,7 +5,7 @@ module mod_initgrid
   private
   public initgrid
   contains
-  subroutine initgrid(n,lo,hi,gt,gr,l,drc,drf,rc,rf,fname)
+  subroutine initgrid(n,lo,hi,gt,gr,l,drc,drf,rc,rf,drc_g,drf_g,rc_g,rf_g,fname)
     !
     ! initializes a non-uniform grid
     !
@@ -14,7 +14,7 @@ module mod_initgrid
     real(rp)        , intent(in )                   :: gr,l
     character(len=*), intent(in )                   :: fname
     real(rp)        , intent(out), dimension(lo-1:) :: drc  ,drf  ,rc  ,rf
-    real(rp)        ,              dimension(0:n+1) :: drc_g,drf_g,rc_g,rf_g
+    real(rp)        , intent(out), dimension(0:   ) :: drc_g,drf_g,rc_g,rf_g
     real(rp) :: r0
     integer :: q
     procedure (), pointer :: gridpoint => null()

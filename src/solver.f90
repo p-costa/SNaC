@@ -18,7 +18,7 @@ module mod_solver
   subroutine init_solver(cbc,lo,hi,ng,maxerror,maxiter,stype, &
                          dx1,dx2,dy1,dy2,dz1,dz2,asolver)
     !
-    ! corrects the velocity so that it is divergence free
+    ! description!
     ! N.B.: TO KEEP THIS MORE GENERIC, qskip and dxc,dxf are left to the user hi(:)-q(skip)
     !
     implicit none
@@ -73,7 +73,7 @@ module mod_solver
     call HYPRE_StructVectorInitialize(sol,ierr)
     call HYPRE_StructVectorCreate(comm_hypre,grid,rhs,ierr)
     call HYPRE_StructVectorInitialize(rhs,ierr)
-    allocate(matvalues(product(hi(:)-lo(:)+1)))
+    allocate(matvalues(product(hi(:)-lo(:)+1)*nstencil))
     q = 0
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -144,8 +144,8 @@ module mod_solver
         call HYPRE_StructBiCGSTABSetTol(solver,maxerror,ierr)
       endif
       ! Use PFMG as preconditioner
-      call HYPRE_StructPFMGCreate(comm_hypre, precond, ierr)
-      call HYPRE_StructPFMGSetMaxIter(precond,10, ierr)
+      call HYPRE_StructPFMGCreate(comm_hypre,precond,ierr)
+      call HYPRE_StructPFMGSetMaxIter(precond,10,ierr)
       call HYPRE_StructPFMGSetTol(precond,0._rp,ierr)
       call HYPRE_StructPFMGSetZeroGuess(precond,ierr)
       call HYPRE_StructPFMGSetRelChange(precond,1,ierr)
@@ -153,10 +153,10 @@ module mod_solver
       precond_id = 1   ! Set PFMG as preconditioner
       if     (stype .eq. HYPRESolverGMRES) then
         call HYPRE_StructGMRESSetPrecond(solver,precond_id,precond,ierr)
-        call HYPRE_StructGMRESSetup(solver, mat, rhs, sol, ierr)
+        call HYPRE_StructGMRESSetup(solver,mat,rhs,sol,ierr)
       elseif (stype .eq. HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSetPrecond(solver,precond_id,precond,ierr)
-        call HYPRE_StructBiCGSTABSetup(solver, mat, rhs, sol, ierr)
+        call HYPRE_StructBiCGSTABSetup(solver,mat,rhs,sol,ierr)
       endif
     endif
     asolver%grid    = grid
@@ -169,6 +169,46 @@ module mod_solver
     asolver%stype   = stype
     return
   end subroutine init_solver
+  subroutine setup_solver
+    implicit none
+    return
+  end subroutine setup_solver
+  !subroutine add_to_diagonal(lo,hi,alpha,asolver)
+  !  ! MAYBE CHANGE TO SETUP AND ADD OPTION TO CHANGE DIAGONAL, AND DO ALL THE SETTING UP HERE
+  !  !
+  !  ! DESCRIPTION!
+  !  !
+  !  implicit none
+  !  integer, parameter :: nstencil = 7
+  !  integer           , intent(in   ), dimension(3) :: lo,hi
+  !  type(hypre_solver), intent(inout) :: asolver
+  !  real(rp), allocatable, dimension(:) :: matvalues
+  !  integer :: i,j,k,q,qq
+  !  !
+  !  allocate(matvalues(product(hi(:)-lo(:)+1)))
+  !  q = 0
+  !  do k=lo(3),hi(3)
+  !    do j=lo(2),hi(2)
+  !      do i=lo(1),hi(1)
+  !        q = q + 1
+  !        cxm = 1._rp/(dx1(i-1)*dx2(i))
+  !        cxp = 1._rp/(dx1(i  )*dx2(i))
+  !        cym = 1._rp/(dy1(j-1)*dy2(j))
+  !        cyp = 1._rp/(dy1(j  )*dy2(j))
+  !        czm = 1._rp/(dz1(k-1)*dz2(k))
+  !        czp = 1._rp/(dz1(k  )*dz2(k))
+  !        cc  = -(cxm+cxp+cym+cyp+czm+czp)
+  !        qq = (q-1)*nstencil
+  !        matvalues(qq+1) = alpha
+  !      enddo
+  !    enddo
+  !  enddo
+  !  call HYPREStructMatrixAddToBoxValues(asolver%mat,lo,hi,1,[0],matvalues,ierr)
+  !  call HYPRE_StructMatrixAssemble(asolver%mat,ierr)
+  !  deallocate(matvalues)
+  !  !
+  !  return
+  !end subroutine add_to_diagonal
   subroutine solve_helmholtz(asolver,lo,hi,p,po)
     implicit none
     type(hypre_solver), target, intent(in   )               :: asolver
