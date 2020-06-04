@@ -16,7 +16,8 @@ module mod_load
     integer , intent(in), dimension(3) :: ng,lo,hi
     integer , intent(in)               :: nghost
     real(rp), intent(inout), dimension(lo(1)-nghost:,lo(2)-nghost:,lo(3)-nghost:) :: u,v,w,p
-    real(rp), intent(inout) :: time,istep
+    real(rp), intent(inout) :: time
+    integer , intent(inout) :: istep
     real(rp), dimension(2) :: fldinfo
     integer :: fh,nreals_myid
     integer(kind=MPI_OFFSET_KIND) :: filesize,disp,good
@@ -48,11 +49,11 @@ module mod_load
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       nreals_myid = 0
       if(myid.eq.0) nreals_myid = 2
-      time  = fldinfo(1)
-      istep = fldinfo(2)
       call MPI_FILE_READ(fh,fldinfo,nreals_myid,MPI_REAL_RP,MPI_STATUS_IGNORE,ierr)
       call MPI_FILE_CLOSE(fh,ierr)
       call MPI_BCAST(fldinfo,2,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+      time  =      fldinfo(1)
+      istep = nint(fldinfo(2))
     case('w')
       !
       ! write
@@ -67,11 +68,9 @@ module mod_load
       call io_field('w',fh,ng,lo,hi,nghost,disp,w)
       call io_field('w',fh,ng,lo,hi,nghost,disp,p)
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
-      fldinfo = [time,istep]
+      fldinfo = [time,1._rp*istep]
       nreals_myid = 0
       if(myid.eq.0) nreals_myid = 2
-      time  = fldinfo(1)
-      istep = fldinfo(2)
       call MPI_FILE_WRITE(fh,fldinfo,nreals_myid,MPI_REAL_RP,MPI_STATUS_IGNORE,ierr)
       call MPI_FILE_CLOSE(fh,ierr)
     end select
@@ -98,7 +97,7 @@ module mod_load
     sizes(:)    = n(:) + nghost
     subsizes(:) = n(:)
     starts(:)   = 0 + nghost
-    call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_glob,ierr)
+    call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_loc ,ierr)
     call MPI_TYPE_COMMIT(type_loc,ierr)
       select case(io)
       case('r')

@@ -40,16 +40,20 @@ program snac
   !
   call MPI_INIT(ierr)
   call MPI_COMM_RANK(MPI_COMM_WORLD, myid, ierr)
-  call read_input()
   !
   ! read parameter file
   !
-  call read_input
+  call read_input()
   !
   ! initialize MPI/OpenMP
   !
   !$call omp_set_num_threads(nthreadsmax)
   call initmpi(ng,dims,cbcpre,lo,hi)
+  !
+  if(myid.eq.0) write(stdout,*) '*******************************'
+  if(myid.eq.0) write(stdout,*) '*** beginning of simulation ***'
+  if(myid.eq.0) write(stdout,*) '*******************************'
+  if(myid.eq.0) write(stdout,*) ''
   !
   call MPI_FINALIZE(ierr)
   call exit

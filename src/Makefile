@@ -8,9 +8,9 @@ OPT := -O3
 OTH := 
 PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
-TARGET = cans
+TARGET = snac
 #
-OBJ = bound.o debug.o initflow.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o load.o main.o mom.o output.o param.o rk.o scal.o sanity.o solver.o types.o
+OBJ = bound.o debug.o initflow.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o load.o main.o mom.o output.o param.o pressure_update.o rk.o scal.o sanity.o solver.o types.o
 #
 HYPRE_LIB_DIR=/home/pedro/software/hypre-2.11.2/lib
 LIBS = -L$(HYPRE_LIB_DIR) -lHYPRE
@@ -63,6 +63,8 @@ mom.o: mom.f90 types.o
 output.o: output.f90 common_mpi.o load.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 param.o: param.f90 common_mpi.o types.o
+	$(FC) $(FFLAGS) -cpp -c  $<
+pressure_update.o: pressure_update.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 rk.o: rk.f90 mom.o scal.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<

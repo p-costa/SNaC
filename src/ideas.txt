@@ -1,2 +1,3 @@
 review everything before going to main (understand if it is good to break up some stuff into more functions)!
 add subroutine compute_tau in debug
+add saving of the grid and geo file in initgrid.f90 !

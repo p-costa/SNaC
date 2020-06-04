@@ -7,7 +7,7 @@
 *dSYM
 *.xdmf
 *.xmf
-cans
+snac
 run/
 src/data/*.*
 run/data/*.*

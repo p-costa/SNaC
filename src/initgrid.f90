@@ -5,15 +5,16 @@ module mod_initgrid
   private
   public initgrid
   contains
-  subroutine initgrid(n,lo,hi,gt,gr,l,drc,drf,rc,rf)
+  subroutine initgrid(n,lo,hi,gt,gr,l,drc,drf,rc,rf,fname)
     !
     ! initializes a non-uniform grid
     !
     implicit none
-    integer , intent(in) :: n,lo,hi,gt
-    real(rp), intent(in) :: gr,l
-    real(rp), intent(out), dimension(lo-1:) :: drc  ,drf  ,rc  ,rf
-    real(rp),              dimension(0:n+1) :: drc_g,drf_g,rc_g,rf_g
+    integer         , intent(in )                   :: n,lo,hi,gt
+    real(rp)        , intent(in )                   :: gr,l
+    character(len=*), intent(in )                   :: fname
+    real(rp)        , intent(out), dimension(lo-1:) :: drc  ,drf  ,rc  ,rf
+    real(rp)        ,              dimension(0:n+1) :: drc_g,drf_g,rc_g,rf_g
     real(rp) :: r0
     integer :: q
     procedure (), pointer :: gridpoint => null()
@@ -79,6 +80,17 @@ module mod_initgrid
     grid(lo-1:hi+1) = grid_g(lo-1:hi+1)
     return
   end subroutine distribute_grid
+  subroutine save_grid(fname,ng,rf,rc,drf,drc)
+    implicit none
+    character(len=*), intent(in) :: fname
+    integer         , intent(in) :: ng
+    real(rp)        , intent(in), dimension(0:) :: rf,rc,drf,drc
+    integer :: iunit
+    open(newunit=iunit,file=trim(fname),access='direct',recl=4*ng*sizeof(1._rp))
+    write(iunit,rec=1) rf(1:ng),rc(1:ng),drf(1:ng),drc(1:ng)
+    close(iunit)
+    return
+  end subroutine save_grid
   !
   ! grid stretching functions 
   ! see e.g., Fluid Flow Phenomena -- A Numerical Toolkit, by P. Orlandi
@@ -89,7 +101,7 @@ module mod_initgrid
     ! clustered at the two sides
     !
     implicit none
-    real(rp), intent(in) :: alpha,r0
+    real(rp), intent(in ) :: alpha,r0
     real(rp), intent(out) :: r
     if(alpha.ne.0._rp) then
       r = 0.5_rp*(1._rp+tanh((r0-0.5_rp)*alpha)/tanh(alpha/2._rp))
@@ -104,7 +116,7 @@ module mod_initgrid
     ! clustered at the lower side
     !
     implicit none
-    real(rp), intent(in) :: alpha,r0
+    real(rp), intent(in ) :: alpha,r0
     real(rp), intent(out) :: r
     if(alpha.ne.0._rp) then
       r = 1.0_rp*(1._rp+tanh((r0-1.0_rp)*alpha)/tanh(alpha/1._rp))
@@ -119,7 +131,7 @@ module mod_initgrid
     ! clustered in the middle
     !
     implicit none
-    real(rp), intent(in) :: alpha,r0
+    real(rp), intent(in ) :: alpha,r0
     real(rp), intent(out) :: r
     if(alpha.ne.0._rp) then
       if(    r0.le.0.5_rp) then 
