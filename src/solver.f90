@@ -15,7 +15,7 @@ module mod_solver
     integer    :: stype
   end type hypre_solver 
   contains
-  subroutine init_solver(cbc,lo,hi,ng,maxerror,maxiter,stype, &
+  subroutine init_solver(cbc,bc,dl,is_bound,is_centered,lo,hi,ng,maxerror,maxiter,stype, &
                          dx1,dx2,dy1,dy2,dz1,dz2,rhsx,rhsy,rhsz,asolver)
     !
     ! description
@@ -23,6 +23,10 @@ module mod_solver
     implicit none
     integer, parameter :: nstencil = 7
     character(len=1)  , intent(in ), dimension(0:1,3) :: cbc
+    real(rp)          , intent(in ), dimension(0:1,3) ::  bc
+    real(rp)          , intent(in ), dimension(0:1,3) ::  dl
+    logical           , intent(in ), dimension(0:1,3) ::  is_bound
+    logical           , intent(in ), dimension(    3) ::  is_centered
     integer           , intent(in ), dimension(3) :: lo,hi,ng
     real(rp)          , intent(in ) :: maxerror
     integer           , intent(in ) :: maxiter,stype
@@ -30,12 +34,13 @@ module mod_solver
     real(rp)          , intent(in ), target, dimension(lo(2)-1:) :: dy1,dy2
     real(rp)          , intent(in ), target, dimension(lo(3)-1:) :: dz1,dz2
     type(hypre_solver), intent(out)                              :: asolver
-    real(rp)          , intent(out), dimension(lo(2):,lo(3):)    :: rhsx
-    real(rp)          , intent(out), dimension(lo(1):,lo(3):)    :: rhsy
-    real(rp)          , intent(out), dimension(lo(1):,lo(2):)    :: rhsz
+    real(rp)          , intent(out), dimension(lo(2):,lo(3):,0:)    :: rhsx
+    real(rp)          , intent(out), dimension(lo(1):,lo(3):,0:)    :: rhsy
+    real(rp)          , intent(out), dimension(lo(1):,lo(2):,0:)    :: rhsz
     integer, dimension(3         ) :: periods
     integer, dimension(3,nstencil) :: offsets
     real(rp), allocatable, dimension(:) :: matvalues
+    real(rp), dimension(0:1,3) :: factor,sgn
     integer(8) :: grid,stencil,precond,solver,mat,rhs,sol
     integer :: precond_id
     integer :: i,j,k,q,qq
@@ -44,25 +49,27 @@ module mod_solver
     comm_hypre = MPI_COMM_WORLD
     periods(:) = 0
     where (cbc(0,:)//cbc(1,:).eq.'PP') periods(:) = ng(:)
-    !factor(:,:) = 0._rp
-    !sgn(   :,:) = 0._rp
-    !do q=1,3
-    !  do qq=0,1
-    !    select case(cbc(qq,q))
-    !    case('N')
-    !      factor(qq,q) = 1._rp*dl(q)*bc(qq,q) ! pass dl(3) as the upper and lower dl which can be c or f depending on the BC
-    !      sgn(   qq,q) = 1._rp
-    !    case('D')
-    !      if(is_centered(q)) then
-    !        factor(qq,q) = -2._rp0*bc(qq,q)
-    !        sgn(   qq,q) = -1._rp
-    !      else
-    !        factor(qq,q) = -1._rp0*bc(qq,q)
-    !        sgn(   qq,q) =  0._rp
-    !      endif
-    !    end select
-    !  enddo
-    !enddo
+    factor(:,:) = 0._rp
+    sgn(   :,:) = 0._rp
+    do q=1,3
+      do qq=0,1
+        if(is_bound(qq,q)) then
+          select case(cbc(qq,q))
+          case('N')
+            factor(qq,q) = 1._rp*dl(qq,q)*bc(qq,q)
+            sgn(   qq,q) = 1._rp
+          case('D')
+            if(is_centered(q)) then
+              factor(qq,q) = -2._rp*bc(qq,q)
+              sgn(   qq,q) = -1._rp
+            else
+              factor(qq,q) = -1._rp*bc(qq,q)
+              sgn(   qq,q) =  0._rp
+            endif
+          end select
+        endif
+      enddo
+    enddo
     !
     ! create 3D grid object
     !
@@ -96,9 +103,9 @@ module mod_solver
     call HYPRE_StructVectorInitialize(rhs,ierr)
     allocate(matvalues(product(hi(:)-lo(:)+1)*nstencil))
     q = 0
-    !rhsx(:,:) = 0._rp
-    !rhsy(:,:) = 0._rp
-    !rhsz(:,:) = 0._rp
+    rhsx(:,:,:) = 0._rp
+    rhsy(:,:,:) = 0._rp
+    rhsz(:,:,:) = 0._rp
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -118,36 +125,36 @@ module mod_solver
           matvalues(qq+5) = cyp
           matvalues(qq+6) = czm
           matvalues(qq+7) = czp
-          !!!!if(is_bound(0,1).and.i.eq.lo(1)) then
-          !!!!  rhsx(j,k,0) = rhsx(j,k,0) + cxm*factor(0,1)
-          !!!!  cc = cc + sgn(0,1)*cxm
-          !!!!  cxm = 0._rp
-          !!!!endif
-          !!!!if(is_bound(1,1).and.i.eq.hi(1)) then
-          !!!!  rhsx(j,k,1) = rhsx(j,k,1) + cxm*factor(1,1)
-          !!!!  cc = cc + sgn(1,1)*cxp
-          !!!!  cxp = 0._rp
-          !!!!endif
-          !!!!if(is_bound(0,2).and.j.eq.lo(2)) then
-          !!!!  rhsy(i,k,0) = rhsy(i,k,0) + cym*factor(0,2)
-          !!!!  cc = cc + sgn(0,2)*cym
-          !!!!  cym = 0._rp
-          !!!!endif
-          !!!!if(is_bound(1,2).and.j.eq.hi(2)) then
-          !!!!  rhsy(i,k,1) = rhsy(i,k,1) + cym*factor(1,2)
-          !!!!  cc = cc + sgn(1,2)*cyp
-          !!!!  cyp = 0._rp
-          !!!!endif
-          !!!!if(is_bound(0,3).and.k.eq.lo(3)) then
-          !!!!  rhsz(i,j,0) = rhsz(i,j,0) + czm*factor(0,2)
-          !!!!  cc = cc + sgn(0,3)*czm
-          !!!!  czm = 0._rp
-          !!!!endif
-          !!!!if(is_bound(1,3).and.j.eq.hi(3)) then
-          !!!!  rhsz(i,j,1) = rhsz(i,j,1) + czm*factor(1,3)
-          !!!!  cc = cc + sgn(1,3)*czp
-          !!!!  czp = 0._rp
-          !!!!endif
+          if(is_bound(0,1).and.i.eq.lo(1)) then
+            rhsx(j,k,0) = rhsx(j,k,0) + cxm*factor(0,1)
+            cc = cc + sgn(0,1)*cxm
+            cxm = 0._rp
+          endif
+          if(is_bound(1,1).and.i.eq.hi(1)) then
+            rhsx(j,k,1) = rhsx(j,k,1) + cxm*factor(1,1)
+            cc = cc + sgn(1,1)*cxp
+            cxp = 0._rp
+          endif
+          if(is_bound(0,2).and.j.eq.lo(2)) then
+            rhsy(i,k,0) = rhsy(i,k,0) + cym*factor(0,2)
+            cc = cc + sgn(0,2)*cym
+            cym = 0._rp
+          endif
+          if(is_bound(1,2).and.j.eq.hi(2)) then
+            rhsy(i,k,1) = rhsy(i,k,1) + cym*factor(1,2)
+            cc = cc + sgn(1,2)*cyp
+            cyp = 0._rp
+          endif
+          if(is_bound(0,3).and.k.eq.lo(3)) then
+            rhsz(i,j,0) = rhsz(i,j,0) + czm*factor(0,2)
+            cc = cc + sgn(0,3)*czm
+            czm = 0._rp
+          endif
+          if(is_bound(1,3).and.j.eq.hi(3)) then
+            rhsz(i,j,1) = rhsz(i,j,1) + czm*factor(1,3)
+            cc = cc + sgn(1,3)*czp
+            czp = 0._rp
+          endif
           !
         enddo
       enddo
@@ -169,7 +176,6 @@ module mod_solver
       call HYPRE_StructSMGSetTol(solver,maxerror,ierr)
       call hypre_structSMGsetLogging(solver,1,ierr)
       call HYPRE_StructSMGSetPrintLevel(solver,1,ierr)
-      call HYPRE_StructSMGSetup(solver,mat,rhs,sol,ierr)
     elseif ( stype .eq. HYPRESolverPFMG ) then
       call HYPRE_StructPFMGCreate(comm_hypre,solver,ierr)
       call HYPRE_StructPFMGSetMaxIter(solver,maxiter,ierr)
@@ -185,7 +191,6 @@ module mod_solver
       call HYPRE_StructPFMGSetRelaxType(solver,1,ierr)
       call HYPRE_StructPFMGSetNumPreRelax(solver,1,ierr)
       call HYPRE_StructPFMGSetNumPostRelax(solver,1,ierr)
-      call HYPRE_StructPFMGSetup(solver,mat,rhs,sol,ierr)
     elseif ( stype .eq. HYPRESolverGMRES .or. &
              stype .eq. HYPRESolverBiCGSTAB   ) then
       if     (stype .eq. HYPRESolverGMRES) then
@@ -208,10 +213,8 @@ module mod_solver
       precond_id = 1   ! Set PFMG as preconditioner
       if     (stype .eq. HYPRESolverGMRES) then
         call HYPRE_StructGMRESSetPrecond(solver,precond_id,precond,ierr)
-        call HYPRE_StructGMRESSetup(solver,mat,rhs,sol,ierr)
       elseif (stype .eq. HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSetPrecond(solver,precond_id,precond,ierr)
-        call HYPRE_StructBiCGSTABSetup(solver,mat,rhs,sol,ierr)
       endif
     endif
     asolver%grid    = grid
@@ -224,46 +227,58 @@ module mod_solver
     asolver%stype   = stype
     return
   end subroutine init_solver
-  subroutine setup_solver
+  subroutine setup_solver(lo,hi,asolver,alpha)
     implicit none
+    integer , intent(in), dimension(3) :: lo,hi
+    real(rp), intent(in) :: alpha
+    type(hypre_solver), target, intent(inout) :: asolver
+    integer(8), pointer :: solver,mat,rhs,sol
+    integer   , pointer :: stype
+    real(rp), allocatable, dimension(:) :: matvalues
+    integer :: i,j,k,q
+    solver  => asolver%solver
+    mat     => asolver%mat     
+    rhs     => asolver%rhs     
+    sol     => asolver%sol     
+    stype   => asolver%stype   
+    q = 0
+    allocate(matvalues(product(hi(:)-lo(:)+1)))
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+          q=q+1
+          matvalues(q) = alpha
+        enddo
+      enddo
+    enddo
+    call HYPRE_StructMatrixAddToBoxValues(mat,lo,hi,1,[0],matvalues,ierr)
+    call HYPRE_StructMatrixAssemble(mat,ierr)
+    deallocate(matvalues)
+    !
+    ! setup solver
+    !
+    ! note: this part was taken from the Paris Simulator code
+    !       freely available under a GPL license
+    !       http://www.ida.upmc.fr/~zaleski/paris
+    !
+    if     ( stype .eq. HYPRESolverSMG ) then
+      call HYPRE_StructSMGSetup(solver,mat,rhs,sol,ierr)
+    elseif ( stype .eq. HYPRESolverPFMG ) then
+      call HYPRE_StructPFMGSetup(solver,mat,rhs,sol,ierr)
+    elseif ( stype .eq. HYPRESolverGMRES .or. &
+             stype .eq. HYPRESolverBiCGSTAB   ) then
+      if     (stype .eq. HYPRESolverGMRES) then
+        call HYPRE_StructGMRESSetup(solver,mat,rhs,sol,ierr)
+      elseif (stype .eq. HYPRESolverBiCGSTAB) then
+        call HYPRE_StructBiCGSTABSetup(solver,mat,rhs,sol,ierr)
+      endif
+    endif
+    asolver%solver  = solver
+    asolver%mat     = mat
+    asolver%rhs     = rhs
+    asolver%sol     = sol
     return
   end subroutine setup_solver
-  !subroutine add_to_diagonal(lo,hi,alpha,asolver)
-  !  ! MAYBE CHANGE TO SETUP AND ADD OPTION TO CHANGE DIAGONAL, AND DO ALL THE SETTING UP HERE
-  !  !
-  !  ! DESCRIPTION!
-  !  !
-  !  implicit none
-  !  integer, parameter :: nstencil = 7
-  !  integer           , intent(in   ), dimension(3) :: lo,hi
-  !  type(hypre_solver), intent(inout) :: asolver
-  !  real(rp), allocatable, dimension(:) :: matvalues
-  !  integer :: i,j,k,q,qq
-  !  !
-  !  allocate(matvalues(product(hi(:)-lo(:)+1)))
-  !  q = 0
-  !  do k=lo(3),hi(3)
-  !    do j=lo(2),hi(2)
-  !      do i=lo(1),hi(1)
-  !        q = q + 1
-  !        cxm = 1._rp/(dx1(i-1)*dx2(i))
-  !        cxp = 1._rp/(dx1(i  )*dx2(i))
-  !        cym = 1._rp/(dy1(j-1)*dy2(j))
-  !        cyp = 1._rp/(dy1(j  )*dy2(j))
-  !        czm = 1._rp/(dz1(k-1)*dz2(k))
-  !        czp = 1._rp/(dz1(k  )*dz2(k))
-  !        cc  = -(cxm+cxp+cym+cyp+czm+czp)
-  !        qq = (q-1)*nstencil
-  !        matvalues(qq+1) = alpha
-  !      enddo
-  !    enddo
-  !  enddo
-  !  call HYPREStructMatrixAddToBoxValues(asolver%mat,lo,hi,1,[0],matvalues,ierr)
-  !  call HYPRE_StructMatrixAssemble(asolver%mat,ierr)
-  !  deallocate(matvalues)
-  !  !
-  !  return
-  !end subroutine add_to_diagonal
   subroutine solve_helmholtz(asolver,lo,hi,p,po)
     implicit none
     type(hypre_solver), target, intent(in   )               :: asolver

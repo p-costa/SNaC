@@ -20,26 +20,28 @@
 !-----------------------------------------------------------------------------------
 program snac
   use mpi
-  use mod_bound     , only: bounduvw,boundp
-  use mod_chkdt     , only: chkdt
-  use mod_common_mpi, only: myid,ierr
-  use mod_initflow  , only: initflow
-  use mod_initgrid  , only: initgrid,distribute_grid,save_grid
-  use mod_initmpi   , only: initmpi
-  use mod_fillps    , only: fillps
-  use mod_load      , only: load
-  use mod_param     , only: read_input, &
-                            datadir, &
-                            rkcoeff, &
-                            ng,l,gt,gr,cfl,dtmin,uref,lref,rey,visc,            &
-                            inivel,is_wallturb,nstep,time_max,tw_max,stop_type, &
-                            restart,is_overwrite_save,                          &
-                            icheck,iout0d,iout1d,iout2d,iout3d,isave,           &
-                            cbcvel,bcvel,cbcpre,bcpre,                          &
-                            bforce, is_forced,velf,is_outflow,no_outflow,       &
-                            dims,nthreadsmax
-  use mod_rk     , only: rk_mom
-  use mod_sanity , only: test_sanity
+  use mod_bound          , only: bounduvw,boundp,updt_rhs
+  use mod_chkdt          , only: chkdt
+  use mod_common_mpi     , only: myid,ierr
+  use mod_correc         , only: correc
+  use mod_initflow       , only: initflow
+  use mod_initgrid       , only: initgrid,distribute_grid,save_grid
+  use mod_initmpi        , only: initmpi
+  use mod_fillps         , only: fillps
+  use mod_load           , only: load
+  use mod_param          , only: read_input, &
+                                 datadir, &
+                                 rkcoeff, &
+                                 ng,l,gt,gr,cfl,dtmin,uref,lref,rey,visc,            &
+                                 inivel,is_wallturb,nstep,time_max,tw_max,stop_type, &
+                                 restart,is_overwrite_save,                          &
+                                 icheck,iout0d,iout1d,iout2d,iout3d,isave,           &
+                                 cbcvel,bcvel,cbcpre,bcpre,                          &
+                                 bforce, is_forced,velf,is_outflow,no_outflow,       &
+                                 dims,nthreadsmax
+  use mod_pressure_update, only: pressure_update
+  use mod_rk             , only: rk_mom
+  use mod_sanity         , only: test_sanity
   use mod_types
   !$ use omp_lib
   implicit none
@@ -55,8 +57,8 @@ program snac
     real(rp), allocatable, dimension(:,:,:) :: z
   end type rhs_bound
   type(rhs_bound) :: rhsbp
-#ifdef _IMPDIFF
   real(rp) :: alpha
+#ifdef _IMPDIFF
   type(rhs_bound) :: rhsbu,rhsbv,rhsbw
 #endif
   real(rp) :: dt,dtmax,time,dtrk,divtot,divmax
@@ -185,8 +187,8 @@ program snac
   ! initialization of the flow fields
   !
   if(.not.restart) then
-    istep = 100
-    time = 2.5_rp
+    istep = 0
+    time = 0._rp
     call initflow(inivel,is_wallturb,lo,hi,ng,l,uref,lref,visc,bforce(1), &
                   xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
     if(myid.eq.0) write(stdout,*) '*** Initial condition succesfully set ***'
@@ -231,11 +233,22 @@ program snac
     if(myid.eq.0) write(stdout,*) 'Timestep #', istep, 'Time = ', time
     dpdl(:)  = 0._rp
     do irk=1,3
+      dtrk = sum(rkcoeff(:,irk))*dt
+      alpha = visc*dtrk/2._rp
       call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,l,dt,bforce, &
                   is_forced,velf,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,f)
       dpdl(:) = dpdl(:) - f(:)/dt
       call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
+      call fillps(lo,hi,dxf,dyf,dzf,dtrk,up,vp,wp,p)
+      call updt_rhs(cbcpre,lo,hi,is_bound,rhsbp%x,rhsbp%y,rhsbp%z,pp)
+      !solver
+      call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
+      call correc(lo,hi,dxc,dyc,dzc,dtrk,p,up,vp,wp,u,v,w)
+      call bounduvw(cbcvel,lo,hi,bcvel,is_outflow,halos,is_bound,nb, &
+                    dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
+      call pressure_update(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,pp,p)
+      call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
     enddo
     !
     ! check simulation stopping criteria
