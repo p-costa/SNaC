@@ -21,18 +21,19 @@
 program snac
   use mpi
   use mod_common_mpi, only: myid,ierr
+  use mod_initflow  , only: initflow
   use mod_initgrid  , only: initgrid,distribute_grid,save_grid
   use mod_initmpi   , only: initmpi
   use mod_fillps    , only: fillps
   use mod_load      , only: load
   use mod_param     , only: read_input, &
                             datadir, &
-                            ng,l,gt,gr,cfl,dtmin,uref,lref,rey,                  &
+                            ng,l,gt,gr,cfl,dtmin,uref,lref,rey,visc,            &
                             inivel,is_wallturb,nstep,time_max,tw_max,stop_type, &
-                            restart,is_overwrite_save,                           &
-                            icheck,iout0d,iout1d,iout2d,iout3d,isave,            &
-                            cbcvel,bcvel,cbcpre,bcpre,                           &
-                            bforce, is_forced,velf,is_outflow,                   &
+                            restart,is_overwrite_save,                          &
+                            icheck,iout0d,iout1d,iout2d,iout3d,isave,           &
+                            cbcvel,bcvel,cbcpre,bcpre,                          &
+                            bforce, is_forced,velf,is_outflow,                  &
                             dims,nthreadsmax
   use mod_sanity , only: test_sanity
   use mod_types
@@ -66,6 +67,7 @@ program snac
   real(rp), dimension(100) :: var
   character(len=7  ) :: fldnum
   character(len=100) :: filename
+  integer :: iunit
   !
   real(rp) :: twi,tw
   logical  :: is_done,kill
@@ -155,6 +157,10 @@ program snac
   call save_grid(trim(datadir)//'grid_x',ng(1),xf_g,xc_g,dxf_g,dxc_g)
   call save_grid(trim(datadir)//'grid_y',ng(2),yf_g,yc_g,dyf_g,dyc_g)
   call save_grid(trim(datadir)//'grid_z',ng(3),zf_g,zc_g,dzf_g,dzc_g)
+  open(newunit=iunit,status='replace',file=trim(datadir)//'geometry.out')
+    write(iunit,*) ng(1),ng(2),ng(3) 
+    write(iunit,*) l(1),l(2),l(3) 
+  close(iunit)
   call distribute_grid(lo(1),hi(1),dxc_g,dxc)
   call distribute_grid(lo(1),hi(1),dxf_g,dxf)
   call distribute_grid(lo(1),hi(1), xc_g, xc)
@@ -169,10 +175,11 @@ program snac
   call distribute_grid(lo(3),hi(3), zf_g, zf)
   !
   if(.not.restart) then
-    istep = 0
-    time = 0._rp
-    !call initflow(inivel,n,zc/lz,dzc/lz,dzf/lz,visc,u,v,w,p)
-    if(myid.eq.0) print*, '*** Initial condition succesfully set ***'
+    istep = 100
+    time = 2.5_rp
+    call initflow(inivel,is_wallturb,lo,hi,ng,l,uref,lref,visc,bforce(1), &
+                  xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
+    if(myid.eq.0) write(stdout,*) '*** Initial condition succesfully set ***'
   else
     call load('r',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
     if(myid.eq.0) write(stdout,*) '*** Checkpoint loaded at time = ', time, 'time step = ', istep, '. ***'

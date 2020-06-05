@@ -81,7 +81,7 @@ module mod_load
     integer , intent(in)                         :: fh
     integer , intent(in), dimension(3)           :: ng,lo,hi,nghost
     integer(kind=MPI_OFFSET_KIND), intent(inout) :: disp
-    real(rp), intent(in), dimension(lo(1)-nghost(1):,lo(2)-nghost(2):,lo(3)-nghost(3):) :: var
+    real(rp), intent(inout), dimension(lo(1)-nghost(1):,lo(2)-nghost(2):,lo(3)-nghost(3):) :: var
     integer :: ierr
     integer , dimension(3) :: n
     integer , dimension(3) :: sizes,subsizes,starts
@@ -92,7 +92,7 @@ module mod_load
     starts(:)   = lo(:) - 1 ! starts from 0
     call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_glob,ierr)
     call MPI_TYPE_COMMIT(type_glob,ierr)
-    sizes(:)    = n(:) + nghost(:)
+    sizes(:)    = n(:) + 2*nghost(:)
     subsizes(:) = n(:)
     starts(:)   = 0 + nghost(:)
     call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_loc ,ierr)
@@ -106,6 +106,8 @@ module mod_load
         call MPI_FILE_WRITE_ALL(fh,var,1,type_loc,MPI_STATUS_IGNORE,ierr)
       end select
         disp = disp+product(ng)*sizeof(1._rp)
+        call MPI_TYPE_FREE(type_glob,ierr)
+        call MPI_TYPE_FREE(type_loc ,ierr)
       return
   end subroutine io_field
 end module mod_load

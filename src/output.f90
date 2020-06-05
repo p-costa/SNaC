@@ -140,8 +140,8 @@ module mod_output
     !
     implicit none
     character(len=*), intent(in) :: fname
-    integer , intent(in), dimension(3) :: lo,hi,ng,nskip
-    real(rp), intent(in), dimension(lo(1)-1,lo(2)-1,lo(3)-1) :: p
+    integer , intent(in   ), dimension(3) :: lo,hi,ng,nskip
+    real(rp), intent(inout), dimension(lo(1)-1,lo(2)-1,lo(3)-1) :: p
     integer :: fh
     integer(kind=MPI_OFFSET_KIND) :: filesize,disp
     !
@@ -193,10 +193,10 @@ module mod_output
     !
     implicit none
     character(len=*), intent(in)          :: datadir,fname_bin,fname_log,varname
-    integer , intent(in), dimension(3)    :: lo,hi,ng,nmin,nmax,nskip
-    real(rp), intent(in)                  :: time
-    integer , intent(in)                  :: istep
-    real(rp), intent(in), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
+    integer , intent(in   ), dimension(3)    :: lo,hi,ng,nmin,nmax,nskip
+    real(rp), intent(in   )                  :: time
+    integer , intent(in   )                  :: istep
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     !
     call out3d(trim(datadir)//trim(fname_bin),lo,hi,ng,nskip,p)
     call write_log_output(trim(datadir)//trim(fname_log),trim(fname_bin),trim(varname),nmin,nmax,nskip,time,istep)
