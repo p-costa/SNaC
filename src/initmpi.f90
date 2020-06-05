@@ -35,7 +35,6 @@ module mod_initmpi
       lo(:) = lo(:) + mod(ng(:),dims(:))
       hi(:) = hi(:) + mod(ng(:),dims(:))
     end where
-    n(:) = hi(:)-lo(:)+1
     !
     ! generate neighbor arrays and derived types for halo regions
     !

@@ -16,10 +16,9 @@ module mod_solver
   end type hypre_solver 
   contains
   subroutine init_solver(cbc,lo,hi,ng,maxerror,maxiter,stype, &
-                         dx1,dx2,dy1,dy2,dz1,dz2,asolver)
+                         dx1,dx2,dy1,dy2,dz1,dz2,rhsx,rhsy,rhsz,asolver)
     !
-    ! description!
-    ! N.B.: TO KEEP THIS MORE GENERIC, qskip and dxc,dxf are left to the user hi(:)-q(skip)
+    ! description
     !
     implicit none
     integer, parameter :: nstencil = 7
@@ -30,7 +29,10 @@ module mod_solver
     real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dx1,dx2
     real(rp)          , intent(in ), target, dimension(lo(2)-1:) :: dy1,dy2
     real(rp)          , intent(in ), target, dimension(lo(3)-1:) :: dz1,dz2
-    type(hypre_solver), intent(out) :: asolver
+    type(hypre_solver), intent(out)                              :: asolver
+    real(rp)          , intent(out), dimension(lo(2):,lo(3):)    :: rhsx
+    real(rp)          , intent(out), dimension(lo(1):,lo(3):)    :: rhsy
+    real(rp)          , intent(out), dimension(lo(1):,lo(2):)    :: rhsz
     integer, dimension(3         ) :: periods
     integer, dimension(3,nstencil) :: offsets
     real(rp), allocatable, dimension(:) :: matvalues
@@ -42,6 +44,25 @@ module mod_solver
     comm_hypre = MPI_COMM_WORLD
     periods(:) = 0
     where (cbc(0,:)//cbc(1,:).eq.'PP') periods(:) = ng(:)
+    !factor(:,:) = 0._rp
+    !sgn(   :,:) = 0._rp
+    !do q=1,3
+    !  do qq=0,1
+    !    select case(cbc(qq,q))
+    !    case('N')
+    !      factor(qq,q) = 1._rp*dl(q)*bc(qq,q) ! pass dl(3) as the upper and lower dl which can be c or f depending on the BC
+    !      sgn(   qq,q) = 1._rp
+    !    case('D')
+    !      if(is_centered(q)) then
+    !        factor(qq,q) = -2._rp0*bc(qq,q)
+    !        sgn(   qq,q) = -1._rp
+    !      else
+    !        factor(qq,q) = -1._rp0*bc(qq,q)
+    !        sgn(   qq,q) =  0._rp
+    !      endif
+    !    end select
+    !  enddo
+    !enddo
     !
     ! create 3D grid object
     !
@@ -75,6 +96,9 @@ module mod_solver
     call HYPRE_StructVectorInitialize(rhs,ierr)
     allocate(matvalues(product(hi(:)-lo(:)+1)*nstencil))
     q = 0
+    !rhsx(:,:) = 0._rp
+    !rhsy(:,:) = 0._rp
+    !rhsz(:,:) = 0._rp
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -94,6 +118,37 @@ module mod_solver
           matvalues(qq+5) = cyp
           matvalues(qq+6) = czm
           matvalues(qq+7) = czp
+          !!!!if(is_bound(0,1).and.i.eq.lo(1)) then
+          !!!!  rhsx(j,k,0) = rhsx(j,k,0) + cxm*factor(0,1)
+          !!!!  cc = cc + sgn(0,1)*cxm
+          !!!!  cxm = 0._rp
+          !!!!endif
+          !!!!if(is_bound(1,1).and.i.eq.hi(1)) then
+          !!!!  rhsx(j,k,1) = rhsx(j,k,1) + cxm*factor(1,1)
+          !!!!  cc = cc + sgn(1,1)*cxp
+          !!!!  cxp = 0._rp
+          !!!!endif
+          !!!!if(is_bound(0,2).and.j.eq.lo(2)) then
+          !!!!  rhsy(i,k,0) = rhsy(i,k,0) + cym*factor(0,2)
+          !!!!  cc = cc + sgn(0,2)*cym
+          !!!!  cym = 0._rp
+          !!!!endif
+          !!!!if(is_bound(1,2).and.j.eq.hi(2)) then
+          !!!!  rhsy(i,k,1) = rhsy(i,k,1) + cym*factor(1,2)
+          !!!!  cc = cc + sgn(1,2)*cyp
+          !!!!  cyp = 0._rp
+          !!!!endif
+          !!!!if(is_bound(0,3).and.k.eq.lo(3)) then
+          !!!!  rhsz(i,j,0) = rhsz(i,j,0) + czm*factor(0,2)
+          !!!!  cc = cc + sgn(0,3)*czm
+          !!!!  czm = 0._rp
+          !!!!endif
+          !!!!if(is_bound(1,3).and.j.eq.hi(3)) then
+          !!!!  rhsz(i,j,1) = rhsz(i,j,1) + czm*factor(1,3)
+          !!!!  cc = cc + sgn(1,3)*czp
+          !!!!  czp = 0._rp
+          !!!!endif
+          !
         enddo
       enddo
     enddo
@@ -235,6 +290,7 @@ module mod_solver
         enddo
       enddo
     enddo
+    !
     call HYPRE_StructVectorSetBoxValues(rhs,lo,hi, &
                                         rhsvalues,ierr)
     call HYPRE_StructVectorAssemble(rhs,ierr)

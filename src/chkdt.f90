@@ -52,7 +52,7 @@ module mod_chkdt
     if(dti.eq.0._rp) dti = 1._rp
     dlmin     = min(minval(dxf),minval(dyf),minval(dzf))
 #ifdef _IMPDIFF
-    dtmax = sqrt(3.)/dti
+    dtmax = sqrt(3._rp)/dti
 #else
     dtmax = min(1.65_rp/12._rp/visc*dlmin**2,sqrt(3._rp)/dti)
 #endif

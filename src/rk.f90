@@ -93,18 +93,27 @@ module mod_rk
     !
     ! bulk velocity forcing
     !
-    f(:) = 0.
+    f(:) = 0._rp
     if(is_forced(1)) then
       call chkmean(lo,hi,l,dxc,dyf,dzf,up,mean)
       f(1) = velf(1) - mean
+      !$OMP WORKSHARE
+      up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(2):hi(1),lo(2):hi(2),lo(3):hi(3)) + f(1)
+      !$OMP END WORKSHARE
     endif
     if(is_forced(2)) then
       call chkmean(lo,hi,l,dxc,dyf,dzf,vp,mean)
       f(2) = velf(2) - mean
+      !$OMP WORKSHARE
+      vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(2):hi(1),lo(2):hi(2),lo(3):hi(3)) + f(2)
+      !$OMP END WORKSHARE
     endif
     if(is_forced(3)) then
       call chkmean(lo,hi,l,dxc,dyf,dzf,wp,mean)
       f(3) = velf(3) - mean
+      !$OMP WORKSHARE
+      wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(2):hi(1),lo(2):hi(2),lo(3):hi(3)) + f(3)
+      !$OMP END WORKSHARE
     endif
 #ifdef _IMPDIFF
     !

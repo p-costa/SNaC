@@ -21,6 +21,7 @@
 program snac
   use mpi
   use mod_bound     , only: bounduvw,boundp
+  use mod_chkdt     , only: chkdt
   use mod_common_mpi, only: myid,ierr
   use mod_initflow  , only: initflow
   use mod_initgrid  , only: initgrid,distribute_grid,save_grid
@@ -29,6 +30,7 @@ program snac
   use mod_load      , only: load
   use mod_param     , only: read_input, &
                             datadir, &
+                            rkcoeff, &
                             ng,l,gt,gr,cfl,dtmin,uref,lref,rey,visc,            &
                             inivel,is_wallturb,nstep,time_max,tw_max,stop_type, &
                             restart,is_overwrite_save,                          &
@@ -36,6 +38,7 @@ program snac
                             cbcvel,bcvel,cbcpre,bcpre,                          &
                             bforce, is_forced,velf,is_outflow,no_outflow,       &
                             dims,nthreadsmax
+  use mod_rk     , only: rk_mom
   use mod_sanity , only: test_sanity
   use mod_types
   !$ use omp_lib
@@ -66,7 +69,7 @@ program snac
                                          dzc_g,dzf_g,zc_g,zf_g
   !
   real(rp) :: meanvelu,meanvelv,meanvelw
-  real(rp), dimension(3) :: dpdl
+  real(rp), dimension(3) :: f,dpdl
   !
   real(rp), dimension(100) :: var
   character(len=7  ) :: fldnum
@@ -146,7 +149,7 @@ program snac
   !
   if(myid.eq.0) then
     write(stdout,*) '*******************************'
-    write(stdout,*) '*** beginning of simulation ***'
+    write(stdout,*) '*** Beginning of simulation ***'
     write(stdout,*) '*******************************'
     write(stdout,*) ''
   endif
@@ -210,17 +213,46 @@ program snac
   !
   ! determine time step
   !
-  !call chkdt(n,dl,dzci,dzfi,visc,u,v,w,dtmax)
+  call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
   dt = min(cfl*dtmax,dtmin)
   if(myid.eq.0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
   !
   ! main loop
   !
-  if(myid.eq.0) print*, '*** calculation loop starts now ***'
+  if(myid.eq.0) write(stdout,*) '*** Calculation loop starts now ***'
   kill    = .false.
   is_done = .false.
   do while(.not.is_done)
+#ifdef _TIMING
+    dt12 = MPI_WTIME()
+#endif
+    istep = istep + 1
+    time  = time  + dt
+    if(myid.eq.0) write(stdout,*) 'Timestep #', istep, 'Time = ', time
+    dpdl(:)  = 0._rp
+    do irk=1,3
+      call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,l,dt,bforce, &
+                  is_forced,velf,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,f)
+      dpdl(:) = dpdl(:) - f(:)/dt
+      call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
+                    dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
+    enddo
+    !
+    ! check simulation stopping criteria
+    !
+    if(stop_type(1)) then ! maximum number of time steps reached
+      if(istep.ge.nstep   ) is_done = is_done.or..true.
+    endif
+    if(stop_type(2)) then ! maximum simulation time reached
+      if(time .ge.time_max) is_done = is_done.or..true.
+    endif
+    if(stop_type(3)) then ! maximum wall-clock time reached
+      tw = (MPI_WTIME()-twi)/3600._rp
+      call MPI_ALLREDUCE(MPI_IN_PLACE,tw,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
+      if(tw   .ge.tw_max  ) is_done = is_done.or..true.
+    endif
   enddo
+  if(myid.eq.0.and.(.not.kill)) write(stdout,*) '*** Fim ***'
   call MPI_FINALIZE(ierr)
   call exit
 end program snac

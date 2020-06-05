@@ -15,3 +15,5 @@ For implicit diffusion:
 
   ! CHANGE: CALL DISTRIBUTE GRID BELOW THREE TIMES
   ! CHANGE: AND THEN CALL SAVEGRID BELOW THREE TIMES
+ADD BCs a la phase change code! :)
+IF IMPLICIT DIFFUSION and not periodic determine q which is equal to 1 where bound(ijk,nb) is true and zero elsewhere. Then do hi = hi-q (e.g.) q = [0,1,0] for right bound when we are solving Helmholtz for v
