@@ -2,9 +2,9 @@
 FC   = mpifort
 # flags
 BIG :=
-DBG := -g -fbacktrace -Wall -O0 -Wextra -pedantic -fcheck=all
+DBG := -O0 -g -fbacktrace -finit-real=snan -ffpe-trap=invalid -Wall -Wextra -pedantic -fcheck=all
 OMP :=
-OPT := -O3
+OPT := #-O3
 OTH := 
 PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
@@ -34,7 +34,7 @@ run: $(TARGET)
 clean:
 	rm -rf *.o *.mod *dSYM $(TARGET)
 # dependencies
-bound.o: bound.f90 types.o
+bound.o: bound.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 debug.o: debug.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<

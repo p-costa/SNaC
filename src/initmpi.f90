@@ -1,20 +1,22 @@
 module mod_initmpi
   use mpi
   use mod_types
-  use mod_common_mpi, only: ierr,myid,nb,is_bound,halos
+  use mod_common_mpi, only: ierr,myid,comm_cart
   implicit none
   private
   public initmpi
   contains
-  subroutine initmpi(ng,dims,bc,lo,hi)
+  subroutine initmpi(ng,dims,bc,lo,hi,nb,is_bound,halos)
     implicit none
     integer, intent(in ), dimension(3) :: ng,dims
     character(len=1), intent(in), dimension(0:1,3) :: bc
     integer, intent(out), dimension(3) :: lo,hi
+    integer, intent(out), dimension(0:1,3) :: nb
+    logical, intent(out), dimension(0:1,3) :: is_bound
+    integer, intent(out), dimension(3    ) :: halos
     logical, dimension(3) :: periods
     integer, dimension(3) :: n,coords
     integer :: idir
-    integer :: comm_cart
     !
     ! generate Cartesian topology
     !
@@ -33,6 +35,7 @@ module mod_initmpi
       lo(:) = lo(:) + mod(ng(:),dims(:))
       hi(:) = hi(:) + mod(ng(:),dims(:))
     end where
+    n(:) = hi(:)-lo(:)+1
     !
     ! generate neighbor arrays and derived types for halo regions
     !
@@ -58,7 +61,7 @@ module mod_initmpi
     case(3)
       call MPI_TYPE_VECTOR(          1,nghost*nn(1)*nn(2),nn(1)*nn(2)*nn(3),MPI_REAL_RP,halo,ierr)
     end select
-    return
     call MPI_TYPE_COMMIT(halo,ierr)
+    return
   end subroutine makehalo
 end module mod_initmpi

@@ -5,34 +5,34 @@ module mod_bound
   private
   public boundp,bounduvw,updt_rhs_b
   contains
-  subroutine bounduvw(cbc,lo,hi,bc,isoutflow,halo,is_bound,nb, &
+  subroutine bounduvw(cbc,lo,hi,bc,isoutflow,halos,is_bound,nb, &
                       dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
     !
     ! imposes velocity boundary conditions
     !
     implicit none
     character(len=1), intent(in), dimension(0:1,3,3) :: cbc
-    integer , intent(in), dimension(3) :: lo,hi
-    real(rp), intent(in), dimension(0:1,3,3) :: bc
-    logical , intent(in), dimension(0:1,3) :: isoutflow
-    integer , intent(in), dimension(3    ) :: halo
-    logical , intent(in), dimension(0:1,3) :: is_bound
-    integer , intent(in), dimension(0:1,3) :: nb
-    real(rp), intent(in), dimension(lo(1)-1:) :: dxc,dxf
-    real(rp), intent(in), dimension(lo(2)-1:) :: dyc,dyf
-    real(rp), intent(in), dimension(lo(3)-1:) :: dzc,dzf
+    integer , intent(in   ), dimension(3) :: lo,hi
+    real(rp), intent(in   ), dimension(0:1,3,3) :: bc
+    logical , intent(in   ), dimension(0:1,3) :: isoutflow
+    integer , intent(in   ), dimension(3    ) :: halos
+    logical , intent(in   ), dimension(0:1,3) :: is_bound
+    integer , intent(in   ), dimension(0:1,3) :: nb
+    real(rp), intent(in   ), dimension(lo(1)-1:) :: dxc,dxf
+    real(rp), intent(in   ), dimension(lo(2)-1:) :: dyc,dyf
+    real(rp), intent(in   ), dimension(lo(3)-1:) :: dzc,dzf
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
     integer :: q,idir,sgn,ioutflowdir
     !
-    call updthalo(lo,hi,1,halo(1),nb(:,1),1,u)
-    call updthalo(lo,hi,1,halo(2),nb(:,2),2,u)
-    call updthalo(lo,hi,1,halo(3),nb(:,3),3,u)
-    call updthalo(lo,hi,1,halo(1),nb(:,1),1,v)
-    call updthalo(lo,hi,1,halo(2),nb(:,2),2,v)
-    call updthalo(lo,hi,1,halo(3),nb(:,3),3,v)
-    call updthalo(lo,hi,1,halo(1),nb(:,1),1,w)
-    call updthalo(lo,hi,1,halo(2),nb(:,2),2,w)
-    call updthalo(lo,hi,1,halo(3),nb(:,3),3,w)
+    call updthalo(lo,hi,1,halos(1),nb(:,1),1,u)
+    call updthalo(lo,hi,1,halos(2),nb(:,2),2,u)
+    call updthalo(lo,hi,1,halos(3),nb(:,3),3,u)
+    call updthalo(lo,hi,1,halos(1),nb(:,1),1,v)
+    call updthalo(lo,hi,1,halos(2),nb(:,2),2,v)
+    call updthalo(lo,hi,1,halos(3),nb(:,3),3,v)
+    call updthalo(lo,hi,1,halos(1),nb(:,1),1,w)
+    call updthalo(lo,hi,1,halos(2),nb(:,2),2,w)
+    call updthalo(lo,hi,1,halos(3),nb(:,3),3,w)
     !
     if(is_bound(0,1)) then
       call set_bc(cbc(0,1,1),0,lo,hi,1,.false.,bc(0,1,1),dxf(lo(1)-1),u)
@@ -78,7 +78,7 @@ module mod_bound
     return
   end subroutine bounduvw
   !
-  subroutine boundp(cbc,lo,hi,bc,halo,is_bound,nb,dxc,dyc,dzc,p)
+  subroutine boundp(cbc,lo,hi,bc,halos,is_bound,nb,dxc,dyc,dzc,p)
     !
     ! imposes pressure boundary conditions
     !
@@ -86,7 +86,7 @@ module mod_bound
     character(len=1), intent(in), dimension(0:1,3) :: cbc
     integer , intent(in   ), dimension(3    )      :: lo,hi
     real(rp), intent(in   ), dimension(0:1,3)      :: bc
-    integer , intent(in   ), dimension(3    )      :: halo
+    integer , intent(in   ), dimension(3    )      :: halos
     logical , intent(in   ), dimension(0:1,3)      :: is_bound
     integer , intent(in   ), dimension(0:1,3)      :: nb
     real(rp), intent(in   ), dimension(lo(1)-1:)   :: dxc
@@ -94,9 +94,9 @@ module mod_bound
     real(rp), intent(in   ), dimension(lo(3)-1:)   :: dzc
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     !
-    call updthalo(lo,hi,1,halo(1),nb(:,1),1,p)
-    call updthalo(lo,hi,1,halo(2),nb(:,2),2,p)
-    call updthalo(lo,hi,1,halo(3),nb(:,3),3,p)
+    call updthalo(lo,hi,1,halos(1),nb(:,1),1,p)
+    call updthalo(lo,hi,1,halos(2),nb(:,2),2,p)
+    call updthalo(lo,hi,1,halos(3),nb(:,3),3,p)
     !
     if(is_bound(0,1)) then
       call set_bc(cbc(0,1),0,lo,hi,1,.true.,bc(0,1),dxc(lo(2)-1),p)
@@ -454,66 +454,67 @@ module mod_bound
   end subroutine updt_rhs_b
   !
   subroutine updthalo(lo,hi,n,halo,nb,idir,p)
+    use mod_common_mpi, only: comm_cart
     implicit none
     integer , dimension(3), intent(in) :: lo,hi
-    integer , intent(in) :: n,halo
+    integer , intent(in) :: n,halo ! n -> number of ghost points
     integer , intent(in), dimension(0:1) :: nb
     integer , intent(in) :: idir
     real(rp), dimension(lo(1)-n:,lo(2)-n:,lo(3)-n:), intent(inout) :: p
-    integer :: ierr,status(MPI_STATUS_SIZE)
+    integer :: ierr
     !integer :: requests(4), statuses(MPI_STATUS_SIZE,4)
     !
-    !  this subroutine updates the halos that store info
+    !  this subroutine updates the halo that store info
     !  from the neighboring computational sub-domain
     !
     select case(idir)
     case(1) ! x direction
       call MPI_SENDRECV(p(lo(1)  ,lo(2)-n,lo(3)-n),1,halo,nb(0),0, &
                         p(hi(1)+n,lo(2)-n,lo(3)-n),1,halo,nb(1),0, &
-                        MPI_COMM_WORLD,status,ierr)
+                        comm_cart,MPI_STATUS_IGNORE,ierr)
       call MPI_SENDRECV(p(hi(1)  ,lo(2)-n,lo(3)-n),1,halo,nb(1),0, &
                         p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),0, &
-                        MPI_COMM_WORLD,status,ierr)
+                        comm_cart,MPI_STATUS_IGNORE,ierr)
          !call MPI_IRECV( p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),1, &
-         !                MPI_COMM_WORLD,requests(1),error)
+         !                comm_cart,requests(1),error)
          !call MPI_IRECV( p(hi(1)+n,lo(2)-n,lo(3)-n),1,halo,nb(1),0, &
-         !                MPI_COMM_WORLD,requests(2),error)
+         !                comm_cart,requests(2),error)
          !call MPI_ISSEND(p(hi(1)  ,lo(2)-n,lo(3)-n),1,halo,nb(1),1, &
-         !                MPI_COMM_WORLD,requests(3),error)
+         !                comm_cart,requests(3),error)
          !call MPI_ISSEND(p(lo(1)  ,lo(2)-n,lo(3)-n),1,halo,nb(0),0, &
-         !                MPI_COMM_WORLD,requests(4),error)
+         !                comm_cart,requests(4),error)
          !call MPI_WAITALL(4, requests, statuses, error)
     case(2) ! y direction
       call MPI_SENDRECV(p(lo(1)-n,lo(2)  ,lo(3)-n),1,halo,nb(0),0, &
                         p(lo(1)-n,hi(2)+n,lo(3)-n),1,halo,nb(1),0, &
-                        MPI_COMM_WORLD,status,ierr)
+                        comm_cart,MPI_STATUS_IGNORE,ierr)
       call MPI_SENDRECV(p(lo(1)-n,hi(2)  ,lo(3)-n),1,halo,nb(1),0, &
                         p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),0, &
-                        MPI_COMM_WORLD,status,ierr)
+                        comm_cart,MPI_STATUS_IGNORE,ierr)
          !call MPI_IRECV( p(lo(1)-n,hi(2)+n,lo(3)-n),1,halo,nb(1),0, &
-         !                MPI_COMM_WORLD,requests(1),error)
+         !                comm_cart,requests(1),error)
          !call MPI_IRECV( p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),1, &
-         !                MPI_COMM_WORLD,requests(2),error)
+         !                comm_cart,requests(2),error)
          !call MPI_ISSEND(p(lo(1)-n,lo(2)  ,lo(3)-n),1,halo,nb(0),0, &
-         !               MPI_COMM_WORLD,requests(3),error)
+         !               comm_cart,requests(3),error)
          !call MPI_ISSEND(p(lo(1)-n,hi(2)  ,lo(3)-n),1,halo,nb(1),1, &
-         !               MPI_COMM_WORLD,requests(4),error)
+         !               comm_cart,requests(4),error)
          !call MPI_WAITALL(4, requests, statuses, error)
     case(3) ! z direction
       call MPI_SENDRECV(p(lo(1)-n,lo(2)-n,lo(3)  ),1,halo,nb(0),0, &
                         p(lo(1)-n,lo(2)-n,hi(3)+n),1,halo,nb(1),0, &
-                        MPI_COMM_WORLD,status,ierr)
+                        comm_cart,MPI_STATUS_IGNORE,ierr)
       call MPI_SENDRECV(p(lo(1)-n,lo(2)-n,hi(3)  ),1,halo,nb(1),0, &
                         p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),0, &
-                        MPI_COMM_WORLD,status,ierr)
+                        comm_cart,MPI_STATUS_IGNORE,ierr)
       !call MPI_IRECV( p(lo(1)-n,lo(2)-n,hi(3)+n),1,halo,nb(1),0, &
-      !                MPI_COMM_WORLD,requests(1),error)
+      !                comm_cart,requests(1),error)
       !call MPI_IRECV( p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),1, &
-      !                MPI_COMM_WORLD,requests(2),error)
+      !                comm_cart,requests(2),error)
       !call MPI_ISSEND(p(lo(1)-n,lo(2)-n,lo(3)  ),1,halo,nb(0),0, &
-      !               MPI_COMM_WORLD,requests(3),error)
+      !               comm_cart,requests(3),error)
       !call MPI_ISSEND(p(lo(1)-n,lo(2)-n,hi(3)  ),1,halo,nb(1),1, &
-      !               MPI_COMM_WORLD,requests(4),error)
+      !               comm_cart,requests(4),error)
       !call MPI_WAITALL(4, requests, statuses, error)
     end select
     return

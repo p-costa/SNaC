@@ -20,6 +20,7 @@
 !-----------------------------------------------------------------------------------
 program snac
   use mpi
+  use mod_bound     , only: bounduvw,boundp
   use mod_common_mpi, only: myid,ierr
   use mod_initflow  , only: initflow
   use mod_initgrid  , only: initgrid,distribute_grid,save_grid
@@ -33,12 +34,15 @@ program snac
                             restart,is_overwrite_save,                          &
                             icheck,iout0d,iout1d,iout2d,iout3d,isave,           &
                             cbcvel,bcvel,cbcpre,bcpre,                          &
-                            bforce, is_forced,velf,is_outflow,                  &
+                            bforce, is_forced,velf,is_outflow,no_outflow,       &
                             dims,nthreadsmax
   use mod_sanity , only: test_sanity
   use mod_types
   !$ use omp_lib
   implicit none
+  integer, dimension(0:1,3) :: nb
+  logical, dimension(0:1,3) :: is_bound
+  integer, dimension(3    ) :: halos
   integer , dimension(3) :: lo,hi
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
   real(rp), allocatable, dimension(:,:,:) :: dudtrko,dvdtrko,dwdtrko
@@ -77,6 +81,7 @@ program snac
   !
   call MPI_INIT(ierr)
   call MPI_COMM_RANK(MPI_COMM_WORLD, myid, ierr)
+  twi = MPI_WTIME()
   !
   ! read parameter file
   !
@@ -85,7 +90,7 @@ program snac
   ! initialize MPI/OpenMP
   !
   !$call omp_set_num_threads(nthreadsmax)
-  call initmpi(ng,dims,cbcpre,lo,hi)
+  call initmpi(ng,dims,cbcpre,lo,hi,nb,is_bound,halos)
   !
   ! allocate variables
   !
@@ -174,6 +179,8 @@ program snac
   call distribute_grid(lo(3),hi(3), zc_g, zc)
   call distribute_grid(lo(3),hi(3), zf_g, zf)
   !
+  ! initialization of the flow fields
+  !
   if(.not.restart) then
     istep = 100
     time = 2.5_rp
@@ -184,7 +191,36 @@ program snac
     call load('r',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
     if(myid.eq.0) write(stdout,*) '*** Checkpoint loaded at time = ', time, 'time step = ', istep, '. ***'
   endif
+  call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
+                dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
+  call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
+  up(:,:,:)      = 0._rp
+  vp(:,:,:)      = 0._rp
+  wp(:,:,:)      = 0._rp
+  pp(:,:,:)      = 0._rp
+  dudtrko(:,:,:) = 0._rp
+  dvdtrko(:,:,:) = 0._rp
+  dwdtrko(:,:,:) = 0._rp
   !
+  ! post-process and write initial condition
+  !
+  write(fldnum,'(i7.7)') istep
+  !include 'out1d.h90'
+  !include 'out3d.h90'
+  !
+  ! determine time step
+  !
+  !call chkdt(n,dl,dzci,dzfi,visc,u,v,w,dtmax)
+  dt = min(cfl*dtmax,dtmin)
+  if(myid.eq.0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
+  !
+  ! main loop
+  !
+  if(myid.eq.0) print*, '*** calculation loop starts now ***'
+  kill    = .false.
+  is_done = .false.
+  do while(.not.is_done)
+  enddo
   call MPI_FINALIZE(ierr)
   call exit
 end program snac
