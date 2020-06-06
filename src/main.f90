@@ -21,6 +21,8 @@
 program snac
   use mpi
   use mod_bound          , only: bounduvw,boundp,updt_rhs
+  use mod_debug          , only: chkmean
+  use mod_chkdiv         , only: chkdiv
   use mod_chkdt          , only: chkdt
   use mod_common_mpi     , only: myid,ierr
   use mod_correc         , only: correc
@@ -29,6 +31,7 @@ program snac
   use mod_initmpi        , only: initmpi
   use mod_fillps         , only: fillps
   use mod_load           , only: load
+  use mod_output         , only: out0d
   use mod_param          , only: read_input, &
                                  datadir, &
                                  rkcoeff, &
@@ -69,9 +72,7 @@ program snac
                                          dxc_g,dxf_g,xc_g,xf_g, &
                                          dyc_g,dyf_g,yc_g,yf_g, &
                                          dzc_g,dzf_g,zc_g,zf_g
-  !
-  real(rp) :: meanvelu,meanvelv,meanvelw
-  real(rp), dimension(3) :: f,dpdl
+  real(rp), dimension(3) :: f,dpdl,meanvel
   !
   real(rp), dimension(100) :: var
   character(len=7  ) :: fldnum
@@ -264,6 +265,81 @@ program snac
       call MPI_ALLREDUCE(MPI_IN_PLACE,tw,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
       if(tw   .ge.tw_max  ) is_done = is_done.or..true.
     endif
+    if(mod(istep,icheck).eq.0) then
+      if(myid.eq.0) write(stdout,*) 'Checking stability and divergence...'
+      !
+      call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
+      dt = min(cfl*dtmax,dtmin)
+      if(myid.eq.0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
+      !
+      call chkdiv(lo,hi,dxf,dyf,dzf,l,u,v,w,divtot,divmax)
+      if(myid.eq.0) write(stdout,*) 'Total divergence = ', divtot, '| Maximum divergence = ', divmax
+      !if(divmax.gt.small.or.divtot.ne.divtot) then
+      !  is_done = .true.
+      !  kill = .true.
+      !endif
+    endif
+    !
+    ! output routines below
+    !
+    if(mod(istep,iout0d).eq.0) then
+      !allocate(var(4))
+      var(1) = 1._rp*istep
+      var(2) = dt
+      var(3) = time
+      call out0d(trim(datadir)//'time.out',3,var)
+      !
+      if(any(is_forced(:)).or.any(abs(bforce(:)).gt.0.)) then
+        meanvel(:) = 0._rp
+        if(is_forced(1).or.abs(bforce(1)).gt.0._rp) then
+          call chkmean(lo,hi,l,dxc,dyf,dzf,u,meanvel(1))
+        endif
+        if(is_forced(2).or.abs(bforce(2)).gt.0._rp) then
+          call chkmean(lo,hi,l,dxf,dyc,dzf,v,meanvel(2))
+        endif
+        if(is_forced(3).or.abs(bforce(3)).gt.0._rp) then
+          call chkmean(lo,hi,l,dxf,dyf,dzc,w,meanvel(3))
+        endif
+        if(.not.any(is_forced(:))) dpdl(:) = -bforce(:) ! constant pressure gradient
+        var(1)   = time
+        var(2:4) = dpdl(:)
+        var(5:7) = meanvel(:)
+        call out0d(trim(datadir)//'forcing.out',7,var)
+      endif
+    endif
+    write(fldnum,'(i7.7)') istep
+    if(mod(istep,iout1d).eq.0) then
+      include 'out1d.h90'
+    endif
+    if(mod(istep,iout2d).eq.0) then
+      include 'out2d.h90'
+    endif
+    if(mod(istep,iout3d).eq.0) then
+      include 'out3d.h90'
+    endif
+    if(mod(istep,isave ).eq.0.or.(is_done.and..not.kill)) then
+      if(is_overwrite_save) then
+        filename = 'fld.bin'
+      else
+        filename = 'fld_'//fldnum//'.bin'
+      endif
+      call load('r',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
+      if(.not.is_overwrite_save) then
+        !
+        ! fld.bin -> last checkpoint file (symbolic link)
+        !
+        if(myid.eq.0) call system('ln -sf '//trim(filename)//' '//trim(datadir)//'fld.bin')
+      endif
+      if(myid.eq.0) write(stdout,*) '*** Checkpoint saved at time = ', time, 'time step = ', istep, '. ***'
+    endif
+#ifdef _TIMING
+      dt12 = MPI_WTIME()-dt12
+      call MPI_ALLREDUCE(dt12,dt12av ,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+      call MPI_ALLREDUCE(dt12,dt12min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
+      call MPI_ALLREDUCE(dt12,dt12max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
+      if(myid.eq.0) write(stdout,*) 'Avrg, min & max elapsed time: '
+      if(myid.eq.0) write(stdout,*) dt12av/(1._rp*product(dims)),dt12min,dt12max
+#endif
   enddo
   if(myid.eq.0.and.(.not.kill)) write(stdout,*) '*** Fim ***'
   call MPI_FINALIZE(ierr)
