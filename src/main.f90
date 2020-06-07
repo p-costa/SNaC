@@ -45,12 +45,14 @@ program snac
   use mod_pressure_update, only: pressure_update
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
+  use mod_solver         , only: init_solver,setup_solver,solve_helmholtz,finalize_solver, &
+                                 hypre_solver,HYPRESolverPFMG
   use mod_types
   !$ use omp_lib
   implicit none
-  integer, dimension(0:1,3) :: nb
-  logical, dimension(0:1,3) :: is_bound
-  integer, dimension(3    ) :: halos
+  integer , dimension(0:1,3) :: nb
+  logical , dimension(0:1,3) :: is_bound
+  integer , dimension(3    ) :: halos
   integer , dimension(3) :: lo,hi
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
   real(rp), allocatable, dimension(:,:,:) :: dudtrko,dvdtrko,dwdtrko
@@ -59,11 +61,14 @@ program snac
     real(rp), allocatable, dimension(:,:,:) :: y
     real(rp), allocatable, dimension(:,:,:) :: z
   end type rhs_bound
-  type(rhs_bound) :: rhsbp
+  type(rhs_bound) :: rhsp
   real(rp) :: alpha
 #ifdef _IMPDIFF
-  type(rhs_bound) :: rhsbu,rhsbv,rhsbw
+  type(rhs_bound) :: rhsu,rhsv,rhsw
 #endif
+  real(rp), dimension(0:1,3) :: dl
+  type(hypre_solver) :: psolver
+  !
   real(rp) :: dt,dtmax,time,dtrk,divtot,divmax
   integer  :: irk,istep
   real(rp), allocatable, dimension(:) :: dxc  ,dxf  ,xc  ,xf  , &
@@ -107,7 +112,8 @@ program snac
            up(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            vp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            wp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
-           pp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
+           pp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
+           po(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
   allocate(dudtrko(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)), &
            dvdtrko(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)), &
            dwdtrko(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
@@ -135,19 +141,19 @@ program snac
            dzf_g(1-1:ng(3)+1), &
             zc_g(1-1:ng(3)+1), &
             zf_g(1-1:ng(3)+1))
-  allocate(rhsbp%x(lo(2):hi(2),lo(3):hi(3),0:1), &
-           rhsbp%y(lo(1):hi(1),lo(3):hi(3),0:1), &
-           rhsbp%z(lo(1):hi(1),lo(2):hi(2),0:1))
+  allocate(rhsp%x(lo(2):hi(2),lo(3):hi(3),0:1), &
+           rhsp%y(lo(1):hi(1),lo(3):hi(3),0:1), &
+           rhsp%z(lo(1):hi(1),lo(2):hi(2),0:1))
 #ifdef _IMPDIFF
-  allocate(rhsbu%x(lo(2):hi(2),lo(3):hi(3),0:1), &
-           rhsbu%y(lo(1):hi(1),lo(3):hi(3),0:1), &
-           rhsbu%z(lo(1):hi(1),lo(2):hi(2),0:1), &
-           rhsbv%x(lo(2):hi(2),lo(3):hi(3),0:1), &
-           rhsbv%y(lo(1):hi(1),lo(3):hi(3),0:1), &
-           rhsbv%z(lo(1):hi(1),lo(2):hi(2),0:1), &
-           rhsbw%x(lo(2):hi(2),lo(3):hi(3),0:1), &
-           rhsbw%y(lo(1):hi(1),lo(3):hi(3),0:1), &
-           rhsbw%z(lo(1):hi(1),lo(2):hi(2),0:1))
+  allocate(rhsu%x(lo(2):hi(2),lo(3):hi(3),0:1), &
+           rhsu%y(lo(1):hi(1),lo(3):hi(3),0:1), &
+           rhsu%z(lo(1):hi(1),lo(2):hi(2),0:1), &
+           rhsv%x(lo(2):hi(2),lo(3):hi(3),0:1), &
+           rhsv%y(lo(1):hi(1),lo(3):hi(3),0:1), &
+           rhsv%z(lo(1):hi(1),lo(2):hi(2),0:1), &
+           rhsw%x(lo(2):hi(2),lo(3):hi(3),0:1), &
+           rhsw%y(lo(1):hi(1),lo(3):hi(3),0:1), &
+           rhsw%z(lo(1):hi(1),lo(2):hi(2),0:1))
 #endif
   !
   if(myid.eq.0) then
@@ -204,6 +210,7 @@ program snac
   vp(:,:,:)      = 0._rp
   wp(:,:,:)      = 0._rp
   pp(:,:,:)      = 0._rp
+  po(:,:,:)      = 0._rp
   dudtrko(:,:,:) = 0._rp
   dvdtrko(:,:,:) = 0._rp
   dwdtrko(:,:,:) = 0._rp
@@ -219,6 +226,16 @@ program snac
   call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
   dt = min(cfl*dtmax,dtmin)
   if(myid.eq.0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
+  !
+  ! initialize Poisson solver
+  !
+  dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
+                dyc_g(1-1),dyc_g(ng(2)), &
+                dzc_g(1-1),dzc_g(ng(3))],shape(dl))
+  call init_solver(cbcpre,bcpre,dl,is_bound,[.true.,.true.,.true.],lo,hi,ng, &
+                   1._rp/10**6,50,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzc,dzf, &
+                   rhsp%x,rhsp%y,rhsp%z,psolver)
+  call setup_solver(lo,hi,psolver,0._rp)
   !
   ! main loop
   !
@@ -242,8 +259,8 @@ program snac
       call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
       call fillps(lo,hi,dxf,dyf,dzf,dtrk,up,vp,wp,p)
-      call updt_rhs(cbcpre,lo,hi,is_bound,rhsbp%x,rhsbp%y,rhsbp%z,pp)
-      !solver
+      call updt_rhs(lo,hi,is_bound,rhsp%x,rhsp%y,rhsp%z,pp)
+      call solve_helmholtz(psolver,lo,hi,pp,po)
       call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
       call correc(lo,hi,dxc,dyc,dzc,dtrk,p,up,vp,wp,u,v,w)
       call bounduvw(cbcvel,lo,hi,bcvel,is_outflow,halos,is_bound,nb, &
@@ -341,6 +358,7 @@ program snac
       if(myid.eq.0) write(stdout,*) dt12av/(1._rp*product(dims)),dt12min,dt12max
 #endif
   enddo
+  call finalize_solver(psolver)
   if(myid.eq.0.and.(.not.kill)) write(stdout,*) '*** Fim ***'
   call MPI_FINALIZE(ierr)
   call exit

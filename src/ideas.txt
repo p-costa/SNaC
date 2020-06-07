@@ -15,3 +15,5 @@ IF IMPLICIT DIFFUSION and not periodic determine q which is equal to 1 where bou
 
 need to change hi(:) when calling:
   (1) init_solver, (2) setup_sovler, (3) solve, (4) updt_rhs_b
+
+check in CaNS why the BC for Neumann is changing sign depending on the size of the boundary!

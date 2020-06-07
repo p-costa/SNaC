@@ -4,7 +4,9 @@ module mod_solver
   use mod_types
   implicit none
   private
-  public init_solver,solve_helmholtz,finalize_solver
+  public init_solver,setup_solver,solve_helmholtz,finalize_solver, &
+         hypre_solver, &
+         HYPRESolverSMG,HYPRESolverPFMG,HYPRESolverGMRES,HYPRESolverBiCGSTAB
   integer, parameter :: HYPRESolverSMG      = 1, &
                         HYPRESolverPFMG     = 2, &
                         HYPRESolverGMRES    = 3, &
@@ -161,7 +163,7 @@ module mod_solver
     enddo
     call HYPRE_StructMatrixSetBoxValues(mat,hi,lo,nstencil, &
                                         [0,1,2,3,4,5,6],matvalues,ierr)
-    call HYPRE_StructMatrixAssemble(mat,ierr)
+    !call HYPRE_StructMatrixAssemble(mat,ierr)
     deallocate(matvalues)
     !
     ! setup solver
