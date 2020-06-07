@@ -11,7 +11,6 @@ module mod_solver
                         HYPRESolverPFMG     = 2, &
                         HYPRESolverGMRES    = 3, &
                         HYPRESolverBiCGSTAB = 4
-  integer            :: comm_hypre
   type hypre_solver 
     integer(8) :: grid,stencil,precond,solver,mat,rhs,sol
     integer    :: stype
@@ -47,8 +46,8 @@ module mod_solver
     integer :: precond_id
     integer :: i,j,k,q,qq
     real(rp) :: cc,cxm,cxp,cym,cyp,czm,czp
+    integer            :: comm_hypre
     !
-    comm_hypre = MPI_COMM_WORLD
     periods(:) = 0
     where (cbc(0,:)//cbc(1,:).eq.'PP') periods(:) = ng(:)
     factor(:,:) = 0._rp
@@ -286,7 +285,7 @@ module mod_solver
     implicit none
     type(hypre_solver), target, intent(in   )               :: asolver
     integer           ,         intent(in   ), dimension(3) :: lo,hi
-    real(rp)          ,         intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: po,p
+    real(rp)          ,         intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p,po
     integer(8), pointer :: solver,mat,rhs,sol
     integer   , pointer :: stype
     real(rp), allocatable, dimension(:) :: solvalues,rhsvalues
