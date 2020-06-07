@@ -61,7 +61,7 @@ module mod_output
     real(rp), intent(in), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     real(rp), allocatable, dimension(:) :: p1d
     integer :: i,j,k
-    integer :: iunit,ierr
+    integer :: iunit
     !
     select case(idir)
     case(3)

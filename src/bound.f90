@@ -414,46 +414,45 @@ module mod_bound
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     if(is_bound(0,1)) then
       !$OMP WORKSHARE
-      p(lo(1),lo(2):hi(2),lo(3):hi(3)) = p(lo(1),lo(2):hi(2),lo(3):hi(3)) + rhsbx(:,:,0)
+      p(lo(1),lo(2):hi(2),lo(3):hi(3)) = p(lo(1),lo(2):hi(2),lo(3):hi(3)) + rhsbx(lo(2):hi(2),lo(3):hi(3),0)
       !$OMP END WORKSHARE
     endif  
     if(is_bound(1,1)) then
       !$OMP WORKSHARE
-      p(hi(1),lo(2):hi(2),lo(3):hi(3)) = p(hi(1),lo(2):hi(2),lo(3):hi(3)) + rhsbx(:,:,1)
+      p(hi(1),lo(2):hi(2),lo(3):hi(3)) = p(hi(1),lo(2):hi(2),lo(3):hi(3)) + rhsbx(lo(2):hi(2),lo(3):hi(3),1)
       !$OMP END WORKSHARE
     endif
     if(is_bound(0,2)) then
       !$OMP WORKSHARE
-      p(lo(1):hi(1),lo(2),lo(3):hi(3)) = p(lo(1):hi(1),lo(2),lo(3):hi(3)) + rhsby(:,:,0)
+      p(lo(1):hi(1),lo(2),lo(3):hi(3)) = p(lo(1):hi(1),lo(2),lo(3):hi(3)) + rhsby(lo(1):hi(1),lo(3):hi(3),0)
       !$OMP END WORKSHARE
     endif
     if(is_bound(1,2)) then
       !$OMP WORKSHARE
-      p(lo(1):hi(1),hi(2),lo(3):hi(3)) = p(lo(1):hi(1),hi(2),lo(3):hi(3)) + rhsby(:,:,1)
+      p(lo(1):hi(1),hi(2),lo(3):hi(3)) = p(lo(1):hi(1),hi(2),lo(3):hi(3)) + rhsby(lo(1):hi(1),lo(3):hi(3),1)
       !$OMP END WORKSHARE
     endif
     if(is_bound(0,3)) then
       !$OMP WORKSHARE
-      p(lo(1):hi(1),lo(2):hi(2),lo(3)) = p(lo(1):hi(1),lo(2):hi(2),lo(3)) + rhsbz(:,:,0)
+      p(lo(1):hi(1),lo(2):hi(2),lo(3)) = p(lo(1):hi(1),lo(2):hi(2),lo(3)) + rhsbz(lo(1):hi(1),lo(2):hi(2),0)
       !$OMP END WORKSHARE
     endif
     if(is_bound(1,3)) then
       !$OMP WORKSHARE
-      p(lo(1):hi(1),lo(2):hi(2),hi(3)) = p(lo(1):hi(1),lo(2):hi(2),hi(3)) + rhsbz(:,:,1)
+      p(lo(1):hi(1),lo(2):hi(2),hi(3)) = p(lo(1):hi(1),lo(2):hi(2),hi(3)) + rhsbz(lo(1):hi(1),lo(2):hi(2),1)
       !$OMP END WORKSHARE
     endif
     return
   end subroutine updt_rhs
   !
   subroutine updthalo(lo,hi,nh,halo,nb,idir,p)
-    use mod_common_mpi, only: comm_cart
+    use mod_common_mpi, only: comm_cart,ierr
     implicit none
     integer , dimension(3), intent(in) :: lo,hi
     integer , intent(in) :: nh,halo ! n -> number of ghost points
     integer , intent(in), dimension(0:1) :: nb
     integer , intent(in) :: idir
     real(rp), dimension(lo(1)-nh:,lo(2)-nh:,lo(3)-nh:), intent(inout) :: p
-    integer :: ierr
     !integer :: requests(4), statuses(MPI_STATUS_SIZE,4)
     !
     !  this subroutine updates the halo that store info

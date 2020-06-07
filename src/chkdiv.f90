@@ -1,5 +1,6 @@
 module mod_chkdiv
   use mpi
+  use mod_common_mpi, only: ierr
   use mod_types
   implicit none
   private
@@ -19,7 +20,6 @@ module mod_chkdiv
     real(rp), intent(out) :: divtot,divmax
     real(rp) :: div
     integer  :: i,j,k
-    integer  :: ierr
     !
     divtot = 0._rp
     divmax = 0._rp

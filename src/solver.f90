@@ -77,7 +77,7 @@ module mod_solver
     !
     call HYPRE_StructGridCreate(comm_hypre,3,grid,ierr)
     call HYPRE_StructGridSetPeriodic(grid,periods,ierr)
-    call HYPRE_StructGridSetExtents(grid,hi,lo,ierr)
+    call HYPRE_StructGridSetExtents(grid,lo,hi,ierr)
     call HYPRE_StructGridAssemble(grid,ierr)
     !
     ! setup the finite-difference stencil
@@ -161,7 +161,7 @@ module mod_solver
         enddo
       enddo
     enddo
-    call HYPRE_StructMatrixSetBoxValues(mat,hi,lo,nstencil, &
+    call HYPRE_StructMatrixSetBoxValues(mat,lo,hi,nstencil, &
                                         [0,1,2,3,4,5,6],matvalues,ierr)
     call HYPRE_StructMatrixAssemble(mat,ierr)
     deallocate(matvalues)

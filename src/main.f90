@@ -416,7 +416,7 @@ program snac
       else
         filename = 'fld_'//fldnum//'.bin'
       endif
-      call load('r',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
+      call load('w',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
       if(.not.is_overwrite_save) then
         !
         ! fld.bin -> last checkpoint file (symbolic link)

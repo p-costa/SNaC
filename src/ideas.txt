@@ -1,2 +1,3 @@
         http://linuxrajib.blogspot.com/2015/11/coloured-terminal-output-from-fortran.html
         one pressure correction option
+        maybe check if it is these pointer things in solver that are screwing up the calculation!

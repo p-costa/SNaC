@@ -1,5 +1,6 @@
 module mod_chkdt
   use mpi
+  use mod_common_mpi, only: ierr
   use mod_types
   implicit none
   private
@@ -20,7 +21,6 @@ module mod_chkdt
     real(rp) :: ux,uy,uz,vx,vy,vz,wx,wy,wz
     real(rp) :: dtix,dtiy,dtiz,dti,dlmin
     integer :: i,j,k
-    integer :: ierr
     !
     dti = 0._rp
     !$OMP PARALLEL DO DEFAULT(none) &

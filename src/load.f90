@@ -82,7 +82,6 @@ module mod_load
     integer , intent(in), dimension(3)           :: ng,lo,hi,nh
     integer(kind=MPI_OFFSET_KIND), intent(inout) :: disp
     real(rp), intent(inout), dimension(lo(1)-nh(1):,lo(2)-nh(2):,lo(3)-nh(3):) :: var
-    integer :: ierr
     integer , dimension(3) :: n
     integer , dimension(3) :: sizes,subsizes,starts
     integer :: type_glob,type_loc

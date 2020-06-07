@@ -54,10 +54,10 @@ module mod_rk
     call momz_a(lo,hi,dxf,dyf,dzf,u,v,w,dwdtrk)
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
-    !$OMP SHARED(hi,lo,factor1,factor2,u,v,w,up,vp,wp,dudtrk,dvdtrk,dwdtrk,dudtrko,dvdtrko,dwdtrko)
-    do k=hi(3),lo(3)
-      do j=hi(2),lo(2)
-        do i=hi(1),lo(1)
+    !$OMP SHARED(lo,hi,factor1,factor2,u,v,w,up,vp,wp,dudtrk,dvdtrk,dwdtrk,dudtrko,dvdtrko,dwdtrko)
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
           ! could be split in two loops, because factor2=0 for istep=1, but like this reads nicer
           up(i,j,k) = u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k)
           vp(i,j,k) = v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k)
