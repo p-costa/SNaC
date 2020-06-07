@@ -1,2 +1,2 @@
-
-        write(stdout,*) achar(27)//'[95m WARNING'//achar(27)//'[0m product(dims(:)) not equal to the number of MPI tasks!'
+        http://linuxrajib.blogspot.com/2015/11/coloured-terminal-output-from-fortran.html
+        one pressure correction option

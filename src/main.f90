@@ -333,7 +333,7 @@ program snac
       alphaoi = alphai
 #endif
       call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
-                    dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
+                    dxc,dxf,dyc,dyf,dzc,dzf,up,vp,wp)
       call fillps(lo,hi,dxf,dyf,dzf,dtrk,up,vp,wp,p)
       call updt_rhs(lo,hi,is_bound,rhsp%x,rhsp%y,rhsp%z,pp)
       call solve_helmholtz(psolver,lo,hi,pp,po)
