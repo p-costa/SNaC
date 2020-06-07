@@ -48,6 +48,7 @@ module mod_solver
     real(rp) :: cc,cxm,cxp,cym,cyp,czm,czp
     integer            :: comm_hypre
     !
+    comm_hypre = MPI_COMM_WORLD
     periods(:) = 0
     where (cbc(0,:)//cbc(1,:).eq.'PP') periods(:) = ng(:)
     factor(:,:) = 0._rp
@@ -119,6 +120,42 @@ module mod_solver
           czm = 1._rp/(dz1(k-1)*dz2(k))
           czp = 1._rp/(dz1(k  )*dz2(k))
           cc  = -(cxm+cxp+cym+cyp+czm+czp)
+          if(periods(1).eq.0) then
+            if(is_bound(0,1).and.i.eq.lo(1)) then
+              rhsx(j,k,0) = rhsx(j,k,0) + cxm*factor(0,1)
+              cc = cc + sgn(0,1)*cxm
+              cxm = 0._rp
+            endif
+            if(is_bound(1,1).and.i.eq.hi(1)) then
+              rhsx(j,k,1) = rhsx(j,k,1) + cxp*factor(1,1)
+              cc = cc + sgn(1,1)*cxp
+              cxp = 0._rp
+            endif
+          endif
+          if(periods(2).eq.0) then
+            if(is_bound(0,2).and.j.eq.lo(2)) then
+              rhsy(i,k,0) = rhsy(i,k,0) + cym*factor(0,2)
+              cc = cc + sgn(0,2)*cym
+              cym = 0._rp
+            endif
+            if(is_bound(1,2).and.j.eq.hi(2)) then
+              rhsy(i,k,1) = rhsy(i,k,1) + cyp*factor(1,2)
+              cc = cc + sgn(1,2)*cyp
+              cyp = 0._rp
+            endif
+          endif
+          if(periods(3).eq.0) then
+            if(is_bound(0,3).and.k.eq.lo(3)) then
+              rhsz(i,j,0) = rhsz(i,j,0) + czm*factor(0,2)
+              cc = cc + sgn(0,3)*czm
+              czm = 0._rp
+            endif
+            if(is_bound(1,3).and.k.eq.hi(3)) then
+              rhsz(i,j,1) = rhsz(i,j,1) + czp*factor(1,3)
+              cc = cc + sgn(1,3)*czp
+              czp = 0._rp
+            endif
+          endif
           qq = (q-1)*nstencil
           matvalues(qq+1) = cc
           matvalues(qq+2) = cxm
@@ -127,36 +164,6 @@ module mod_solver
           matvalues(qq+5) = cyp
           matvalues(qq+6) = czm
           matvalues(qq+7) = czp
-          if(is_bound(0,1).and.i.eq.lo(1)) then
-            rhsx(j,k,0) = rhsx(j,k,0) + cxm*factor(0,1)
-            cc = cc + sgn(0,1)*cxm
-            cxm = 0._rp
-          endif
-          if(is_bound(1,1).and.i.eq.hi(1)) then
-            rhsx(j,k,1) = rhsx(j,k,1) + cxm*factor(1,1)
-            cc = cc + sgn(1,1)*cxp
-            cxp = 0._rp
-          endif
-          if(is_bound(0,2).and.j.eq.lo(2)) then
-            rhsy(i,k,0) = rhsy(i,k,0) + cym*factor(0,2)
-            cc = cc + sgn(0,2)*cym
-            cym = 0._rp
-          endif
-          if(is_bound(1,2).and.j.eq.hi(2)) then
-            rhsy(i,k,1) = rhsy(i,k,1) + cym*factor(1,2)
-            cc = cc + sgn(1,2)*cyp
-            cyp = 0._rp
-          endif
-          if(is_bound(0,3).and.k.eq.lo(3)) then
-            rhsz(i,j,0) = rhsz(i,j,0) + czm*factor(0,2)
-            cc = cc + sgn(0,3)*czm
-            czm = 0._rp
-          endif
-          if(is_bound(1,3).and.j.eq.hi(3)) then
-            rhsz(i,j,1) = rhsz(i,j,1) + czm*factor(1,3)
-            cc = cc + sgn(1,3)*czp
-            czp = 0._rp
-          endif
           !
         enddo
       enddo

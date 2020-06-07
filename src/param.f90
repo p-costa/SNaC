@@ -96,7 +96,6 @@ contains
     close(iunit)
     dl(:)  = l(:)/(1._rp*ng(:))
     dli(:) = dl(:)**(-1)
-    n = ng(:)/dims(:)
     visc = uref*lref/rey
   return
   end subroutine read_input
