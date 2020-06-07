@@ -33,8 +33,9 @@ program snac
   use mod_load           , only: load
   use mod_output         , only: out0d,out1d,write_visu_3d
   use mod_param          , only: read_input, &
-                                 datadir, &
-                                 rkcoeff, &
+                                 datadir,    &
+                                 small,      &
+                                 rkcoeff,    &
                                  ng,l,gt,gr,cfl,dtmin,uref,lref,rey,visc,            &
                                  inivel,is_wallturb,nstep,time_max,tw_max,stop_type, &
                                  restart,is_overwrite_save,                          &
@@ -42,7 +43,7 @@ program snac
                                  cbcvel,bcvel,cbcpre,bcpre,                          &
                                  bforce, is_forced,velf,is_outflow,no_outflow,       &
                                  dims,nthreadsmax
-  use mod_pressure_update, only: pressure_update
+  use mod_updt_pressure, only: updt_pressure
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
   use mod_solver         , only: init_solver,setup_solver,solve_helmholtz,finalize_solver, &
@@ -344,7 +345,7 @@ program snac
       call correc(lo,hi,dxc,dyc,dzc,dtrk,pp,up,vp,wp,u,v,w)
       call bounduvw(cbcvel,lo,hi,bcvel,is_outflow,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
-      call pressure_update(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,pp,p)
+      call updt_pressure(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,pp,p)
       call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
     enddo
     !
@@ -367,10 +368,18 @@ program snac
       call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
       dt = min(cfl*dtmax,dtmin)
       if(myid.eq.0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
+      if(dtmax.lt.small) then
+        if(myid.eq.0) write(stderr,*) 'ERROR: timestep is too small.'
+        if(myid.eq.0) write(stderr,*) 'Aborting...'
+        is_done = .true.
+        kill = .true.
+      endif
       !
       call chkdiv(lo,hi,dxf,dyf,dzf,l,u,v,w,divtot,divmax)
       if(myid.eq.0) write(stdout,*) 'Total divergence = ', divtot, '| Maximum divergence = ', divmax
       if(divtot.ne.divtot) then!divmax.gt.small.or.divtot.ne.divtot) then
+        if(myid.eq.0) write(stderr,*) 'ERROR: maximum divergence is too large.'
+        if(myid.eq.0) write(stderr,*) 'Aborting...'
         is_done = .true.
         kill = .true.
       endif

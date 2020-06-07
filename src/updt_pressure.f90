@@ -1,10 +1,10 @@
-module mod_pressure_update
+module mod_updt_pressure
   use mod_types
   implicit none
   private
-  public pressure_update
+  public updt_pressure
   contains
-  subroutine pressure_update(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,pp,p)
+  subroutine updt_pressure(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,pp,p)
     !
     ! calculates the final pressure field
     !
@@ -37,17 +37,17 @@ module mod_pressure_update
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           p(i,j,k) = p(i,j,k) + & 
-                      ( ((pp(i+1,j,k)-pp(i  ,j,k))/dxc(i  ) - &
-                         (pp(i  ,j,k)-pp(i-1,j,k))/dxc(i-1))/dxf(i) + &
-                        ((pp(i,j+1,k)-pp(i,j  ,k))/dyc(j  ) - &
-                         (pp(i,j  ,k)-pp(i,j-1,k))/dyc(j-1))/dyf(j) + &
-                        ((pp(i,j,k+1)-pp(i,j,k  ))/dzc(k  ) - &
-                         (pp(i,j,k  )-pp(i,j,k-1))/dzc(k-1))/dzf(k) )/alpha
+                      alpha*( ((pp(i+1,j,k)-pp(i  ,j,k))/dxc(i  ) - &
+                               (pp(i  ,j,k)-pp(i-1,j,k))/dxc(i-1))/dxf(i) + &
+                              ((pp(i,j+1,k)-pp(i,j  ,k))/dyc(j  ) - &
+                               (pp(i,j  ,k)-pp(i,j-1,k))/dyc(j-1))/dyf(j) + &
+                              ((pp(i,j,k+1)-pp(i,j,k  ))/dzc(k  ) - &
+                               (pp(i,j,k  )-pp(i,j,k-1))/dzc(k-1))/dzf(k) )
         enddo
       enddo
     enddo
     !$OMP END PARALLEL DO
 #endif
     return
-  end subroutine pressure_update
-end module mod_pressure_update
+  end subroutine updt_pressure
+end module mod_updt_pressure
