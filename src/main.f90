@@ -261,7 +261,8 @@ program snac
   dl = reshape([dxf_g(1-0),dxf_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
-  if(is_bound(1,1)) hiu(:) = hi(:)-q(:)
+  hiu(:) = hi(:)
+  if(is_bound(1,1)) hiu(:) = hiu(:)-q(:)
   ngu(:) = ng(:) - q
   call init_solver(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,[.false.,.true.,.true.],lo,hiu,ngu, &
                    1._rp/10**6,50,HYPRESolverPFMG,dxf,dxc,dyc,dyf,dzc,dzf, &
@@ -270,7 +271,8 @@ program snac
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyf_g(1-0),dyf_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
-  if(is_bound(1,2)) hiv(:) = hi(:)-q(:)
+  hiv(:) = hi(:)
+  if(is_bound(1,2)) hiv(:) = hiv(:)-q(:)
   ngv(:) = ng(:) - q(:)
   call init_solver(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,[.true.,.false.,.true.],lo,hiv,ngv, &
                    1._rp/10**6,50,HYPRESolverPFMG,dxc,dxf,dyf,dyc,dzc,dzf, &
@@ -279,7 +281,8 @@ program snac
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzf_g(1-0),dzf_g(ng(3))],shape(dl))
-  if(is_bound(1,3)) hiw(:) = hi(:)-q(:)
+  hiw(:) = hi(:)
+  if(is_bound(1,3)) hiw(:) = hiw(:)-q(:)
   ngw(:) = ng(:) - q(:)
   call init_solver(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,[.true.,.true.,.false.],lo,hiw,ngw, &
                    1._rp/10**6,50,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzf,dzc, &
