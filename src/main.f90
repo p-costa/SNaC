@@ -55,6 +55,9 @@ program snac
   integer , dimension(3    ) :: halos
   integer , dimension(3) :: lo,hi
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
+#ifdef _IMPDIFF
+  real(rp), allocatable, dimension(:,:,:) :: uo,vo,wo
+#endif
   real(rp), allocatable, dimension(:,:,:) :: dudtrko,dvdtrko,dwdtrko
   type rhs_bound
     real(rp), allocatable, dimension(:,:,:) :: x
@@ -67,7 +70,12 @@ program snac
   type(rhs_bound) :: rhsu,rhsv,rhsw
 #endif
   real(rp), dimension(0:1,3) :: dl
+  integer , dimension(    3) :: q,hiu,hiv,hiw,ngu,ngv,ngw
   type(hypre_solver) :: psolver
+#ifdef _IMPDIFF
+  type(hypre_solver) :: usolver,vsolver,wsolver
+  real(rp)           :: alphai,alphaoi
+#endif
   !
   real(rp) :: dt,dtmax,time,dtrk,divtot,divmax
   integer  :: irk,istep
@@ -114,6 +122,11 @@ program snac
            wp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            pp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            po(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
+#ifdef _IMPDIFF
+  allocate(uo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
+           vo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
+           wo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
+#endif
   allocate(dudtrko(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)), &
            dvdtrko(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)), &
            dwdtrko(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
@@ -214,6 +227,11 @@ program snac
   dudtrko(:,:,:) = 0._rp
   dvdtrko(:,:,:) = 0._rp
   dwdtrko(:,:,:) = 0._rp
+#ifdef _IMPDIFF
+  uo(:,:,:) = 0._rp
+  vo(:,:,:) = 0._rp
+  wo(:,:,:) = 0._rp
+#endif
   !
   ! post-process and write initial condition
   !
@@ -236,6 +254,35 @@ program snac
                    1._rp/10**6,50,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzc,dzf, &
                    rhsp%x,rhsp%y,rhsp%z,psolver)
   call setup_solver(lo,hi,psolver,0._rp)
+#ifdef _IMPDIFF
+  q  = [1,0,0] 
+  dl = reshape([dxf_g(1-0),dxf_g(ng(1)), &
+                dyc_g(1-1),dyc_g(ng(2)), &
+                dzc_g(1-1),dzc_g(ng(3))],shape(dl))
+  if(is_bound(1,1)) hiu(:) = hi(:)-q(:)
+  ngu(:) = ng(:) - q
+  call init_solver(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,[.false.,.true.,.true.],lo,hiu,ngu, &
+                   1._rp/10**6,50,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzc,dzf, &
+                   rhsu%x,rhsu%y,rhsu%z,usolver)
+  q  = [0,1,0] 
+  dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
+                dyf_g(1-0),dyf_g(ng(2)), &
+                dzc_g(1-1),dzc_g(ng(3))],shape(dl))
+  if(is_bound(1,2)) hiv(:) = hi(:)-q(:)
+  ngv(:) = ng(:) - q(:)
+  call init_solver(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,[.true.,.false.,.true.],lo,hiv,ngv, &
+                   1._rp/10**6,50,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzc,dzf, &
+                   rhsv%x,rhsv%y,rhsv%z,vsolver)
+  q  = [0,0,1] 
+  dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
+                dyc_g(1-1),dyc_g(ng(2)), &
+                dzf_g(1-0),dzf_g(ng(3))],shape(dl))
+  if(is_bound(1,3)) hiw(:) = hi(:)-q(:)
+  ngw(:) = ng(:) - q(:)
+  call init_solver(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,[.true.,.true.,.false.],lo,hiw,ngw, &
+                   1._rp/10**6,50,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzc,dzf, &
+                   rhsw%x,rhsw%y,rhsw%z,wsolver)
+#endif
   !
   ! main loop
   !
@@ -256,13 +303,40 @@ program snac
       call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,l,dt,bforce, &
                   is_forced,velf,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,f)
       dpdl(:) = dpdl(:) - f(:)/dt
+#ifdef _IMPDIFF
+      if(irk.eq.0) alphaoi = 0._rp
+      alphai = alpha**(-1)
+      !
+      !$OMP WORKSHARE
+      up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alpha
+      !$OMP WORKSHARE
+      call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,up)
+      call setup_solver(lo,hiu,usolver,alphai-alphaoi) ! correct diagonal term
+      call solve_helmholtz(usolver,lo,hiu,up,uo)
+      !
+      !$OMP WORKSHARE
+      vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alpha
+      !$OMP WORKSHARE
+      call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,vp)
+      call setup_solver(lo,hiv,vsolver,alphai-alphaoi) ! correct diagonal term
+      call solve_helmholtz(usolver,lo,hiv,vp,vo)
+      !
+      !$OMP WORKSHARE
+      wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alpha
+      !$OMP WORKSHARE
+      call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,wp)
+      call setup_solver(lo,hiw,wsolver,alphai-alphaoi) ! correct diagonal term
+      call solve_helmholtz(usolver,lo,hiw,wp,wo)
+      !
+      alphaoi = alphai
+#endif
       call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
       call fillps(lo,hi,dxf,dyf,dzf,dtrk,up,vp,wp,p)
       call updt_rhs(lo,hi,is_bound,rhsp%x,rhsp%y,rhsp%z,pp)
       call solve_helmholtz(psolver,lo,hi,pp,po)
-      call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
-      call correc(lo,hi,dxc,dyc,dzc,dtrk,p,up,vp,wp,u,v,w)
+      call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,pp)
+      call correc(lo,hi,dxc,dyc,dzc,dtrk,pp,up,vp,wp,u,v,w)
       call bounduvw(cbcvel,lo,hi,bcvel,is_outflow,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
       call pressure_update(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,pp,p)
@@ -291,10 +365,10 @@ program snac
       !
       call chkdiv(lo,hi,dxf,dyf,dzf,l,u,v,w,divtot,divmax)
       if(myid.eq.0) write(stdout,*) 'Total divergence = ', divtot, '| Maximum divergence = ', divmax
-      !if(divmax.gt.small.or.divtot.ne.divtot) then
-      !  is_done = .true.
-      !  kill = .true.
-      !endif
+      if(divtot.ne.divtot) then!divmax.gt.small.or.divtot.ne.divtot) then
+        is_done = .true.
+        kill = .true.
+      endif
     endif
     !
     ! output routines below
