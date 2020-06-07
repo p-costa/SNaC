@@ -46,19 +46,19 @@ module mod_initmpi
     enddo
     return
   end subroutine initmpi
-  subroutine makehalo(idir,nghost,n,halo)
-    integer, intent(in ) :: idir,nghost
+  subroutine makehalo(idir,nh,n,halo)
+    integer, intent(in ) :: idir,nh
     integer, intent(in ), dimension(3) :: n
     integer, intent(out) :: halo
     integer, dimension(3) :: nn
-    nn(:) = n(:) + 2*nghost
+    nn(:) = n(:) + 2*nh
     select case(idir)
     case(1)
-      call MPI_TYPE_VECTOR(nn(2)*nn(3),nghost            ,nn(1)            ,MPI_REAL_RP,halo,ierr)
+      call MPI_TYPE_VECTOR(nn(2)*nn(3),nh            ,nn(1)            ,MPI_REAL_RP,halo,ierr)
     case(2)
-      call MPI_TYPE_VECTOR(      nn(3),nghost*nn(1)      ,nn(1)*nn(2)      ,MPI_REAL_RP,halo,ierr)
+      call MPI_TYPE_VECTOR(      nn(3),nh*nn(1)      ,nn(1)*nn(2)      ,MPI_REAL_RP,halo,ierr)
     case(3)
-      call MPI_TYPE_VECTOR(          1,nghost*nn(1)*nn(2),nn(1)*nn(2)*nn(3),MPI_REAL_RP,halo,ierr)
+      call MPI_TYPE_VECTOR(          1,nh*nn(1)*nn(2),nn(1)*nn(2)*nn(3),MPI_REAL_RP,halo,ierr)
     end select
     call MPI_TYPE_COMMIT(halo,ierr)
     return

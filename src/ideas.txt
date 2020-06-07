@@ -1,5 +1,4 @@
 review everything before going to main (understand if it is good to break up some stuff into more functions)!
-use HYPREStructMatrixAddToValues to change the diagonal term of the matrix, to solve the helmholtz eq!
 structure solver into:
 
 initialize, setup, add_to_diagonal (over-write a current solver), solve, destroy
@@ -14,10 +13,5 @@ For implicit diffusion:
 ADD BCs a la phase change code! :)
 IF IMPLICIT DIFFUSION and not periodic determine q which is equal to 1 where bound(ijk,nb) is true and zero elsewhere. Then do hi = hi-q (e.g.) q = [0,1,0] for right bound when we are solving Helmholtz for v
 
-Maybe change things to capital F
-
 need to change hi(:) when calling:
   (1) init_solver, (2) setup_sovler, (3) solve, (4) updt_rhs_b
-(1) change all c_or_f to is_centered
-(2) add shift inside the solver when is_centered is false
-(3) change all solver subroutines accordingly

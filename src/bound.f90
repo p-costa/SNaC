@@ -404,9 +404,8 @@ module mod_bound
     return
   end subroutine inflow
   !
-  subroutine updt_rhs(cbc,lo,hi,is_bound,rhsbx,rhsby,rhsbz,p)
+  subroutine updt_rhs(lo,hi,is_bound,rhsbx,rhsby,rhsbz,p)
     implicit none
-    character(len=1), intent(in), dimension(0:1,3) :: cbc
     integer , intent(in   ), dimension(3) :: lo,hi
     logical , intent(in   ), dimension(0:1,3) :: is_bound
     real(rp), intent(in   ), dimension(lo(2):,lo(3):,0:) :: rhsbx
@@ -446,14 +445,14 @@ module mod_bound
     return
   end subroutine updt_rhs
   !
-  subroutine updthalo(lo,hi,n,halo,nb,idir,p)
+  subroutine updthalo(lo,hi,nh,halo,nb,idir,p)
     use mod_common_mpi, only: comm_cart
     implicit none
     integer , dimension(3), intent(in) :: lo,hi
-    integer , intent(in) :: n,halo ! n -> number of ghost points
+    integer , intent(in) :: nh,halo ! n -> number of ghost points
     integer , intent(in), dimension(0:1) :: nb
     integer , intent(in) :: idir
-    real(rp), dimension(lo(1)-n:,lo(2)-n:,lo(3)-n:), intent(inout) :: p
+    real(rp), dimension(lo(1)-nh:,lo(2)-nh:,lo(3)-nh:), intent(inout) :: p
     integer :: ierr
     !integer :: requests(4), statuses(MPI_STATUS_SIZE,4)
     !
@@ -462,11 +461,11 @@ module mod_bound
     !
     select case(idir)
     case(1) ! x direction
-      call MPI_SENDRECV(p(lo(1)  ,lo(2)-n,lo(3)-n),1,halo,nb(0),0, &
-                        p(hi(1)+n,lo(2)-n,lo(3)-n),1,halo,nb(1),0, &
+      call MPI_SENDRECV(p(lo(1)   ,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
+                        p(hi(1)+nh,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
                         comm_cart,MPI_STATUS_IGNORE,ierr)
-      call MPI_SENDRECV(p(hi(1)  ,lo(2)-n,lo(3)-n),1,halo,nb(1),0, &
-                        p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),0, &
+      call MPI_SENDRECV(p(hi(1)   ,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
+                        p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
                         comm_cart,MPI_STATUS_IGNORE,ierr)
          !call MPI_IRECV( p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),1, &
          !                comm_cart,requests(1),error)
@@ -478,11 +477,11 @@ module mod_bound
          !                comm_cart,requests(4),error)
          !call MPI_WAITALL(4, requests, statuses, error)
     case(2) ! y direction
-      call MPI_SENDRECV(p(lo(1)-n,lo(2)  ,lo(3)-n),1,halo,nb(0),0, &
-                        p(lo(1)-n,hi(2)+n,lo(3)-n),1,halo,nb(1),0, &
+      call MPI_SENDRECV(p(lo(1)-nh,lo(2)   ,lo(3)-nh),1,halo,nb(0),0, &
+                        p(lo(1)-nh,hi(2)+nh,lo(3)-nh),1,halo,nb(1),0, &
                         comm_cart,MPI_STATUS_IGNORE,ierr)
-      call MPI_SENDRECV(p(lo(1)-n,hi(2)  ,lo(3)-n),1,halo,nb(1),0, &
-                        p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),0, &
+      call MPI_SENDRECV(p(lo(1)-nh,hi(2)   ,lo(3)-nh),1,halo,nb(1),0, &
+                        p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
                         comm_cart,MPI_STATUS_IGNORE,ierr)
          !call MPI_IRECV( p(lo(1)-n,hi(2)+n,lo(3)-n),1,halo,nb(1),0, &
          !                comm_cart,requests(1),error)
@@ -494,11 +493,11 @@ module mod_bound
          !               comm_cart,requests(4),error)
          !call MPI_WAITALL(4, requests, statuses, error)
     case(3) ! z direction
-      call MPI_SENDRECV(p(lo(1)-n,lo(2)-n,lo(3)  ),1,halo,nb(0),0, &
-                        p(lo(1)-n,lo(2)-n,hi(3)+n),1,halo,nb(1),0, &
+      call MPI_SENDRECV(p(lo(1)-nh,lo(2)-nh,lo(3)   ),1,halo,nb(0),0, &
+                        p(lo(1)-nh,lo(2)-nh,hi(3)+nh),1,halo,nb(1),0, &
                         comm_cart,MPI_STATUS_IGNORE,ierr)
-      call MPI_SENDRECV(p(lo(1)-n,lo(2)-n,hi(3)  ),1,halo,nb(1),0, &
-                        p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),0, &
+      call MPI_SENDRECV(p(lo(1)-nh,lo(2)-nh,hi(3)   ),1,halo,nb(1),0, &
+                        p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
                         comm_cart,MPI_STATUS_IGNORE,ierr)
       !call MPI_IRECV( p(lo(1)-n,lo(2)-n,hi(3)+n),1,halo,nb(1),0, &
       !                comm_cart,requests(1),error)

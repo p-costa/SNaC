@@ -6,15 +6,15 @@ module mod_load
   private
   public load,io_field
   contains
-  subroutine load(io,filename,ng,nghost,lo,hi,u,v,w,p,time,istep)
+  subroutine load(io,filename,ng,nh,lo,hi,u,v,w,p,time,istep)
     !
     ! reads/writes a restart file
     !
     implicit none
     character(len=1), intent(in) :: io
     character(len=*), intent(in) :: filename
-    integer , intent(in), dimension(3) :: ng,lo,hi,nghost
-    real(rp), intent(inout), dimension(lo(1)-nghost(1):,lo(2)-nghost(2):,lo(3)-nghost(3):) :: u,v,w,p
+    integer , intent(in), dimension(3) :: ng,lo,hi,nh
+    real(rp), intent(inout), dimension(lo(1)-nh(1):,lo(2)-nh(2):,lo(3)-nh(3):) :: u,v,w,p
     real(rp), intent(inout) :: time
     integer , intent(inout) :: istep
     real(rp), dimension(2) :: fldinfo
@@ -41,10 +41,10 @@ module mod_load
       ! read
       !
       disp = 0_MPI_OFFSET_KIND
-      call io_field('r',fh,ng,lo,hi,nghost,disp,u)
-      call io_field('r',fh,ng,lo,hi,nghost,disp,v)
-      call io_field('r',fh,ng,lo,hi,nghost,disp,w)
-      call io_field('r',fh,ng,lo,hi,nghost,disp,p)
+      call io_field('r',fh,ng,lo,hi,nh,disp,u)
+      call io_field('r',fh,ng,lo,hi,nh,disp,v)
+      call io_field('r',fh,ng,lo,hi,nh,disp,w)
+      call io_field('r',fh,ng,lo,hi,nh,disp,p)
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       nreals_myid = 0
       if(myid.eq.0) nreals_myid = 2
@@ -62,10 +62,10 @@ module mod_load
       filesize = 0_MPI_OFFSET_KIND
       call MPI_FILE_SET_SIZE(fh,filesize,ierr)
       disp = 0_MPI_OFFSET_KIND
-      call io_field('w',fh,ng,lo,hi,nghost,disp,u)
-      call io_field('w',fh,ng,lo,hi,nghost,disp,v)
-      call io_field('w',fh,ng,lo,hi,nghost,disp,w)
-      call io_field('w',fh,ng,lo,hi,nghost,disp,p)
+      call io_field('w',fh,ng,lo,hi,nh,disp,u)
+      call io_field('w',fh,ng,lo,hi,nh,disp,v)
+      call io_field('w',fh,ng,lo,hi,nh,disp,w)
+      call io_field('w',fh,ng,lo,hi,nh,disp,p)
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       fldinfo = [time,1._rp*istep]
       nreals_myid = 0
@@ -75,13 +75,13 @@ module mod_load
     end select
     return
   end subroutine load
-  subroutine io_field(io,fh,ng,lo,hi,nghost,disp,var)
+  subroutine io_field(io,fh,ng,lo,hi,nh,disp,var)
     implicit none
     character(len=1), intent(in)                 :: io
     integer , intent(in)                         :: fh
-    integer , intent(in), dimension(3)           :: ng,lo,hi,nghost
+    integer , intent(in), dimension(3)           :: ng,lo,hi,nh
     integer(kind=MPI_OFFSET_KIND), intent(inout) :: disp
-    real(rp), intent(inout), dimension(lo(1)-nghost(1):,lo(2)-nghost(2):,lo(3)-nghost(3):) :: var
+    real(rp), intent(inout), dimension(lo(1)-nh(1):,lo(2)-nh(2):,lo(3)-nh(3):) :: var
     integer :: ierr
     integer , dimension(3) :: n
     integer , dimension(3) :: sizes,subsizes,starts
@@ -92,9 +92,9 @@ module mod_load
     starts(:)   = lo(:) - 1 ! starts from 0
     call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_glob,ierr)
     call MPI_TYPE_COMMIT(type_glob,ierr)
-    sizes(:)    = n(:) + 2*nghost(:)
+    sizes(:)    = n(:) + 2*nh(:)
     subsizes(:) = n(:)
-    starts(:)   = 0 + nghost(:)
+    starts(:)   = 0 + nh(:)
     call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_loc ,ierr)
     call MPI_TYPE_COMMIT(type_loc,ierr)
       select case(io)

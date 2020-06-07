@@ -10,12 +10,12 @@ module mod_chkdiv
     ! checks the divergence of the velocity field
     !
     implicit none
-    integer , intent(in), dimension(3) :: lo,hi
-    real(rp), intent(in), dimension(lo(1)-1:) :: dxf
-    real(rp), intent(in), dimension(lo(2)-1:) :: dyf
-    real(rp), intent(in), dimension(lo(3)-1:) :: dzf
-    real(rp), intent(in), dimension(3)        :: l
-    real(rp), intent(in), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
+    integer , intent(in ), dimension(3) :: lo,hi
+    real(rp), intent(in ), dimension(lo(1)-1:) :: dxf
+    real(rp), intent(in ), dimension(lo(2)-1:) :: dyf
+    real(rp), intent(in ), dimension(lo(3)-1:) :: dzf
+    real(rp), intent(in ), dimension(3)        :: l
+    real(rp), intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
     real(rp), intent(out) :: divtot,divmax
     real(rp) :: div
     integer  :: i,j,k

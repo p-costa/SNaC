@@ -14,7 +14,7 @@ module mod_correc
     real(rp), intent(in ), dimension(lo(2)-1:) :: dyc
     real(rp), intent(in ), dimension(lo(3)-1:) :: dzc
     real(rp), intent(in ) :: dt
-    real(rp), intent(in ) , dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p,up,vp,wp
+    real(rp), intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p,up,vp,wp
     real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
     integer :: i,j,k
     !

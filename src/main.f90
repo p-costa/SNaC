@@ -31,7 +31,7 @@ program snac
   use mod_initmpi        , only: initmpi
   use mod_fillps         , only: fillps
   use mod_load           , only: load
-  use mod_output         , only: out0d
+  use mod_output         , only: out0d,out1d,write_visu_3d
   use mod_param          , only: read_input, &
                                  datadir, &
                                  rkcoeff, &

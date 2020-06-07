@@ -45,9 +45,9 @@ module mod_rk
     call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrk)
     call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrk)
 #ifdef _IMPDIFF
-    dudtrkd(:,:,:) = dudtrk(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
-    dvdtrkd(:,:,:) = dvdtrk(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
-    dwdtrkd(:,:,:) = dwdtrk(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
+    dudtrkd(:,:,:) = dudtrk(:,:,:)
+    dvdtrkd(:,:,:) = dvdtrk(:,:,:)
+    dwdtrkd(:,:,:) = dwdtrk(:,:,:)
 #endif
     call momx_a(lo,hi,dxf,dyf,dzf,u,v,w,dudtrk)
     call momy_a(lo,hi,dxf,dyf,dzf,u,v,w,dvdtrk)
@@ -76,7 +76,8 @@ module mod_rk
     !$OMP END WORKSHARE
     call momx_p(lo,hi,dxc,bforce(1),p,dudtrk)
     call momy_p(lo,hi,dyc,bforce(2),p,dvdtrk)
-    call momz_p(lo,hi,dzc,bforce(3),p,dwdtrk)
+    call momz_p(lo,hi,dzc,bforce(3),p,dwdtrk) ! we could perform the pressure gradient calculation in the loop below instead, but I
+                                              ! decided to have more modular, like this, for simplicity.
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,factor12,u,v,w,up,vp,wp,dudtrk,dvdtrk,dwdtrk)
@@ -102,14 +103,14 @@ module mod_rk
       !$OMP END WORKSHARE
     endif
     if(is_forced(2)) then
-      call chkmean(lo,hi,l,dxc,dyf,dzf,vp,mean)
+      call chkmean(lo,hi,l,dxf,dyc,dzf,vp,mean)
       f(2) = velf(2) - mean
       !$OMP WORKSHARE
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) + f(2)
       !$OMP END WORKSHARE
     endif
     if(is_forced(3)) then
-      call chkmean(lo,hi,l,dxc,dyf,dzf,wp,mean)
+      call chkmean(lo,hi,l,dxf,dyf,dzc,wp,mean)
       f(3) = velf(3) - mean
       !$OMP WORKSHARE
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) + f(3)
@@ -152,12 +153,11 @@ module mod_rk
     real(rp), intent(inout), dimension(lo(1):  ,lo(2):  ,lo(3):  ) :: dsdtrko
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: s
     real(rp),                dimension(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) :: dsdtrk
-    real(rp) :: factor1,factor2,factor12
+    real(rp) :: factor1,factor2
     integer  :: i,j,k
     !
     factor1 = rkpar(1)*dt
     factor2 = rkpar(2)*dt
-    factor12 = factor1 + factor2
     dsdtrk(:,:,:) = 0._rp
     call scal_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,s,dsdtrk)
     call scal_a(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdtrk)
