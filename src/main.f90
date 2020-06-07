@@ -70,7 +70,9 @@ program snac
   type(rhs_bound) :: rhsu,rhsv,rhsw
 #endif
   real(rp), dimension(0:1,3) :: dl
+#ifdef _IMPDIFF
   integer , dimension(    3) :: q,hiu,hiv,hiw,ngu,ngv,ngw
+#endif
   type(hypre_solver) :: psolver
 #ifdef _IMPDIFF
   type(hypre_solver) :: usolver,vsolver,wsolver
@@ -308,21 +310,21 @@ program snac
       alphai = alpha**(-1)
       !
       !$OMP WORKSHARE
-      up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alpha
+      up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP WORKSHARE
       call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,up)
       call setup_solver(lo,hiu,usolver,alphai-alphaoi) ! correct diagonal term
       call solve_helmholtz(usolver,lo,hiu,up,uo)
       !
       !$OMP WORKSHARE
-      vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alpha
+      vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP WORKSHARE
       call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,vp)
       call setup_solver(lo,hiv,vsolver,alphai-alphaoi) ! correct diagonal term
       call solve_helmholtz(usolver,lo,hiv,vp,vo)
       !
       !$OMP WORKSHARE
-      wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alpha
+      wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP WORKSHARE
       call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,wp)
       call setup_solver(lo,hiw,wsolver,alphai-alphaoi) ! correct diagonal term
