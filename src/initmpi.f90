@@ -8,15 +8,29 @@ module mod_initmpi
   contains
   subroutine initmpi(ng,dims,bc,lo,hi,nb,is_bound,halos)
     implicit none
-    integer, intent(in ), dimension(3) :: ng,dims
+    integer, intent(in    ), dimension(3) :: ng
+    integer, intent(inout ), dimension(3) :: dims
     character(len=1), intent(in), dimension(0:1,3) :: bc
     integer, intent(out), dimension(3) :: lo,hi
     integer, intent(out), dimension(0:1,3) :: nb
     logical, intent(out), dimension(0:1,3) :: is_bound
     integer, intent(out), dimension(3    ) :: halos
+    integer :: nrank
     logical, dimension(3) :: periods
     integer, dimension(3) :: n,coords
     integer :: idir
+    !
+    ! sanity check
+    !
+    CALL MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
+    if(nrank.ne.product(dims(:))) then
+      dims(:) = 0
+      CALL MPI_DIMS_CREATE(nrank,3,dims,ierr)
+      if(myid.eq.0) then
+        write(stdout,*) 'WARNING: product(dims(:)) not equal to the number of MPI tasks!'
+        write(stdout,*) 'dims changed with MPI_DIMS_CREATE to ', dims(1),dims(2),dims(3)
+      endif
+    endif
     !
     ! generate Cartesian topology
     !
