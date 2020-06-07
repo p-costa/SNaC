@@ -309,7 +309,7 @@ program snac
                   is_forced,velf,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,f)
       dpdl(:) = dpdl(:) - f(:)/dt
 #ifdef _IMPDIFF
-      if(irk.eq.0) alphaoi = 0._rp
+      if(irk.eq.1) alphaoi = 0._rp
       alphai = alpha**(-1)
       !
       !$OMP WORKSHARE
