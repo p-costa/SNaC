@@ -250,7 +250,7 @@ module mod_mom
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
-          dudt(i,j,k) = - ( p(i-1,j,k)-p(i,j,k) )/dxc(i) + bforce
+          dudt(i,j,k) = - ( p(i+1,j,k)-p(i,j,k) )/dxc(i) + bforce
         enddo
       enddo
     enddo
@@ -273,7 +273,7 @@ module mod_mom
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
-          dvdt(i,j,k) = - ( p(i,j-1,k)-p(i,j,k) )/dyc(j) + bforce
+          dvdt(i,j,k) = - ( p(i,j+1,k)-p(i,j,k) )/dyc(j) + bforce
         enddo
       enddo
     enddo
@@ -296,7 +296,7 @@ module mod_mom
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
-          dwdt(i,j,k) = - ( p(i,j,k-1)-p(i,j,k) )/dzc(k) + bforce
+          dwdt(i,j,k) = - ( p(i,j,k+1)-p(i,j,k) )/dzc(k) + bforce
         enddo
       enddo
     enddo

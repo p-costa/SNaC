@@ -254,7 +254,7 @@ program snac
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
   call init_solver(cbcpre,bcpre,dl,is_bound,[.true.,.true.,.true.],lo,hi,ng, &
-                   1._rp/10**6,50,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzc,dzf, &
+                   1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzc,dzf, &
                    rhsp%x,rhsp%y,rhsp%z,psolver)
   call setup_solver(lo,hi,psolver,0._rp)
 #ifdef _IMPDIFF
@@ -266,7 +266,7 @@ program snac
   if(is_bound(1,1)) hiu(:) = hiu(:)-q(:)
   ngu(:) = ng(:) - q
   call init_solver(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,[.false.,.true.,.true.],lo,hiu,ngu, &
-                   1._rp/10**6,50,HYPRESolverPFMG,dxf,dxc,dyc,dyf,dzc,dzf, &
+                   1.d-6,500,HYPRESolverPFMG,dxf,dxc,dyc,dyf,dzc,dzf, &
                    rhsu%x,rhsu%y,rhsu%z,usolver)
   q  = [0,1,0] 
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
@@ -276,7 +276,7 @@ program snac
   if(is_bound(1,2)) hiv(:) = hiv(:)-q(:)
   ngv(:) = ng(:) - q(:)
   call init_solver(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,[.true.,.false.,.true.],lo,hiv,ngv, &
-                   1._rp/10**6,50,HYPRESolverPFMG,dxc,dxf,dyf,dyc,dzc,dzf, &
+                   1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyf,dyc,dzc,dzf, &
                    rhsv%x,rhsv%y,rhsv%z,vsolver)
   q  = [0,0,1] 
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
@@ -286,7 +286,7 @@ program snac
   if(is_bound(1,3)) hiw(:) = hiw(:)-q(:)
   ngw(:) = ng(:) - q(:)
   call init_solver(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,[.true.,.true.,.false.],lo,hiw,ngw, &
-                   1._rp/10**6,50,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzf,dzc, &
+                   1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzf,dzc, &
                    rhsw%x,rhsw%y,rhsw%z,wsolver)
 #endif
   !
@@ -305,7 +305,7 @@ program snac
     dpdl(:)  = 0._rp
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
-      alpha = visc*dtrk/2._rp
+      alpha = -visc*dtrk/2._rp
       call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,l,dt,bforce, &
                   is_forced,velf,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,f)
       dpdl(:) = dpdl(:) - f(:)/dt
