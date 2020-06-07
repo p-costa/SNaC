@@ -216,12 +216,12 @@ module mod_mom
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
-          dwdxp = (w(i+1,j,k)-w(i,j,k))*dxc(i  )
-          dwdxm = (w(i,j,k)-w(i-1,j,k))*dxc(i-1)
-          dwdyp = (w(i,j+1,k)-w(i,j,k))*dyc(j  )
-          dwdym = (w(i,j,k)-w(i,j-1,k))*dyc(j-1)
-          dwdzp = (w(i,j,k+1)-w(i,j,k))*dzf(k+1)
-          dwdzm = (w(i,j,k)-w(i,j,k-1))*dzf(k  )
+          dwdxp = (w(i+1,j,k)-w(i,j,k))/dxc(i  )
+          dwdxm = (w(i,j,k)-w(i-1,j,k))/dxc(i-1)
+          dwdyp = (w(i,j+1,k)-w(i,j,k))/dyc(j  )
+          dwdym = (w(i,j,k)-w(i,j-1,k))/dyc(j-1)
+          dwdzp = (w(i,j,k+1)-w(i,j,k))/dzf(k+1)
+          dwdzm = (w(i,j,k)-w(i,j,k-1))/dzf(k  )
           !
           ! Momentum balance
           !
