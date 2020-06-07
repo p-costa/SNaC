@@ -19,21 +19,21 @@
              dxc,dyf,dzf,xc,yf,zf,xc_g,yc_g,zc_g,u)
   call out1d(trim(datadir)//'umean_z_fld_'   //fldnum//'.out',lo,hi,ng,3,l, &
              dxc,dyf,dzf,xc,yf,zf,xc_g,yc_g,zc_g,u)
-  call out1d(trim(datadir)//'umean_x_fld_'   //fldnum//'.out',lo,hi,ng,1,l, &
+  call out1d(trim(datadir)//'vmean_x_fld_'   //fldnum//'.out',lo,hi,ng,1,l, &
              dxf,dyc,dzf,xf,yc,zf,xc_g,yc_g,zc_g,v)
-  call out1d(trim(datadir)//'umean_y_fld_'   //fldnum//'.out',lo,hi,ng,2,l, &
+  call out1d(trim(datadir)//'vmean_y_fld_'   //fldnum//'.out',lo,hi,ng,2,l, &
              dxf,dyc,dzf,xf,yc,zf,xc_g,yc_g,zc_g,v)
-  call out1d(trim(datadir)//'umean_z_fld_'   //fldnum//'.out',lo,hi,ng,3,l, &
+  call out1d(trim(datadir)//'vmean_z_fld_'   //fldnum//'.out',lo,hi,ng,3,l, &
              dxf,dyc,dzf,xf,yc,zf,xc_g,yc_g,zc_g,v)
-  call out1d(trim(datadir)//'umean_x_fld_'   //fldnum//'.out',lo,hi,ng,1,l, &
+  call out1d(trim(datadir)//'wmean_x_fld_'   //fldnum//'.out',lo,hi,ng,1,l, &
              dxf,dyf,dzc,xf,yf,zc,xc_g,yc_g,zc_g,w)
-  call out1d(trim(datadir)//'umean_y_fld_'   //fldnum//'.out',lo,hi,ng,2,l, &
+  call out1d(trim(datadir)//'wmean_y_fld_'   //fldnum//'.out',lo,hi,ng,2,l, &
              dxf,dyf,dzc,xf,yf,zc,xc_g,yc_g,zc_g,w)
-  call out1d(trim(datadir)//'umean_z_fld_'   //fldnum//'.out',lo,hi,ng,3,l, &
+  call out1d(trim(datadir)//'wmean_z_fld_'   //fldnum//'.out',lo,hi,ng,3,l, &
              dxf,dyf,dzc,xf,yf,zc,xc_g,yc_g,zc_g,w)
-  call out1d(trim(datadir)//'umean_x_fld_'   //fldnum//'.out',lo,hi,ng,1,l, &
+  call out1d(trim(datadir)//'pmean_x_fld_'   //fldnum//'.out',lo,hi,ng,1,l, &
              dxc,dyc,dzc,xc,yc,zc,xc_g,yc_g,zc_g,p)
-  call out1d(trim(datadir)//'umean_y_fld_'   //fldnum//'.out',lo,hi,ng,2,l, &
+  call out1d(trim(datadir)//'pmean_y_fld_'   //fldnum//'.out',lo,hi,ng,2,l, &
              dxc,dyc,dzc,xc,yc,zc,xc_g,yc_g,zc_g,p)
-  call out1d(trim(datadir)//'umean_z_fld_'   //fldnum//'.out',lo,hi,ng,3,l, &
+  call out1d(trim(datadir)//'pmean_z_fld_'   //fldnum//'.out',lo,hi,ng,3,l, &
              dxc,dyc,dzc,xc,yc,zc,xc_g,yc_g,zc_g,p)
