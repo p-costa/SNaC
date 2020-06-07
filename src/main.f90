@@ -433,6 +433,11 @@ program snac
 #endif
   enddo
   call finalize_solver(psolver)
+#ifdef _IMPDIFF
+  call finalize_solver(usolver)
+  call finalize_solver(vsolver)
+  call finalize_solver(wsolver)
+#endif
   if(myid.eq.0.and.(.not.kill)) write(stdout,*) '*** Fim ***'
   call MPI_FINALIZE(ierr)
   call exit
