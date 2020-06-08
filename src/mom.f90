@@ -5,10 +5,10 @@ module mod_mom
   private
   public momx_a,momy_a,momz_a,momx_d,momy_d,momz_d,momx_p,momy_p,momz_p
   contains
-  subroutine momx_a(lo,hi,dxf,dyf,dzf,u,v,w,dudt)
+  subroutine momx_a(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
-    real(rp), intent(in), dimension(lo(1)-1:) :: dxf
+    real(rp), intent(in), dimension(lo(1)-1:) :: dxc,dxf
     real(rp), intent(in), dimension(lo(2)-1:) :: dyf
     real(rp), intent(in), dimension(lo(3)-1:) :: dzf
     real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in   ) :: u,v,w
@@ -43,11 +43,11 @@ module mod_mom
     return
   end subroutine momx_a
   !
-  subroutine momy_a(lo,hi,dxf,dyf,dzf,u,v,w,dvdt)
+  subroutine momy_a(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxf
-    real(rp), intent(in), dimension(lo(2)-1:) :: dyf
+    real(rp), intent(in), dimension(lo(2)-1:) :: dyc,dyf
     real(rp), intent(in), dimension(lo(3)-1:) :: dzf
     real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in   ) :: u,v,w
     real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(inout) :: dvdt
@@ -81,12 +81,12 @@ module mod_mom
     return
   end subroutine momy_a
   !
-  subroutine momz_a(lo,hi,dxf,dyf,dzf,u,v,w,dwdt)
+  subroutine momz_a(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
     real(rp), intent(in), dimension(lo(1)-1:) :: dxf
     real(rp), intent(in), dimension(lo(2)-1:) :: dyf
-    real(rp), intent(in), dimension(lo(3)-1:) :: dzf
+    real(rp), intent(in), dimension(lo(3)-1:) :: dzc,dzf
     real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in   ) :: u,v,w
     real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(inout) :: dwdt
     real(rp) :: uwip,uwim,vwjp,vwjm,wwkp,wwkm

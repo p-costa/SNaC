@@ -49,9 +49,9 @@ module mod_rk
     dvdtrkd(:,:,:) = dvdtrk(:,:,:)
     dwdtrkd(:,:,:) = dwdtrk(:,:,:)
 #endif
-    call momx_a(lo,hi,dxf,dyf,dzf,u,v,w,dudtrk)
-    call momy_a(lo,hi,dxf,dyf,dzf,u,v,w,dvdtrk)
-    call momz_a(lo,hi,dxf,dyf,dzf,u,v,w,dwdtrk)
+    call momx_a(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudtrk)
+    call momy_a(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdtrk)
+    call momz_a(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdtrk)
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,factor1,factor2,u,v,w,up,vp,wp,dudtrk,dvdtrk,dwdtrk,dudtrko,dvdtrko,dwdtrko)

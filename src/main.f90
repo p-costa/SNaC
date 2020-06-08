@@ -234,6 +234,7 @@ program snac
   uo(:,:,:) = 0._rp
   vo(:,:,:) = 0._rp
   wo(:,:,:) = 0._rp
+  alphaoi = 0._rp
 #endif
   !
   ! post-process and write initial condition
@@ -313,7 +314,6 @@ program snac
                   is_forced,velf,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,f)
       dpdl(:) = dpdl(:) - f(:)/dt
 #ifdef _IMPDIFF
-      if(irk.eq.1) alphaoi = 0._rp
       alphai = alpha**(-1)
       !
       !$OMP WORKSHARE
