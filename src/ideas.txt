@@ -3,3 +3,5 @@
 todos:
 change some stuff to a utils subroutine
 add some nice printing subroutines (with colors, maybe)
+
+check all the code, comment header of subroutines, and add examples folder

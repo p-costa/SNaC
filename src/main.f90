@@ -15,7 +15,7 @@
 ! S:::::::::::::::SS N::::::N        N::::::N a::::::::::aa:::a    CCC::::::::::::C
 !  SSSSSSSSSSSSSSS   NNNNNNNN         NNNNNNN  aaaaaaaaaa  aaaa       CCCCCCCCCCCCC
 !-----------------------------------------------------------------------------------
-! Slow CaNS, a.k.a. **SNaC**
+! **SNaC**, also known as *Slow CaNS*
 ! Pedro Costa (p.simoes.costa@gmail.com)
 !-----------------------------------------------------------------------------------
 program snac
@@ -341,6 +341,18 @@ program snac
 #endif
       call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,up,vp,wp)
+#if defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
+      dtrk  = dt
+      dtrki = dt**(-1)
+      if(irk.lt.3) then ! pressure correction only at the last RK step
+        !$OMP WORKSHARE
+        u(:,:,:) = up(:,:,:)
+        v(:,:,:) = vp(:,:,:)
+        w(:,:,:) = wp(:,:,:)
+        !$OMP END WORKSHARE
+        cycle
+      endif
+#endif
       call fillps(lo,hi,dxf,dyf,dzf,dtrk,up,vp,wp,pp)
       call updt_rhs(lo,hi,is_bound,rhsp%x,rhsp%y,rhsp%z,pp)
       call solve_helmholtz(psolver,lo,hi,pp,po)

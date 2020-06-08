@@ -368,9 +368,6 @@ module mod_bound
   !
   subroutine inflow(lo,hi,idir,vel2d,u,v,w)
     !
-    ! n.b.: if the call of inflow should be conditioned by is_bound
-    !       just like the outflow subroutine
-    !
     implicit none
     integer, intent(in), dimension(3) :: lo,hi
     integer, intent(in) :: idir
@@ -405,6 +402,10 @@ module mod_bound
   end subroutine inflow
   !
   subroutine updt_rhs(lo,hi,is_bound,rhsbx,rhsby,rhsbz,p)
+    !
+    ! updates the right-hand-side of the Helmholtz/Poisson equation
+    ! with the appropriate boundary conditions
+    !
     implicit none
     integer , intent(in   ), dimension(3) :: lo,hi
     logical , intent(in   ), dimension(0:1,3) :: is_bound
@@ -466,13 +467,13 @@ module mod_bound
       call MPI_SENDRECV(p(hi(1)   ,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
                         p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
                         comm_cart,MPI_STATUS_IGNORE,ierr)
-         !call MPI_IRECV( p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),1, &
+         !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),1, &
          !                comm_cart,requests(1),error)
-         !call MPI_IRECV( p(hi(1)+n,lo(2)-n,lo(3)-n),1,halo,nb(1),0, &
+         !call MPI_IRECV( p(hi(1)+nh,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
          !                comm_cart,requests(2),error)
-         !call MPI_ISSEND(p(hi(1)  ,lo(2)-n,lo(3)-n),1,halo,nb(1),1, &
+         !call MPI_ISSEND(p(hi(1)   ,lo(2)-nh,lo(3)-nh),1,halo,nb(1),1, &
          !                comm_cart,requests(3),error)
-         !call MPI_ISSEND(p(lo(1)  ,lo(2)-n,lo(3)-n),1,halo,nb(0),0, &
+         !call MPI_ISSEND(p(lo(1)   ,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
          !                comm_cart,requests(4),error)
          !call MPI_WAITALL(4, requests, statuses, error)
     case(2) ! y direction
@@ -482,13 +483,13 @@ module mod_bound
       call MPI_SENDRECV(p(lo(1)-nh,hi(2)   ,lo(3)-nh),1,halo,nb(1),0, &
                         p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
                         comm_cart,MPI_STATUS_IGNORE,ierr)
-         !call MPI_IRECV( p(lo(1)-n,hi(2)+n,lo(3)-n),1,halo,nb(1),0, &
+         !call MPI_IRECV( p(lo(1)-nh,hi(2)+nh,lo(3)-nh),1,halo,nb(1),0, &
          !                comm_cart,requests(1),error)
-         !call MPI_IRECV( p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),1, &
+         !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),1, &
          !                comm_cart,requests(2),error)
-         !call MPI_ISSEND(p(lo(1)-n,lo(2)  ,lo(3)-n),1,halo,nb(0),0, &
+         !call MPI_ISSEND(p(lo(1)-nh,lo(2)   ,lo(3)-nh),1,halo,nb(0),0, &
          !               comm_cart,requests(3),error)
-         !call MPI_ISSEND(p(lo(1)-n,hi(2)  ,lo(3)-n),1,halo,nb(1),1, &
+         !call MPI_ISSEND(p(lo(1)-nh,hi(2)   ,lo(3)-nh),1,halo,nb(1),1, &
          !               comm_cart,requests(4),error)
          !call MPI_WAITALL(4, requests, statuses, error)
     case(3) ! z direction
@@ -498,13 +499,13 @@ module mod_bound
       call MPI_SENDRECV(p(lo(1)-nh,lo(2)-nh,hi(3)   ),1,halo,nb(1),0, &
                         p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
                         comm_cart,MPI_STATUS_IGNORE,ierr)
-      !call MPI_IRECV( p(lo(1)-n,lo(2)-n,hi(3)+n),1,halo,nb(1),0, &
+      !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,hi(3)+nh),1,halo,nb(1),0, &
       !                comm_cart,requests(1),error)
-      !call MPI_IRECV( p(lo(1)-n,lo(2)-n,lo(3)-n),1,halo,nb(0),1, &
+      !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),1, &
       !                comm_cart,requests(2),error)
-      !call MPI_ISSEND(p(lo(1)-n,lo(2)-n,lo(3)  ),1,halo,nb(0),0, &
+      !call MPI_ISSEND(p(lo(1)-nh,lo(2)-nh,lo(3)   ),1,halo,nb(0),0, &
       !               comm_cart,requests(3),error)
-      !call MPI_ISSEND(p(lo(1)-n,lo(2)-n,hi(3)  ),1,halo,nb(1),1, &
+      !call MPI_ISSEND(p(lo(1)-nh,lo(2)-nh,hi(3)   ),1,halo,nb(1),1, &
       !               comm_cart,requests(4),error)
       !call MPI_WAITALL(4, requests, statuses, error)
     end select
