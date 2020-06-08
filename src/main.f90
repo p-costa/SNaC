@@ -258,7 +258,8 @@ program snac
                    rhsp%x,rhsp%y,rhsp%z,psolver)
   call setup_solver(lo,hi,psolver,0._rp)
 #ifdef _IMPDIFF
-  q  = [1,0,0] 
+  q  = [1,0,0]
+  if(cbcpre(0,1)//cbcpre(0,1).eq.'PP') q(:) = 0
   dl = reshape([dxf_g(1-0),dxf_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
@@ -269,6 +270,7 @@ program snac
                    1.d-6,500,HYPRESolverPFMG,dxf,dxc,dyc,dyf,dzc,dzf, &
                    rhsu%x,rhsu%y,rhsu%z,usolver)
   q  = [0,1,0] 
+  if(cbcpre(0,2)//cbcpre(0,2).eq.'PP') q(:) = 0
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyf_g(1-0),dyf_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
@@ -279,6 +281,7 @@ program snac
                    1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyf,dyc,dzc,dzf, &
                    rhsv%x,rhsv%y,rhsv%z,vsolver)
   q  = [0,0,1] 
+  if(cbcpre(0,3)//cbcpre(0,3).eq.'PP') q(:) = 0
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzf_g(1-0),dzf_g(ng(3))],shape(dl))

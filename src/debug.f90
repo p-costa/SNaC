@@ -35,6 +35,44 @@ module mod_debug
     call mpi_allreduce(MPI_IN_PLACE,mean,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
     return
   end subroutine chkmean
+  subroutine chk_helmholtz(lo,hi,is_centered,dx1,dx2,dy1,dy2,dz1,dz2,alpha,fpp,fp,diffmax)
+    !
+    ! this subroutine checks if the implementation of implicit diffusion is
+    ! correct
+    !
+    implicit none
+    integer , intent(in ), dimension(3) :: lo,hi
+    logical , intent(in ), dimension(3) :: is_centered
+    real(rp), intent(in ), dimension(lo(1)-1:) :: dx1,dx2
+    real(rp), intent(in ), dimension(lo(2)-1:) :: dy1,dy2
+    real(rp), intent(in ), dimension(lo(3)-1:) :: dz1,dz2
+    real(rp), intent(in )                      :: alpha
+    real(rp), intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: fpp,fp
+    real(rp), intent(out) :: diffmax
+    real(rp) :: val
+    integer :: i,j,k
+    integer, dimension(3) :: q
+    q(:) = 0
+    where(is_centered(:)) q(:) = 1
+    !
+    diffmax = 0._rp
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=1,lo(1),hi(1)
+          val = alpha*fpp(i,j,k) + &
+                 ((fpp(i+1,j,k)-fpp(i  ,j,k))/dx1(i  +q(1)) - &
+                  (fpp(i  ,j,k)-fpp(i-1,j,k))/dx1(i-1+q(1)))/dx2(i) + &
+                 ((fpp(i,j+1,k)-fpp(i,j  ,k))/dy1(j  +q(2)) - &
+                  (fpp(i,j  ,k)-fpp(i,j-1,k))/dy1(j-1+q(2)))/dy2(j) + &
+                 ((fpp(i,j,k+1)-fpp(i,j,k  ))/dz1(k  +q(3)) - &
+                  (fpp(i,j,k  )-fpp(i,j,k-1))/dz1(k-1+q(3)))/dz2(k)
+          diffmax = max(diffmax,abs(val-fp(i,j,k)))
+        enddo
+      enddo
+    enddo
+    call mpi_allreduce(MPI_IN_PLACE,diffmax,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
+    return
+  end subroutine chk_helmholtz
   subroutine mean_boundary_force(dt,factor,l,tau,tauo,f)
     implicit none
     type wallshear

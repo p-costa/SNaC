@@ -38,7 +38,7 @@ module mod_solver
     real(rp)          , intent(out), dimension(lo(2):,lo(3):,0:)    :: rhsx
     real(rp)          , intent(out), dimension(lo(1):,lo(3):,0:)    :: rhsy
     real(rp)          , intent(out), dimension(lo(1):,lo(2):,0:)    :: rhsz
-    integer, dimension(3         ) :: periods
+    integer, dimension(3         ) :: periods,qqq
     integer, dimension(3,nstencil) :: offsets
     real(rp), allocatable, dimension(:) :: matvalues
     real(rp), dimension(0:1,3) :: factor,sgn
@@ -50,7 +50,9 @@ module mod_solver
     !
     comm_hypre = MPI_COMM_WORLD
     periods(:) = 0
-    where (cbc(0,:)//cbc(1,:).eq.'PP') periods(:) = ng(:)
+    where(cbc(0,:)//cbc(1,:).eq.'PP') periods(:) = ng(:)
+    qqq(:) = 0
+    where(is_centered(:)) qqq(:) = 1
     factor(:,:) = 0._rp
     sgn(   :,:) = 0._rp
     do q=1,3
@@ -113,12 +115,12 @@ module mod_solver
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           q = q + 1
-          cxm = 1._rp/(dx1(i-1)*dx2(i))
-          cxp = 1._rp/(dx1(i  )*dx2(i))
-          cym = 1._rp/(dy1(j-1)*dy2(j))
-          cyp = 1._rp/(dy1(j  )*dy2(j))
-          czm = 1._rp/(dz1(k-1)*dz2(k))
-          czp = 1._rp/(dz1(k  )*dz2(k))
+          cxm = 1._rp/(dx1(i-1+qqq(1))*dx2(i))
+          cxp = 1._rp/(dx1(i  +qqq(1))*dx2(i))
+          cym = 1._rp/(dy1(j-1+qqq(2))*dy2(j))
+          cyp = 1._rp/(dy1(j  +qqq(2))*dy2(j))
+          czm = 1._rp/(dz1(k-1+qqq(3))*dz2(k))
+          czp = 1._rp/(dz1(k  +qqq(3))*dz2(k))
           cc  = -(cxm+cxp+cym+cyp+czm+czp)
           if(periods(1).eq.0) then
             if(is_bound(0,1).and.i.eq.lo(1)) then
