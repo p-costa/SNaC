@@ -1,6 +1,6 @@
 ## Synopsis
 
-**SNaC** is [**CaNS**](https://github.com/p-costa/CaNS) spelled backwards, and is a code for massively-parallel direct numerical simulations (DNS) of fluid flows. *SNaC* is an alias a longer and somewhat malevolent name: *Slow CaNS*. Despite being one to two orders of magnitude slower than *CaNS*, this code serves well as an efficient base solver for a multi-block DNS code. The fluid flow is solved with a second-order finite-volume pressure correction scheme, discretized in a MAC grid arrangement. Time is advanced with a three-step low storage Runge-Kutta scheme. Optionally, for increased stability at low Reynolds numbers, at the price of higher computational demand, the diffusion term can be treated implicitly.
+**SNaC** is [**CaNS**](https://github.com/p-costa/CaNS) spelled backwards, and is a code for massively-parallel direct numerical simulations (DNS) of fluid flows. *SNaC* is an alias a longer and somewhat malevolent name: *Slow CaNS*. Despite being one to two orders of magnitude slower than *CaNS*, this code serves well as an efficient base solver for a multi-block DNS code.
 
 ## News
 
@@ -20,7 +20,7 @@ This simple code for canonical fluid flows will eventually serve as base for a m
 
 ## Method
 
-The fluid flow is solved with a second-order finite-volume pressure correction scheme, discretized in a MAC grid arrangement. Time is advanced with a three-step low storage Runge-Kutta scheme. Optionally, for increased stability at low Reynolds numbers, at the price of higher computational demand, the diffusion term can be treated implicitly. See the reference above for details.
+The fluid flow is solved with a second-order finite-volume pressure correction scheme, discretized in a MAC grid arrangement. Time is advanced with a three-step low storage Runge-Kutta scheme. Optionally, for increased stability at low Reynolds numbers, at the price of higher computational demand, the diffusion term can be treated implicitly.
 
 ## Usage
 
