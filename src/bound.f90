@@ -99,10 +99,10 @@ module mod_bound
     call updthalo(lo,hi,1,halos(3),nb(:,3),3,p)
     !
     if(is_bound(0,1)) then
-      call set_bc(cbc(0,1),0,lo,hi,1,.true.,bc(0,1),dxc(lo(2)-1),p)
+      call set_bc(cbc(0,1),0,lo,hi,1,.true.,bc(0,1),dxc(lo(1)-1),p)
     endif                                                       
     if(is_bound(1,1)) then                                      
-      call set_bc(cbc(1,1),1,lo,hi,1,.true.,bc(1,1),dxc(hi(2)  ),p)
+      call set_bc(cbc(1,1),1,lo,hi,1,.true.,bc(1,1),dxc(hi(1)  ),p)
     endif                       
     if(is_bound(0,2)) then      
       call set_bc(cbc(0,2),0,lo,hi,2,.true.,bc(0,2),dyc(lo(2)-1),p)

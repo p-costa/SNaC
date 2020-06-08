@@ -33,7 +33,7 @@ module mod_mom
           ! Momentum balance
           !
           dudt(i,j,k) = dudt(i,j,k) + &
-                        ( -uuip + uuim )/dxf(i) + &
+                        ( -uuip + uuim )/dxc(i) + &
                         ( -uvjp + uvjm )/dyf(j) + &
                         ( -uwkp + uwkm )/dzf(k)
         enddo
@@ -72,7 +72,7 @@ module mod_mom
           !
           dvdt(i,j,k) = dvdt(i,j,k) + &
                         ( -uvip + uvim )/dxf(i) + &
-                        ( -vvjp + vvjm )/dyf(j) + &
+                        ( -vvjp + vvjm )/dyc(j) + &
                         ( -wvkp + wvkm )/dzf(k)
         enddo
       enddo
@@ -111,7 +111,7 @@ module mod_mom
           dwdt(i,j,k) = dwdt(i,j,k) + &
                         ( -uwip + uwim )/dxf(i) + &
                         ( -vwjp + vwjm )/dyf(j) + &
-                        ( -wwkp + wwkm )/dzf(k)
+                        ( -wwkp + wwkm )/dzc(k)
         enddo
       enddo
     enddo
