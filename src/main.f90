@@ -209,6 +209,10 @@ program snac
   !
   ! initialization of the flow fields
   !
+  u(:,:,:)      = 0._rp
+  v(:,:,:)      = 0._rp
+  w(:,:,:)      = 0._rp
+  p(:,:,:)      = 0._rp
   if(.not.restart) then
     istep = 0
     time = 0._rp

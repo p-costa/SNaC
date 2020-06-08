@@ -61,7 +61,7 @@ module mod_solver
           select case(cbc(qq,q))
           case('N')
             factor(qq,q) = 1._rp*dl(qq,q)*bc(qq,q)
-            if(qq.eq.1) factor(qq,q) = factor(qq,q)
+            if(qq.eq.1) factor(qq,q) = -factor(qq,q)
             sgn(   qq,q) = 1._rp
           case('D')
             if(is_centered(q)) then
