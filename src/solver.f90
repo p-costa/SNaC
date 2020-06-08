@@ -50,7 +50,7 @@ module mod_solver
     !
     comm_hypre = MPI_COMM_WORLD
     periods(:) = 0
-    where(cbc(0,:)//cbc(1,:).eq.'PP') periods(:) = ng(:)
+    where(cbc(0,:)//cbc(1,:) == 'PP') periods(:) = ng(:)
     qqq(:) = 0
     where(.not.is_centered(:)) qqq(:) = 1
     factor(:,:) = 0._rp
@@ -61,7 +61,7 @@ module mod_solver
           select case(cbc(qq,q))
           case('N')
             factor(qq,q) = 1._rp*dl(qq,q)*bc(qq,q)
-            if(qq.eq.1) factor(qq,q) = -factor(qq,q)
+            if(qq == 1) factor(qq,q) = -factor(qq,q)
             sgn(   qq,q) = 1._rp
           case('D')
             if(is_centered(q)) then
@@ -122,37 +122,37 @@ module mod_solver
           czm = 1._rp/(dz1(k-1+qqq(3))*dz2(k))
           czp = 1._rp/(dz1(k  +qqq(3))*dz2(k))
           cc  = -(cxm+cxp+cym+cyp+czm+czp)
-          if(periods(1).eq.0) then
-            if(is_bound(0,1).and.i.eq.lo(1)) then
+          if(periods(1) == 0) then
+            if(is_bound(0,1).and.i == lo(1)) then
               rhsx(j,k,0) = rhsx(j,k,0) + cxm*factor(0,1)
               cc = cc + sgn(0,1)*cxm
               cxm = 0._rp
             endif
-            if(is_bound(1,1).and.i.eq.hi(1)) then
+            if(is_bound(1,1).and.i == hi(1)) then
               rhsx(j,k,1) = rhsx(j,k,1) + cxp*factor(1,1)
               cc = cc + sgn(1,1)*cxp
               cxp = 0._rp
             endif
           endif
-          if(periods(2).eq.0) then
-            if(is_bound(0,2).and.j.eq.lo(2)) then
+          if(periods(2) == 0) then
+            if(is_bound(0,2).and.j == lo(2)) then
               rhsy(i,k,0) = rhsy(i,k,0) + cym*factor(0,2)
               cc = cc + sgn(0,2)*cym
               cym = 0._rp
             endif
-            if(is_bound(1,2).and.j.eq.hi(2)) then
+            if(is_bound(1,2).and.j == hi(2)) then
               rhsy(i,k,1) = rhsy(i,k,1) + cyp*factor(1,2)
               cc = cc + sgn(1,2)*cyp
               cyp = 0._rp
             endif
           endif
-          if(periods(3).eq.0) then
-            if(is_bound(0,3).and.k.eq.lo(3)) then
+          if(periods(3) == 0) then
+            if(is_bound(0,3).and.k == lo(3)) then
               rhsz(i,j,0) = rhsz(i,j,0) + czm*factor(0,2)
               cc = cc + sgn(0,3)*czm
               czm = 0._rp
             endif
-            if(is_bound(1,3).and.k.eq.hi(3)) then
+            if(is_bound(1,3).and.k == hi(3)) then
               rhsz(i,j,1) = rhsz(i,j,1) + czp*factor(1,3)
               cc = cc + sgn(1,3)*czp
               czp = 0._rp
@@ -181,13 +181,13 @@ module mod_solver
     !       freely available under a GPL license
     !       http://www.ida.upmc.fr/~zaleski/paris
     !
-    if     ( stype .eq. HYPRESolverSMG ) then
+    if     ( stype == HYPRESolverSMG ) then
       call HYPRE_StructSMGCreate(comm_hypre,solver,ierr)
       call HYPRE_StructSMGSetMaxIter(solver,maxiter,ierr)
       call HYPRE_StructSMGSetTol(solver,maxerror,ierr)
       call hypre_structSMGsetLogging(solver,1,ierr)
       call HYPRE_StructSMGSetPrintLevel(solver,1,ierr)
-    elseif ( stype .eq. HYPRESolverPFMG ) then
+    elseif ( stype == HYPRESolverPFMG ) then
       call HYPRE_StructPFMGCreate(comm_hypre,solver,ierr)
       call HYPRE_StructPFMGSetMaxIter(solver,maxiter,ierr)
       call HYPRE_StructPFMGSetTol(solver,maxerror,ierr)
@@ -202,14 +202,14 @@ module mod_solver
       call HYPRE_StructPFMGSetRelaxType(solver,1,ierr)
       call HYPRE_StructPFMGSetNumPreRelax(solver,1,ierr)
       call HYPRE_StructPFMGSetNumPostRelax(solver,1,ierr)
-    elseif ( stype .eq. HYPRESolverGMRES .or. &
-             stype .eq. HYPRESolverBiCGSTAB   ) then
-      if     (stype .eq. HYPRESolverGMRES) then
+    elseif ( stype == HYPRESolverGMRES .or. &
+             stype == HYPRESolverBiCGSTAB   ) then
+      if     (stype == HYPRESolverGMRES) then
         call HYPRE_StructGMRESCreate(comm_hypre,solver,ierr)
         call HYPRE_StructGMRESSetMaxIter(solver,maxiter,ierr)
         call HYPRE_StructGMRESSetTol(solver,maxerror,ierr)
         !call HYPRE_StructGMRESSetLogging(solver, 1 ,ierr)
-      elseif (stype .eq. HYPRESolverBiCGSTAB) then
+      elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABCreate(comm_hypre,solver,ierr)
         call HYPRE_StructBiCGSTABSetMaxIter(solver,maxiter,ierr)
         call HYPRE_StructBiCGSTABSetTol(solver,maxerror,ierr)
@@ -222,9 +222,9 @@ module mod_solver
       call HYPRE_StructPFMGSetRelChange(precond,1,ierr)
       call HYPRE_StructPFMGSetRelaxType(precond,2,ierr)
       precond_id = 1   ! Set PFMG as preconditioner
-      if     (stype .eq. HYPRESolverGMRES) then
+      if     (stype == HYPRESolverGMRES) then
         call HYPRE_StructGMRESSetPrecond(solver,precond_id,precond,ierr)
-      elseif (stype .eq. HYPRESolverBiCGSTAB) then
+      elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSetPrecond(solver,precond_id,precond,ierr)
       endif
     endif
@@ -272,15 +272,15 @@ module mod_solver
     !       freely available under a GPL license
     !       http://www.ida.upmc.fr/~zaleski/paris
     !
-    if     ( stype .eq. HYPRESolverSMG ) then
+    if     ( stype == HYPRESolverSMG ) then
       call HYPRE_StructSMGSetup(solver,mat,rhs,sol,ierr)
-    elseif ( stype .eq. HYPRESolverPFMG ) then
+    elseif ( stype == HYPRESolverPFMG ) then
       call HYPRE_StructPFMGSetup(solver,mat,rhs,sol,ierr)
-    elseif ( stype .eq. HYPRESolverGMRES .or. &
-             stype .eq. HYPRESolverBiCGSTAB   ) then
-      if     (stype .eq. HYPRESolverGMRES) then
+    elseif ( stype == HYPRESolverGMRES .or. &
+             stype == HYPRESolverBiCGSTAB   ) then
+      if     (stype == HYPRESolverGMRES) then
         call HYPRE_StructGMRESSetup(solver,mat,rhs,sol,ierr)
-      elseif (stype .eq. HYPRESolverBiCGSTAB) then
+      elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSetup(solver,mat,rhs,sol,ierr)
       endif
     endif
@@ -333,16 +333,16 @@ module mod_solver
     !       freely available under a GPL license; see:
     !       http://www.ida.upmc.fr/~zaleski/paris/
     !
-    if ( stype .eq. HYPRESolverSMG ) then 
+    if ( stype == HYPRESolverSMG ) then 
       call HYPRE_StructSMGSolve(solver,mat,rhs,sol,ierr)
       !call HYPRE_StructSMGGetNumIterations(solver,num_iterations,ierr)
-    elseif ( stype .eq. HYPRESolverPFMG ) then  
+    elseif ( stype == HYPRESolverPFMG ) then  
       call HYPRE_StructPFMGSolve(solver,mat,rhs,sol,ierr)
       !call HYPRE_StructPFMGGetNumIterations(solver,num_iterations,ierr)
-    elseif (stype .eq. HYPRESolverGMRES) then 
+    elseif (stype == HYPRESolverGMRES) then 
       call HYPRE_StructGMRESSolve(solver,mat,rhs,sol,ierr)
       !call HYPRE_StructGMRESGetNumIterations(solver, num_iterations,ierr)
-    elseif (stype .eq. HYPRESolverBiCGSTAB) then 
+    elseif (stype == HYPRESolverBiCGSTAB) then 
       call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
       !call HYPRE_StructBiCGSTABGetNumIterations(solver, num_iterations,ierr)
     endif ! stype
@@ -384,14 +384,14 @@ module mod_solver
     !       freely available under a GPL license; see:
     !       http://www.ida.upmc.fr/~zaleski/paris/
     !
-    if     ( stype .eq. HYPRESolverSMG ) then 
+    if     ( stype == HYPRESolverSMG ) then 
       call HYPRE_StructSMGDestroy(solver,ierr)
-    elseif ( stype .eq. HYPRESolverPFMG ) then  
+    elseif ( stype == HYPRESolverPFMG ) then  
       call HYPRE_StructPFMGDestroy(solver,ierr)
-    elseif ( stype .eq. HYPRESolverGMRES ) then  
+    elseif ( stype == HYPRESolverGMRES ) then  
       call HYPRE_StructGMRESDestroy(solver,ierr)
       call HYPRE_StructPFMGDestroy(precond,ierr)
-    elseif ( stype .eq. HYPRESolverBiCGSTAB ) then  
+    elseif ( stype == HYPRESolverBiCGSTAB ) then  
       call HYPRE_StructBiCGSTABDestroy(solver,ierr)
       call HYPRE_StructPFMGDestroy(precond,ierr)
     endif

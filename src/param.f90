@@ -60,7 +60,7 @@ contains
   implicit none
   integer :: iunit
     open(newunit=iunit,file='dns.in',status='old',action='read',iostat=ierr)
-      if( ierr.eq.0 ) then
+      if( ierr == 0 ) then
         read(iunit,*) ng(1),ng(2),ng(3)
         read(iunit,*) l(1),l(2),l(3)
         read(iunit,*) gt(1),gt(2),gt(3)
@@ -88,8 +88,8 @@ contains
         read(iunit,*) dims(1),dims(2),dims(3)
         read(iunit,*) nthreadsmax
       else
-        if(myid.eq.0) write(stderr,*) '*** Error reading the input file *** ' 
-        if(myid.eq.0) write(stderr,*) 'Aborting...'
+        if(myid == 0) write(stderr,*) '*** Error reading the input file *** ' 
+        if(myid == 0) write(stderr,*) 'Aborting...'
         call MPI_FINALIZE(ierr)
         error stop
     endif

@@ -172,7 +172,7 @@ program snac
            rhsw%z(lo(1):hi(1),lo(2):hi(2),0:1))
 #endif
   !
-  if(myid.eq.0) then
+  if(myid == 0) then
     write(stdout,*) '*******************************'
     write(stdout,*) '*** Beginning of simulation ***'
     write(stdout,*) '*******************************'
@@ -218,10 +218,10 @@ program snac
     time = 0._rp
     call initflow(inivel,is_wallturb,lo,hi,ng,l,uref,lref,visc,bforce(1), &
                   xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
-    if(myid.eq.0) write(stdout,*) '*** Initial condition succesfully set ***'
+    if(myid == 0) write(stdout,*) '*** Initial condition succesfully set ***'
   else
     call load('r',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
-    if(myid.eq.0) write(stdout,*) '*** Checkpoint loaded at time = ', time, 'time step = ', istep, '. ***'
+    if(myid == 0) write(stdout,*) '*** Checkpoint loaded at time = ', time, 'time step = ', istep, '. ***'
   endif
   call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
                 dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
@@ -251,7 +251,7 @@ program snac
   !
   call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
   dt = min(cfl*dtmax,dtmin)
-  if(myid.eq.0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
+  if(myid == 0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
   !
   ! initialize Poisson solver
   !
@@ -264,7 +264,7 @@ program snac
   call setup_solver(lo,hi,psolver,0._rp)
 #ifdef _IMPDIFF
   q  = [1,0,0]
-  if(cbcpre(0,1)//cbcpre(0,1).eq.'PP') q(:) = 0
+  if(cbcpre(0,1)//cbcpre(0,1) == 'PP') q(:) = 0
   dl = reshape([dxf_g(1-0),dxf_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
@@ -275,7 +275,7 @@ program snac
                    1.d-6,500,HYPRESolverPFMG,dxf,dxc,dyc,dyf,dzc,dzf, &
                    rhsu%x,rhsu%y,rhsu%z,usolver)
   q  = [0,1,0] 
-  if(cbcpre(0,2)//cbcpre(0,2).eq.'PP') q(:) = 0
+  if(cbcpre(0,2)//cbcpre(0,2) == 'PP') q(:) = 0
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyf_g(1-0),dyf_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
@@ -286,7 +286,7 @@ program snac
                    1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyf,dyc,dzc,dzf, &
                    rhsv%x,rhsv%y,rhsv%z,vsolver)
   q  = [0,0,1] 
-  if(cbcpre(0,3)//cbcpre(0,3).eq.'PP') q(:) = 0
+  if(cbcpre(0,3)//cbcpre(0,3) == 'PP') q(:) = 0
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzf_g(1-0),dzf_g(ng(3))],shape(dl))
@@ -300,7 +300,7 @@ program snac
   !
   ! main loop
   !
-  if(myid.eq.0) write(stdout,*) '*** Calculation loop starts now ***'
+  if(myid == 0) write(stdout,*) '*** Calculation loop starts now ***'
   kill    = .false.
   is_done = .false.
   do while(.not.is_done)
@@ -309,7 +309,7 @@ program snac
 #endif
     istep = istep + 1
     time  = time  + dt
-    if(myid.eq.0) write(stdout,*) 'Timestep #', istep, 'Time = ', time
+    if(myid == 0) write(stdout,*) 'Timestep #', istep, 'Time = ', time
     dpdl(:)  = 0._rp
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
@@ -348,7 +348,7 @@ program snac
 #if defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
       dtrk  = dt
       dtrki = dt**(-1)
-      if(irk.lt.3) then ! pressure correction only at the last RK step
+      if(irk < 3) then ! pressure correction only at the last RK step
         !$OMP WORKSHARE
         u(:,:,:) = up(:,:,:)
         v(:,:,:) = vp(:,:,:)
@@ -371,34 +371,34 @@ program snac
     ! check simulation stopping criteria
     !
     if(stop_type(1)) then ! maximum number of time steps reached
-      if(istep.ge.nstep   ) is_done = is_done.or..true.
+      if(istep >= nstep   ) is_done = is_done.or..true.
     endif
     if(stop_type(2)) then ! maximum simulation time reached
-      if(time .ge.time_max) is_done = is_done.or..true.
+      if(time  >= time_max) is_done = is_done.or..true.
     endif
     if(stop_type(3)) then ! maximum wall-clock time reached
       tw = (MPI_WTIME()-twi)/3600._rp
       call MPI_ALLREDUCE(MPI_IN_PLACE,tw,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
-      if(tw   .ge.tw_max  ) is_done = is_done.or..true.
+      if(tw    >= tw_max  ) is_done = is_done.or..true.
     endif
-    if(mod(istep,icheck).eq.0) then
-      if(myid.eq.0) write(stdout,*) 'Checking stability and divergence...'
+    if(mod(istep,icheck) == 0) then
+      if(myid == 0) write(stdout,*) 'Checking stability and divergence...'
       !
       call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
       dt = min(cfl*dtmax,dtmin)
-      if(myid.eq.0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
-      if(dtmax.lt.small) then
-        if(myid.eq.0) write(stderr,*) 'ERROR: timestep is too small.'
-        if(myid.eq.0) write(stderr,*) 'Aborting...'
+      if(myid == 0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
+      if(dtmax < small) then
+        if(myid == 0) write(stderr,*) 'ERROR: timestep is too small.'
+        if(myid == 0) write(stderr,*) 'Aborting...'
         is_done = .true.
         kill = .true.
       endif
       !
       call chkdiv(lo,hi,dxf,dyf,dzf,l,u,v,w,divtot,divmax)
-      if(myid.eq.0) write(stdout,*) 'Total divergence = ', divtot, '| Maximum divergence = ', divmax
-      if(divtot.ne.divtot) then!divmax.gt.small.or.divtot.ne.divtot) then
-        if(myid.eq.0) write(stderr,*) 'ERROR: maximum divergence is too large.'
-        if(myid.eq.0) write(stderr,*) 'Aborting...'
+      if(myid == 0) write(stdout,*) 'Total divergence = ', divtot, '| Maximum divergence = ', divmax
+      if(divtot /= divtot) then!divmax > small.or.divtot /= divtot) then
+        if(myid == 0) write(stderr,*) 'ERROR: maximum divergence is too large.'
+        if(myid == 0) write(stderr,*) 'Aborting...'
         is_done = .true.
         kill = .true.
       endif
@@ -406,22 +406,22 @@ program snac
     !
     ! output routines below
     !
-    if(mod(istep,iout0d).eq.0) then
+    if(mod(istep,iout0d) == 0) then
       !allocate(var(4))
       var(1) = 1._rp*istep
       var(2) = dt
       var(3) = time
       call out0d(trim(datadir)//'time.out',3,var)
       !
-      if(any(is_forced(:)).or.any(abs(bforce(:)).gt.0.)) then
+      if(any(is_forced(:)).or.any(abs(bforce(:)) > 0._rp)) then
         meanvel(:) = 0._rp
-        if(is_forced(1).or.abs(bforce(1)).gt.0._rp) then
+        if(is_forced(1).or.abs(bforce(1)) > 0._rp) then
           call chkmean(lo,hi,l,dxc,dyf,dzf,u,meanvel(1))
         endif
-        if(is_forced(2).or.abs(bforce(2)).gt.0._rp) then
+        if(is_forced(2).or.abs(bforce(2)) > 0._rp) then
           call chkmean(lo,hi,l,dxf,dyc,dzf,v,meanvel(2))
         endif
-        if(is_forced(3).or.abs(bforce(3)).gt.0._rp) then
+        if(is_forced(3).or.abs(bforce(3)) > 0._rp) then
           call chkmean(lo,hi,l,dxf,dyf,dzc,w,meanvel(3))
         endif
         if(.not.any(is_forced(:))) dpdl(:) = -bforce(:) ! constant pressure gradient
@@ -432,16 +432,16 @@ program snac
       endif
     endif
     write(fldnum,'(i7.7)') istep
-    if(mod(istep,iout1d).eq.0) then
+    if(mod(istep,iout1d) == 0) then
       include 'out1d.h90'
     endif
-    if(mod(istep,iout2d).eq.0) then
+    if(mod(istep,iout2d) == 0) then
       include 'out2d.h90'
     endif
-    if(mod(istep,iout3d).eq.0) then
+    if(mod(istep,iout3d) == 0) then
       include 'out3d.h90'
     endif
-    if(mod(istep,isave ).eq.0.or.(is_done.and..not.kill)) then
+    if(mod(istep,isave ) == 0.or.(is_done.and..not.kill)) then
       if(is_overwrite_save) then
         filename = 'fld.bin'
       else
@@ -452,17 +452,17 @@ program snac
         !
         ! fld.bin -> last checkpoint file (symbolic link)
         !
-        if(myid.eq.0) call system('ln -sf '//trim(filename)//' '//trim(datadir)//'fld.bin')
+        if(myid == 0) call system('ln -sf '//trim(filename)//' '//trim(datadir)//'fld.bin')
       endif
-      if(myid.eq.0) write(stdout,*) '*** Checkpoint saved at time = ', time, 'time step = ', istep, '. ***'
+      if(myid == 0) write(stdout,*) '*** Checkpoint saved at time = ', time, 'time step = ', istep, '. ***'
     endif
 #ifdef _TIMING
       dt12 = MPI_WTIME()-dt12
       call MPI_ALLREDUCE(dt12,dt12av ,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
       call MPI_ALLREDUCE(dt12,dt12min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
       call MPI_ALLREDUCE(dt12,dt12max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
-      if(myid.eq.0) write(stdout,*) 'Avrg, min & max elapsed time: '
-      if(myid.eq.0) write(stdout,*) dt12av/(1._rp*product(dims)),dt12min,dt12max
+      if(myid == 0) write(stdout,*) 'Avrg, min & max elapsed time: '
+      if(myid == 0) write(stdout,*) dt12av/(1._rp*product(dims)),dt12min,dt12max
 #endif
   enddo
   call finalize_solver(psolver)
@@ -471,7 +471,7 @@ program snac
   call finalize_solver(vsolver)
   call finalize_solver(wsolver)
 #endif
-  if(myid.eq.0.and.(.not.kill)) write(stdout,*) '*** Fim ***'
+  if(myid == 0.and.(.not.kill)) write(stdout,*) '*** Fim ***'
   call MPI_FINALIZE(ierr)
-  call exit
+  stop
 end program snac

@@ -24,7 +24,7 @@ module mod_output
     integer :: i
     !
     write(cfmt,'(A,I3,A)') '(',n,'E15.7)'
-    if (myid .eq. 0) then
+    if (myid == 0) then
       open(newunit=iunit,file=fname,position='append')
       write(iunit,trim(cfmt)) (var(i),i=1,n) 
       close(iunit)
@@ -75,7 +75,7 @@ module mod_output
         enddo
       enddo
       call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
-      if(myid.eq.0) then
+      if(myid == 0) then
         open(newunit=iunit,file=fname)
         do k=1,ng(3)
           write(iunit,'(2E15.7)') z_g(k),p1d(k)
@@ -93,7 +93,7 @@ module mod_output
         enddo
       enddo
       call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(2),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
-      if(myid.eq.0) then
+      if(myid == 0) then
         open(newunit=iunit,file=fname)
         do j=1,ng(2)
           write(iunit,'(2E15.7)') y_g(j),p1d(j)
@@ -111,7 +111,7 @@ module mod_output
         enddo
       enddo
       call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(1),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
-      if(myid.eq.0) then
+      if(myid == 0) then
         open(newunit=iunit,file=fname)
         do i=1,ng(1)
           write(iunit,'(2E15.7)') x_g(i),p1d(i)
@@ -179,7 +179,7 @@ module mod_output
     !
     iunit = 10
     write(cfmt, '(A)') '(A,A,A,9i5,E15.7,i7)'
-    if (myid .eq. 0) then
+    if (myid == 0) then
       open(iunit,file=fname,position='append')
       write(iunit,trim(cfmt)) trim(fname_fld),' ',trim(varname),nmin,nmax,nskip,time,istep
       close(iunit)

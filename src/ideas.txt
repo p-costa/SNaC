@@ -4,7 +4,6 @@ todos:
 change some stuff to a utils subroutine
 add some nice printing subroutines (with colors, maybe)
 
-add README.md
-add INFO_INPUT.md
-add INFO_VISU.md
-change license to GPL
+(1) select subset of tasks that intercept the global coordinates and create a new communicator
+(2) calcualte disps and use MPI_TYPE_VECTOR FROM THE HALO DEFINITION
+(3) write

@@ -79,14 +79,14 @@ module mod_initflow
       call poiseuille(lo(3),hi(3),zc,l(3),uref,u1d)
       is_mean=.true.
     case default
-      if(myid.eq.0) write(stderr,*) 'ERROR: invalid name for initial velocity field'
-      if(myid.eq.0) write(stderr,*) ''
-      if(myid.eq.0) write(stderr,*) '*** Simulation abortited due to errors in the case file ***'
-      if(myid.eq.0) write(stderr,*) '    check INFO_INPUT.md'
+      if(myid == 0) write(stderr,*) 'ERROR: invalid name for initial velocity field'
+      if(myid == 0) write(stderr,*) ''
+      if(myid == 0) write(stderr,*) '*** Simulation abortited due to errors in the case file ***'
+      if(myid == 0) write(stderr,*) '    check INFO_INPUT.md'
       call MPI_FINALIZE(ierr)
       error stop
     end select
-    if(inivel.ne.'tgv') then
+    if(inivel /= 'tgv') then
       do k=lo(3),hi(3)
         do j=lo(2),hi(2)
           do i=lo(1),hi(1)
@@ -174,9 +174,9 @@ module mod_initflow
       do j=1,ng(2)
         do i=1,ng(1)
           call random_number(rn)
-          if(i.ge.lo(1).and.i.le.hi(1) .and. &
-             j.ge.lo(2).and.j.le.hi(2) .and. &
-             k.ge.lo(3).and.k.le.hi(3) ) then
+          if(i>=lo(1).and.i<=hi(1) .and. &
+             j>=lo(2).and.j<=hi(2) .and. &
+             k>=lo(3).and.k<=hi(3) ) then
              p(i,j,k) = p(i,j,k) + 2._rp*(rn-.5_rp)*norm
           endif
         enddo
@@ -211,7 +211,7 @@ module mod_initflow
     enddo
     !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,meanold,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
-    if(meanold.ne.0._rp) then
+    if(meanold /= 0._rp) then
       !$OMP WORKSHARE
       p(:,:,:) = p(:,:,:)/meanold*mean
       !$OMP END WORKSHARE
@@ -267,10 +267,10 @@ module mod_initflow
     retau = 0.09_rp*reb**(0.88_rp) ! from Pope's book
     do k=lo,hi
       z    = zc(k)/l
-      if(z.gt.0.5_rp) z = 1._rp-z
+      if(z>0.5_rp) z = 1._rp-z
       z    = zc(k)*2._rp*retau
       p(k) = 2.5_rp*log(z) + 5.5_rp
-      if (z.le.11.6_rp) p(k)=z
+      if (z<=11.6_rp) p(k)=z
     enddo
     return
   end subroutine log_profile

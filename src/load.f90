@@ -30,10 +30,10 @@ module mod_load
       !
       call MPI_FILE_GET_SIZE(fh,filesize,ierr)
       good = (product(ng)*4+2)*sizeof(1._rp)
-      if(filesize.ne.good) then
-        if(myid.eq.0) write(stderr,*) ''
-        if(myid.eq.0) write(stderr,*) '*** Simulation aborted due a checkpoint file with incorrect size ***'
-        if(myid.eq.0) write(stderr,*) '    file: ', filename, ' | expected size: ', good, '| actual size: ', filesize
+      if(filesize /= good) then
+        if(myid == 0) write(stderr,*) ''
+        if(myid == 0) write(stderr,*) '*** Simulation aborted due a checkpoint file with incorrect size ***'
+        if(myid == 0) write(stderr,*) '    file: ', filename, ' | expected size: ', good, '| actual size: ', filesize
         call MPI_FINALIZE(ierr)
         error stop
       endif
@@ -47,7 +47,7 @@ module mod_load
       call io_field('r',fh,ng,lo,hi,nh,disp,p)
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       nreals_myid = 0
-      if(myid.eq.0) nreals_myid = 2
+      if(myid == 0) nreals_myid = 2
       call MPI_FILE_READ(fh,fldinfo,nreals_myid,MPI_REAL_RP,MPI_STATUS_IGNORE,ierr)
       call MPI_FILE_CLOSE(fh,ierr)
       call MPI_BCAST(fldinfo,2,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
@@ -69,7 +69,7 @@ module mod_load
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       fldinfo = [time,1._rp*istep]
       nreals_myid = 0
-      if(myid.eq.0) nreals_myid = 2
+      if(myid == 0) nreals_myid = 2
       call MPI_FILE_WRITE(fh,fldinfo,nreals_myid,MPI_REAL_RP,MPI_STATUS_IGNORE,ierr)
       call MPI_FILE_CLOSE(fh,ierr)
     end select

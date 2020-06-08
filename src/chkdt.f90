@@ -49,7 +49,7 @@ module mod_chkdt
     enddo
     !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,dti,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
-    if(dti.eq.0._rp) dti = 1._rp
+    if(dti == 0._rp) dti = 1._rp
     dlmin     = min(minval(dxf),minval(dyf),minval(dzf))
 #ifdef _IMPDIFF
     dtmax = sqrt(3._rp)/dti

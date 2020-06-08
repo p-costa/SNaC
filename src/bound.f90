@@ -68,8 +68,8 @@ module mod_bound
     do q = 1,3
       do idir = 0,1
         if(isoutflow(idir,q).and.is_bound(idir,q)) then
-          if(idir.eq.0) sgn = -1
-          if(idir.eq.1) sgn = +1
+          if(idir == 0) sgn = -1
+          if(idir == 1) sgn = +1
           ioutflowdir = q*sgn
           call outflow(lo,hi,ioutflowdir,dxf,dyf,dzf,u,v,w)
         endif
@@ -131,14 +131,14 @@ module mod_bound
     real(rp) :: factor,sgn
     !
     factor = rvalue
-    if(ctype.eq.'D'.and.centered) then
+    if(ctype == 'D'.and.centered) then
       factor = 2._rp*factor
       sgn    = -1._rp
     endif
-    if(ctype.eq.'N'.and.centered) then
-      if(    ibound.eq.0) then
+    if(ctype == 'N'.and.centered) then
+      if(    ibound == 0) then
         factor = -dr*factor
-      elseif(ibound.eq.1) then
+      elseif(ibound == 1) then
         factor =  dr*factor
       endif
       sgn    = 1._rp
@@ -167,81 +167,81 @@ module mod_bound
       if(centered) then
         select case(idir)
         case(1)
-          if    (ibound.eq.0) then
+          if    (ibound == 0) then
             !$OMP WORKSHARE
             p(lo(idir)-1,:,:) = factor+sgn*p(lo(idir),:,:)
             !$OMP END WORKSHARE
-          elseif(ibound.eq.1) then
+          elseif(ibound == 1) then
             !$OMP WORKSHARE
             p(hi(idir)+1,:,:) = factor+sgn*p(hi(idir),:,:)
             !$OMP END WORKSHARE
           endif
         case(2)
-          if    (ibound.eq.0) then
+          if    (ibound == 0) then
             !$OMP WORKSHARE
             p(:,lo(idir)-1,:) = factor+sgn*p(:,lo(idir),:)
             !$OMP END WORKSHARE
-          elseif(ibound.eq.1) then
+          elseif(ibound == 1) then
             !$OMP WORKSHARE
             p(:,hi(idir)+1,:) = factor+sgn*p(:,hi(idir),:)
             !$OMP END WORKSHARE
           endif
         case(3)
-          if    (ibound.eq.0) then
+          if    (ibound == 0) then
             !$OMP WORKSHARE
             p(:,:,lo(idir)-1) = factor+sgn*p(:,:,lo(idir))
             !$OMP END WORKSHARE
-          elseif(ibound.eq.1) then
+          elseif(ibound == 1) then
             !$OMP WORKSHARE
             p(:,:,hi(idir)+1) = factor+sgn*p(:,:,hi(idir))
             !$OMP END WORKSHARE
           endif
         end select
-      elseif(.not.centered.and.ctype.eq.'D') then
+      elseif(.not.centered.and.ctype == 'D') then
         select case(idir)
         case(1)
-          if    (ibound.eq.0) then
+          if    (ibound == 0) then
             !$OMP WORKSHARE
             p(lo(idir)-1,:,:) = factor 
             !$OMP END WORKSHARE
-          elseif(ibound.eq.1) then
+          elseif(ibound == 1) then
             !$OMP WORKSHARE
             p(hi(idir)  ,:,:) = factor
             p(hi(idir)+1,:,:) = p(hi(idir)-1,:,:)
             !$OMP END WORKSHARE
           endif
         case(2)
-          if    (ibound.eq.0) then
+          if    (ibound == 0) then
             !$OMP WORKSHARE
             p(:,lo(idir)-1,:) = factor 
             !$OMP END WORKSHARE
-          elseif(ibound.eq.1) then
+          elseif(ibound == 1) then
             !$OMP WORKSHARE
             p(:,hi(idir)  ,:) = factor
             p(:,hi(idir)+1,:) = p(:,hi(idir)-1,:)
             !$OMP END WORKSHARE
           endif
         case(3)
-          if    (ibound.eq.0) then
+          if    (ibound == 0) then
             !$OMP WORKSHARE
             p(:,:,lo(idir)-1) = factor 
             !$OMP END WORKSHARE
-          elseif(ibound.eq.1) then
+          elseif(ibound == 1) then
             !$OMP WORKSHARE
             p(:,:,hi(idir)  ) = factor
             p(:,:,hi(idir)+1) = p(:,:,hi(idir)-1)
             !$OMP END WORKSHARE
           endif
         end select
-      elseif(.not.centered.and.ctype.eq.'N') then
+      elseif(.not.centered.and.ctype == 'N') then
         select case(idir)
         case(1)
-          if    (ibound.eq.0) then
+          if    (ibound == 0) then
             !$OMP WORKSHARE
             !p(0,:,:) = 1./3.*(-2.*factor+4.*p(1  ,:,:)-p(2  ,:,:))
             p(lo(idir)-1,:,:) = factor + p(lo(idir)  ,:,:)
             !$OMP END WORKSHARE
-          elseif(ibound.eq.1) then
+          elseif(ibound == 1) then
             !$OMP WORKSHARE
             !p(n,:,:) = 1./3.*(-2.*factor+4.*p(n-1,:,:)-p(n-2,:,:))
             p(hi(idir)  ,:,:) = factor + p(hi(idir)-1,:,:)
@@ -249,12 +249,12 @@ module mod_bound
             !$OMP END WORKSHARE
           endif
         case(2)
-          if    (ibound.eq.0) then
+          if    (ibound == 0) then
             !$OMP WORKSHARE
             !p(:,0  ,:) = 1./3.*(-2.*factor+4.*p(:,1,:)-p(:,2  ,:))
             p(:,lo(idir)-1,:) = factor + p(:,lo(idir)  ,:)
             !$OMP END WORKSHARE
-          elseif(ibound.eq.1) then
+          elseif(ibound == 1) then
             !$OMP WORKSHARE
             !p(:,n,:) = 1./3.*(-2.*factor+4.*p(:,n-1,:)-p(:,n-2,:))
             p(:,hi(idir)  ,:) = factor + p(:,hi(idir)-1,:)
@@ -262,12 +262,12 @@ module mod_bound
             !$OMP END WORKSHARE
           endif
         case(3)
-          if    (ibound.eq.0) then
+          if    (ibound == 0) then
             !$OMP WORKSHARE
             !p(:,:,0) = 1./3.*(-2.*factor+4.*p(:,:,1  )-p(:,:,2  ))
             p(:,:,lo(idir)-1) = factor + p(:,:,lo(idir)  )
             !$OMP END WORKSHARE
-          elseif(ibound.eq.1) then
+          elseif(ibound == 1) then
             !$OMP WORKSHARE
             !p(:,:,n) = 1./3.*(-2.*factor+4.*p(:,:,n-1)-p(:,:,n-2))
             p(:,:,hi(idir)  ) = factor + p(:,:,hi(idir)-1)

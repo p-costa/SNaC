@@ -10,6 +10,9 @@ module mod_initgrid
     ! initializes a non-uniform grid
     !
     implicit none
+    integer, parameter :: CLUSTER_TWO_END = 0, &
+                          CLUSTER_ONE_END = 1, &
+                          CLUSTER_MIDDLE  = 2
     integer         , intent(in )                  :: n,lo,hi,gt
     real(rp)        , intent(in )                  :: gr,l
     real(rp)        , intent(out), dimension(1-1:) :: drc_g,drf_g,rc_g,rf_g
@@ -17,11 +20,11 @@ module mod_initgrid
     integer :: q
     procedure (), pointer :: gridpoint => null()
     select case(gt)
-    case(0)
+    case(CLUSTER_TWO_END)
       gridpoint => gridpoint_cluster_two_end
-    case(1)
+    case(CLUSTER_ONE_END)
       gridpoint => gridpoint_cluster_middle
-    case(2)
+    case(CLUSTER_MIDDLE)
       gridpoint => gridpoint_cluster_one_end
     case default
       gridpoint => gridpoint_cluster_two_end
@@ -98,7 +101,7 @@ module mod_initgrid
     implicit none
     real(rp), intent(in ) :: alpha,r0
     real(rp), intent(out) :: r
-    if(alpha.ne.0._rp) then
+    if(alpha /= 0._rp) then
       r = 0.5_rp*(1._rp+tanh((r0-0.5_rp)*alpha)/tanh(alpha/2._rp))
       !r = 0.5_rp*(1._rp+erf( (r0-0.5_rp)*alpha)/erf( alpha/2._rp))
     else
@@ -113,7 +116,7 @@ module mod_initgrid
     implicit none
     real(rp), intent(in ) :: alpha,r0
     real(rp), intent(out) :: r
-    if(alpha.ne.0._rp) then
+    if(alpha /= 0._rp) then
       r = 1.0_rp*(1._rp+tanh((r0-1.0_rp)*alpha)/tanh(alpha/1._rp))
       !r = 1.0_rp*(1._rp+erf( (r0-1.0_rp)*alpha)/erf( alpha/1._rp))
     else
@@ -128,11 +131,11 @@ module mod_initgrid
     implicit none
     real(rp), intent(in ) :: alpha,r0
     real(rp), intent(out) :: r
-    if(alpha.ne.0._rp) then
-      if(    r0.le.0.5_rp) then 
+    if(alpha /= 0._rp) then
+      if(    r0 <= 0.5_rp) then 
         r = 0.5_rp*(1._rp-1._rp+tanh(2._rp*alpha*(r0-0._rp))/tanh(alpha))
         !r = 0.5_rp*(1._rp-1._rp+erf( 2._rp*alpha*(r0-0._rp))/erf( alpha))
-      elseif(r0.gt.0.5_rp) then
+      elseif(r0 >  0.5_rp) then
         r = 0.5_rp*(1._rp+1._rp+tanh(2._rp*alpha*(r0-1._rp))/tanh(alpha))
         !r = 0.5_rp*(1._rp+1._rp+erf( 2._rp*alpha*(r0-1._rp))/erf( alpha))
       endif

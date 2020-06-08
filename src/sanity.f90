@@ -50,7 +50,7 @@ module mod_sanity
     logical, intent(out) :: passed
     logical :: passed_loc
     passed = .true.
-    passed_loc = all(mod(ng(1:3),dims(1:3)).eq.0)
+    passed_loc = all(mod(ng(1:3),dims(1:3)) == 0)
     if(.not.passed_loc) &
       call write_error('itot, jtot and ktot should be divisable by dims(1), dims(2) and dims(3), respectively (for now!).')
     passed = passed.and.passed_loc
@@ -86,11 +86,11 @@ module mod_sanity
     do ivel = 1,3
       do idir=1,3
         bc01v = cbcvel(0,idir,ivel)//cbcvel(1,idir,ivel)
-        passed_loc = passed_loc.and.( (bc01v.eq.'PP').or. &
-                                      (bc01v.eq.'ND').or. &
-                                      (bc01v.eq.'DN').or. &
-                                      (bc01v.eq.'NN').or. &
-                                      (bc01v.eq.'DD') )
+        passed_loc = passed_loc.and.( (bc01v == 'PP').or. &
+                                      (bc01v == 'ND').or. &
+                                      (bc01v == 'DN').or. &
+                                      (bc01v == 'NN').or. &
+                                      (bc01v == 'DD') )
       enddo
     enddo
     if(.not.passed_loc) call write_error('velocity BCs not valid.')
@@ -99,11 +99,11 @@ module mod_sanity
     passed_loc = .true.
     do idir=1,3
       bc01p = cbcpre(0,idir)//cbcpre(1,idir)
-      passed_loc = passed_loc.and.( (bc01p.eq.'PP').or. &
-                                    (bc01p.eq.'ND').or. &
-                                    (bc01p.eq.'DN').or. &
-                                    (bc01p.eq.'NN').or. &
-                                    (bc01p.eq.'DD') )
+      passed_loc = passed_loc.and.( (bc01p == 'PP').or. &
+                                    (bc01p == 'ND').or. &
+                                    (bc01p == 'DN').or. &
+                                    (bc01p == 'NN').or. &
+                                    (bc01p == 'DD') )
     enddo
     if(.not.passed_loc) call write_error('pressure BCs not valid.')
     passed = passed.and.passed_loc
@@ -113,11 +113,11 @@ module mod_sanity
       ivel = idir
       bc01v = cbcvel(0,idir,ivel)//cbcvel(1,idir,ivel)
       bc01p = cbcpre(0,idir)//cbcpre(1,idir)
-      passed_loc = passed_loc.and.( (bc01v.eq.'PP'.and.bc01p.eq.'PP').or. &
-                                    (bc01v.eq.'ND'.and.bc01p.eq.'DN').or. &
-                                    (bc01v.eq.'DN'.and.bc01p.eq.'ND').or. &
-                                    (bc01v.eq.'DD'.and.bc01p.eq.'NN').or. &
-                                    (bc01v.eq.'NN'.and.bc01p.eq.'DD') )
+      passed_loc = passed_loc.and.( (bc01v == 'PP'.and.bc01p == 'PP').or. &
+                                    (bc01v == 'ND'.and.bc01p == 'DN').or. &
+                                    (bc01v == 'DN'.and.bc01p == 'ND').or. &
+                                    (bc01v == 'DD'.and.bc01p == 'NN').or. &
+                                    (bc01v == 'NN'.and.bc01p == 'DD') )
     enddo
     if(.not.passed_loc) call write_error('velocity and pressure BCs not compatible.')
     passed = passed.and.passed_loc
@@ -138,7 +138,7 @@ module mod_sanity
     do idir=1,3
       do ibound = 0,1
         passed = passed.and. &
-                 (cbcpre(ibound,idir).eq.'D'.and.(is_outflow(ibound,idir))) .or. &
+                 (cbcpre(ibound,idir) == 'D'.and.(is_outflow(ibound,idir))) .or. &
                  (.not.is_outflow(ibound,idir))
       enddo
     enddo
@@ -159,7 +159,7 @@ module mod_sanity
     !
     do idir=1,3
       if(is_forced(idir)) then
-        passed = passed.and.(cbcpre(0,idir)//cbcpre(1,idir).eq.'PP')
+        passed = passed.and.(cbcpre(0,idir)//cbcpre(1,idir) == 'PP')
       endif
     enddo
     if(.not.passed) &
@@ -169,16 +169,16 @@ module mod_sanity
   !
   subroutine abortit
     implicit none
-    if(myid.eq.0) write(stderr,*) ''
-    if(myid.eq.0) write(stderr,*) '*** Simulation aborted due to errors in the input file ***'
-    if(myid.eq.0) write(stderr,*) '    check dns.in'
+    if(myid == 0) write(stderr,*) ''
+    if(myid == 0) write(stderr,*) '*** Simulation aborted due to errors in the input file ***'
+    if(myid == 0) write(stderr,*) '    check dns.in'
     call MPI_FINALIZE(ierr)
     error stop
     return
   end subroutine abortit
   subroutine write_error(message)
     character(len=*), intent(in) :: message
-    if(myid.eq.0) write(stderr,*) 'ERROR: '//message
+    if(myid == 0) write(stderr,*) 'ERROR: '//message
     return
   end subroutine write_error
 end module mod_sanity

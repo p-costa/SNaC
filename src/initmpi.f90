@@ -23,10 +23,10 @@ module mod_initmpi
     ! sanity check
     !
     CALL MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
-    if(nrank.ne.product(dims(:))) then
+    if(nrank /= product(dims(:))) then
       dims(:) = 0
       CALL MPI_DIMS_CREATE(nrank,3,dims,ierr)
-      if(myid.eq.0) then
+      if(myid == 0) then
         write(stdout,*) 'WARNING: product(dims(:)) not equal to the number of MPI tasks!'
         write(stdout,*) 'dims changed with MPI_DIMS_CREATE to ', dims(1),dims(2),dims(3)
       endif
@@ -35,19 +35,19 @@ module mod_initmpi
     ! generate Cartesian topology
     !
     periods(:) = .false.
-    where (bc(0,:)//bc(1,:).eq.'PP') periods(:) = .true.
+    where (bc(0,:)//bc(1,:) == 'PP') periods(:) = .true.
     call MPI_CART_CREATE(MPI_COMM_WORLD,3,dims,periods,.true.,comm_cart,ierr)
     call MPI_CART_COORDS(comm_cart,myid,3,coords,ierr)
     !
     ! determine array extents for possibly uneven data
     !
     n(:) = ng(:)/dims(:)
-    where(coords(:)+1.le.mod(ng(:),dims(:))) n(:) = n(:) + 1
+    where(coords(:)+1 <= mod(ng(:),dims(:))) n(:) = n(:) + 1
     lo(:) = 1    + coords(:)*n(:)
     hi(:) = n(:) + coords(:)*n(:)
-    where(coords(:)+1.gt.mod(ng(:),dims(:)))
-      lo(:) = lo(:) + mod(ng(:),dims(:))
-      hi(:) = hi(:) + mod(ng(:),dims(:))
+    where(coords(:)+1 >  mod(ng(:),dims(:)))
+      lo(:) = lo(:) +    mod(ng(:),dims(:))
+      hi(:) = hi(:) +    mod(ng(:),dims(:))
     end where
     !
     ! generate neighbor arrays and derived types for halo regions
@@ -55,7 +55,7 @@ module mod_initmpi
     do idir=1,3
       call MPI_CART_SHIFT(comm_cart,idir-1,1,nb(0,idir),nb(1,idir),ierr)
       is_bound(:,idir) = .false.
-      where(nb(0:1,idir).eq.MPI_PROC_NULL) is_bound(0:1,idir) = .true.
+      where(nb(0:1,idir) == MPI_PROC_NULL) is_bound(0:1,idir) = .true.
       call makehalo(idir,1,n,halos(idir))
     enddo
     return
