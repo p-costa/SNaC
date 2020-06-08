@@ -52,7 +52,7 @@ module mod_solver
     periods(:) = 0
     where(cbc(0,:)//cbc(1,:).eq.'PP') periods(:) = ng(:)
     qqq(:) = 0
-    where(is_centered(:)) qqq(:) = 1
+    where(.not.is_centered(:)) qqq(:) = 1
     factor(:,:) = 0._rp
     sgn(   :,:) = 0._rp
     do q=1,3

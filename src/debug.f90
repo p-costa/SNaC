@@ -53,7 +53,7 @@ module mod_debug
     integer :: i,j,k
     integer, dimension(3) :: q
     q(:) = 0
-    where(is_centered(:)) q(:) = 1
+    where(.not.is_centered(:)) q(:) = 1
     !
     diffmax = 0._rp
     do k=lo(3),hi(3)
