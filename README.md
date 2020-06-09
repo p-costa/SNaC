@@ -1,6 +1,6 @@
 ## Synopsis
 
-**SNaC** is [**CaNS**](https://github.com/p-costa/CaNS) spelled backwards, and is a code for massively-parallel direct numerical simulations (DNS) of fluid flows. *SNaC* is an alias a longer and somewhat malevolent name: *Slow CaNS*. Despite being one to two orders of magnitude slower than *CaNS*, this code serves well as an efficient base solver for a multi-block DNS code.
+**SNaC** is [**CaNS**](https://github.com/p-costa/CaNS) spelled backwards, and is a code for massively-parallel direct numerical simulations (DNS) of fluid flows. *SNaC* is an alias a longer and somewhat malevolent name: *Slow CaNS*, as this code is one to two orders of magnitude slower than *CaNS*. The upside is that this *SNaC* serves well as an efficient base solver for a multi-block DNS code.
 
 ## News
 
@@ -8,15 +8,16 @@
 
 Some features are:
 
- * Block-structured three dimensional parallelization
+ * Block-structured three-dimensional parallelization
  * Hybrid MPI/OpenMP parallelization
  * HYPRE library used to solve Poisson/Helmholtz equations
  * Parallel I/O using MPI I/O 
  * A different canonical flow can be simulated just by changing the input files
+ * Simple implementation with no dependencies on external libraries other than HYPRE and MPI
 
 ## Motivation
 
-This simple code for canonical fluid flows will eventually serve as base for a multi-block DNS code with adaptive mesh refinement.
+This code for canonical fluid flows will eventually serve as base for a multi-block DNS code with adaptive mesh refinement.
 
 ## Method
 

@@ -19,7 +19,7 @@ module mod_mom
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uuip,uuim,uvjp,uvjm,uwkp,uwkm) &
-    !$OMP SHARED(lo,hi,dxf,dyf,dzf,u,v,w,dudt)
+    !$OMP SHARED(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -57,7 +57,7 @@ module mod_mom
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uvip,uvim,vvjp,vvjm,wvkp,wvkm) &
-    !$OMP SHARED(lo,hi,dxf,dyf,dzf,u,v,w,dvdt)
+    !$OMP SHARED(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -95,7 +95,7 @@ module mod_mom
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uwip,uwim,vwjp,vwjm,wwkp,wwkm) &
-    !$OMP SHARED(lo,hi,dxf,dyf,dzf,u,v,w,dwdt)
+    !$OMP SHARED(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)

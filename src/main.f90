@@ -322,21 +322,21 @@ program snac
       !
       !$OMP WORKSHARE
       up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
-      !$OMP WORKSHARE
+      !$OMP END WORKSHARE
       call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,up)
       call setup_solver(lo,hiu,usolver,alphai-alphaoi) ! correct diagonal term
       call solve_helmholtz(usolver,lo,hiu,up,uo)
       !
       !$OMP WORKSHARE
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
-      !$OMP WORKSHARE
+      !$OMP END WORKSHARE
       call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,vp)
       call setup_solver(lo,hiv,vsolver,alphai-alphaoi) ! correct diagonal term
       call solve_helmholtz(usolver,lo,hiv,vp,vo)
       !
       !$OMP WORKSHARE
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
-      !$OMP WORKSHARE
+      !$OMP END WORKSHARE
       call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,wp)
       call setup_solver(lo,hiw,wsolver,alphai-alphaoi) ! correct diagonal term
       call solve_helmholtz(usolver,lo,hiw,wp,wo)

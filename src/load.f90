@@ -96,17 +96,17 @@ module mod_load
     starts(:)   = 0 + nh(:)
     call MPI_TYPE_CREATE_SUBARRAY(3,sizes,subsizes,starts,MPI_ORDER_FORTRAN,MPI_REAL_RP,type_loc ,ierr)
     call MPI_TYPE_COMMIT(type_loc,ierr)
-      select case(io)
-      case('r')
-        call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
-        call MPI_FILE_READ_ALL(fh,var,1,type_loc,MPI_STATUS_IGNORE,ierr)
-      case('w')
-        call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
-        call MPI_FILE_WRITE_ALL(fh,var,1,type_loc,MPI_STATUS_IGNORE,ierr)
-      end select
-        disp = disp+product(ng)*sizeof(1._rp)
-        call MPI_TYPE_FREE(type_glob,ierr)
-        call MPI_TYPE_FREE(type_loc ,ierr)
-      return
+    select case(io)
+    case('r')
+      call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
+      call MPI_FILE_READ_ALL(fh,var,1,type_loc,MPI_STATUS_IGNORE,ierr)
+    case('w')
+      call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
+      call MPI_FILE_WRITE_ALL(fh,var,1,type_loc,MPI_STATUS_IGNORE,ierr)
+    end select
+      disp = disp+product(ng)*sizeof(1._rp)
+      call MPI_TYPE_FREE(type_glob,ierr)
+      call MPI_TYPE_FREE(type_loc ,ierr)
+    return
   end subroutine io_field
 end module mod_load
