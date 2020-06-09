@@ -172,7 +172,7 @@ module mod_solver
     enddo
     call HYPRE_StructMatrixSetBoxValues(mat,lo,hi,nstencil, &
                                         [0,1,2,3,4,5,6],matvalues,ierr)
-    call HYPRE_StructMatrixAssemble(mat,ierr)
+    !call HYPRE_StructMatrixAssemble(mat,ierr)
     deallocate(matvalues)
     !
     ! setup solver

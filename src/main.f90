@@ -347,7 +347,6 @@ program snac
                     dxc,dxf,dyc,dyf,dzc,dzf,up,vp,wp)
 #if defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
       dtrk  = dt
-      dtrki = dt**(-1)
       if(irk < 3) then ! pressure correction only at the last RK step
         !$OMP WORKSHARE
         u(:,:,:) = up(:,:,:)

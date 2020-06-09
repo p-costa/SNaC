@@ -1,6 +1,6 @@
 ## Synopsis
 
-**SNaC** is [**CaNS**](https://github.com/p-costa/CaNS) spelled backwards, and is a code for massively-parallel direct numerical simulations (DNS) of fluid flows. *SNaC* is an alias a longer and somewhat malevolent name: *Slow CaNS*, as this code is one to two orders of magnitude slower than *CaNS*. The upside is that this *SNaC* serves well as an efficient base solver for a multi-block DNS code.
+**SNaC** is [**CaNS**](https://github.com/p-costa/CaNS) spelled backwards, and is a code for massively-parallel direct numerical simulations (DNS) of fluid flows. *SNaC* is an alias for a longer and somewhat malevolent name: *Slow CaNS*, as this code is one to two orders of magnitude slower than its fast cousin. The upside is that *SNaC* serves well as an efficient base solver for a multi-block DNS code.
 
 ## News
 
@@ -36,7 +36,7 @@ Files `out1d.h90` and `out3d.h90` in `src/` set which data are written in 1- and
 The code should be compiled in `src/`. The prerequisites are the following:
 
  * MPI
- * HYPRE
+ * [HYPRE](https://github.com/hypre-space/hypre)
  * OpenMP (optional)
 
 The Makefile in `src/` should be modified in agreement to the installation paths of each library. Also, the following preprocessor options are available:
