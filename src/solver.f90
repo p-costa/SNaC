@@ -40,7 +40,7 @@ module mod_solver
     real(rp)          , intent(out), dimension(lo(1):,lo(2):,0:)    :: rhsz
     integer, dimension(3         ) :: periods,qqq
     integer, dimension(3,nstencil) :: offsets
-    real(rp), allocatable, dimension(:) :: matvalues
+    real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
     real(rp), dimension(0:1,3) :: factor,sgn
     integer(8) :: grid,stencil,precond,solver,mat,rhs,sol
     integer :: precond_id
@@ -106,7 +106,6 @@ module mod_solver
     call HYPRE_StructVectorInitialize(sol,ierr)
     call HYPRE_StructVectorCreate(comm_hypre,grid,rhs,ierr)
     call HYPRE_StructVectorInitialize(rhs,ierr)
-    allocate(matvalues(product(hi(:)-lo(:)+1)*nstencil))
     q = 0
     rhsx(:,:,:) = 0._rp
     rhsy(:,:,:) = 0._rp
@@ -173,7 +172,6 @@ module mod_solver
     call HYPRE_StructMatrixSetBoxValues(mat,lo,hi,nstencil, &
                                         [0,1,2,3,4,5,6],matvalues,ierr)
     !call HYPRE_StructMatrixAssemble(mat,ierr)
-    deallocate(matvalues)
     !
     ! setup solver
     !
@@ -245,15 +243,14 @@ module mod_solver
     type(hypre_solver), target, intent(inout) :: asolver
     integer(8), pointer :: solver,mat,rhs,sol
     integer   , pointer :: stype
-    real(rp), allocatable, dimension(:) :: matvalues
+    real(rp), dimension(product(hi(:)-lo(:)+1)) :: matvalues
     integer :: i,j,k,q
     solver  => asolver%solver
-    mat     => asolver%mat     
-    rhs     => asolver%rhs     
-    sol     => asolver%sol     
-    stype   => asolver%stype   
+    mat     => asolver%mat
+    rhs     => asolver%rhs
+    sol     => asolver%sol
+    stype   => asolver%stype
     q = 0
-    allocate(matvalues(product(hi(:)-lo(:)+1)))
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -264,7 +261,6 @@ module mod_solver
     enddo
     call HYPRE_StructMatrixAddToBoxValues(mat,lo,hi,1,[0],matvalues,ierr)
     call HYPRE_StructMatrixAssemble(mat,ierr)
-    deallocate(matvalues)
     !
     ! setup solver
     !
@@ -297,15 +293,13 @@ module mod_solver
     real(rp)          ,         intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p,po
     integer(8), pointer :: solver,mat,rhs,sol
     integer   , pointer :: stype
-    real(rp), allocatable, dimension(:) :: solvalues,rhsvalues
+    real(rp), dimension(product(hi(:)-lo(:)+1)) :: solvalues,rhsvalues
     integer :: i,j,k,q
     solver  => asolver%solver
     mat     => asolver%mat     
     rhs     => asolver%rhs     
     sol     => asolver%sol     
     stype   => asolver%stype   
-    allocate( rhsvalues(product(hi(:)-lo(:)+1)), &
-              solvalues(product(hi(:)-lo(:)+1)) )
     q = 0
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -362,7 +356,6 @@ module mod_solver
         enddo
       enddo
     enddo
-    deallocate(rhsvalues,solvalues)
     return
   end subroutine solve_helmholtz
   subroutine finalize_solver(asolver)
