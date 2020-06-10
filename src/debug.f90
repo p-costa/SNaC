@@ -4,7 +4,7 @@ module mod_debug
   use mod_types
   implicit none
   private
-  public chkmean
+  public chkmean,chk_helmholtz
   contains
   subroutine chkmean(lo,hi,l,dx,dy,dz,p,mean)
     !
@@ -56,9 +56,9 @@ module mod_debug
     where(.not.is_centered(:)) q(:) = 1
     !
     diffmax = 0._rp
-    do k=lo(3),hi(3)
-      do j=lo(2),hi(2)
-        do i=1,lo(1),hi(1)
+    do k=lo(3)+1,hi(3)-1
+      do j=lo(2)+1,hi(2)-1
+        do i=lo(1)+1,hi(1)-1
           val = alpha*fpp(i,j,k) + &
                  ((fpp(i+1,j,k)-fpp(i  ,j,k))/dx1(i  +q(1)) - &
                   (fpp(i  ,j,k)-fpp(i-1,j,k))/dx1(i-1+q(1)))/dx2(i) + &
