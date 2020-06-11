@@ -1,11 +1,2 @@
-        http://linuxrajib.blogspot.com/2015/11/coloured-terminal-output-from-fortran.html
-        one pressure correction option
-todos:
-change some stuff to a utils subroutine
-add some nice printing subroutines (with colors, maybe)
+do while inquire exists geo/block.$i, to loop through the block files.
 
-(1) select subset of tasks that intercept the global coordinates and create a new communicator
-(2) calcualte disps and use MPI_TYPE_VECTOR FROM THE HALO DEFINITION
-(3) write
-
-Memory increasing because of ADDTOVALUES
