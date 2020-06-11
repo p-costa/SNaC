@@ -92,7 +92,7 @@ contains
         if(myid == 0) write(stderr,*) 'Aborting...'
         call MPI_FINALIZE(ierr)
         error stop
-    endif
+      endif
     close(iunit)
     dl(:)  = l(:)/(1._rp*ng(:))
     dli(:) = dl(:)**(-1)
