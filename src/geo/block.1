@@ -1,0 +1,16 @@
+1                        ! block ID
+1  1  1                  ! lo(1:3)
+16 16 16                 ! hi(1:3)
+0. 0. 0.                 ! lmin(1:3)
+1. 1. 1.                 ! lmax(1:3)
+0 0 0                    ! gt(1:3)
+0. 0. 0.                 ! gr(1:3)
+D F  D F  D D            ! cbcvel(0:1,1:3,1) [u BC type]
+D F  D F  D D            ! cbcvel(0:1,1:3,2) [v BC type]
+D F  D F  D D            ! cbcvel(0:1,1:3,3) [w BC type]
+N F  N F  N N            ! cbcpre(0:1,1:3  ) [p BC type]
+0. 1.  0. 2.  0. 0.      !  bcvel(0:1,1:3,1) [u BC value]
+0. 1.  0. 2.  0. 0.      !  bcvel(0:1,1:3,2) [v BC value]
+0. 1.  0. 2.  0. 0.      !  bcvel(0:1,1:3,3) [w BC value]
+0. 1.  0. 2.  0. 0.      !  bcpre(0:1,1:3  ) [p BC value]
+1 1 1                    ! dims(1:3)
