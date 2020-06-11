@@ -22,10 +22,10 @@ module mod_initmpi
     !
     ! sanity check
     !
-    CALL MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
+    call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
     if(nrank /= product(dims(:))) then
       dims(:) = 0
-      CALL MPI_DIMS_CREATE(nrank,3,dims,ierr)
+      call MPI_DIMS_CREATE(nrank,3,dims,ierr)
       if(myid == 0) then
         write(stdout,*) 'WARNING: product(dims(:)) not equal to the number of MPI tasks!'
         write(stdout,*) 'dims changed with MPI_DIMS_CREATE to ', dims(1),dims(2),dims(3)
