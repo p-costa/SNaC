@@ -5,19 +5,21 @@ module mod_initgrid
   private
   public initgrid,distribute_grid,save_grid
   contains
-  subroutine initgrid(n,lo,hi,gt,gr,l,drc_g,drf_g,rc_g,rf_g)
+  subroutine initgrid(lo,hi,gt,gr,lmin,lmax,drc_g,drf_g,rc_g,rf_g)
     !
     ! initializes a non-uniform grid
+    !
+    ! NEEDS TO BE PROBABLY SLIGHTLY ADAPTED IN CASE IT IS IN THE MIDDLE OF A BLOCK
     !
     implicit none
     integer, parameter :: CLUSTER_TWO_END = 0, &
                           CLUSTER_ONE_END = 1, &
                           CLUSTER_MIDDLE  = 2
-    integer         , intent(in )                  :: n,lo,hi,gt
-    real(rp)        , intent(in )                  :: gr,l
-    real(rp)        , intent(out), dimension(1-1:) :: drc_g,drf_g,rc_g,rf_g
+    integer         , intent(in )                  :: lo,hi,gt
+    real(rp)        , intent(in )                  :: gr,lmin,lmax
+    real(rp)        , intent(out), dimension(lo-1:) :: drc_g,drf_g,rc_g,rf_g
     real(rp) :: r0
-    integer :: q
+    integer :: q,n
     procedure (), pointer :: gridpoint => null()
     select case(gt)
     case(CLUSTER_TWO_END)
@@ -32,58 +34,60 @@ module mod_initgrid
     !
     ! step 1) determine coordinates of cell faces rf
     !
-    do q=1,n
-      r0  = (q-0._rp)/(1._rp*n)
+    do q=lo,hi
+      n  = hi-lo+1
+      r0 = (q-lo+1-0._rp)/(1._rp*n)
       call gridpoint(gr,r0,rf_g(q))
-      rf_g(q) = rf_g(q)*l
+      rf_g(q) = lmin + rf_g(q)*(lmax-lmin)
     enddo
-    rf_g(0) = 0._rp
+    rf_g(lo-1) = lmin
     !
     ! step 2) determine grid spacing between faces drf
     !
-    do q=1,n
+    do q=lo,hi
       drf_g(q) = rf_g(q)-rf_g(q-1)
     enddo
-    drf_g(0  ) = drf_g(1)
-    drf_g(n+1) = drf_g(n)
+    drf_g(lo-1) = drf_g(lo)
+    drf_g(hi+1) = drf_g(hi)
     !
     ! step 3) determine grid spacing between centers drc
     !
-    do q=0,n
+    do q=lo-1,hi
       drc_g(q) = .5_rp*(drf_g(q)+drf_g(q+1))
     enddo
-    drc_g(n+1) = drc_g(n)
+    drc_g(hi+1) = drc_g(hi)
     !
     ! step 4) compute coordinates of cell centers rc and faces rf
     !
-    rc_g(0)    = -drc_g(0)/2._rp
-    rf_g(0)    = 0._rp
-    do q=1,n+1
+    rc_g(lo-1)    = -drc_g(lo-1)/2._rp
+    rf_g(lo-1)    = 0._rp
+    do q=lo,hi+1
       rc_g(q) = rc_g(q-1) + drc_g(q-1)
-      rf_g(q) = rf_g(q-1) + drf_g(q)
+      rf_g(q) = rf_g(q-1) + drf_g(q  )
     enddo
     !
     return
   end subroutine initgrid
-  subroutine distribute_grid(lo,hi,grid_g,grid)
+  subroutine distribute_grid(lo_g,lo,hi,grid_g,grid)
     implicit none
-    integer  :: lo,hi
-    real(rp), intent(in ), dimension(1-1 :) :: grid_g
-    real(rp), intent(out), dimension(lo-1:) :: grid
-    grid(lo-1:hi+1) = grid_g(lo-1:hi+1)
+    integer  :: lo,hi,lo_g
+    real(rp), intent(in ), dimension(lo_g-1:) :: grid_g
+    real(rp), intent(out), dimension(lo  -1:) :: grid
+    grid(lo-1:hi+1) = grid_g(lo-1:hi+1) ! THIS NEEDS TO BE CHANGED !
     return
   end subroutine distribute_grid
-  subroutine save_grid(fname,ng,rf_g,rc_g,drf_g,drc_g)
+  subroutine save_grid(fname,lo_g,hi_g,rf_g,rc_g,drf_g,drc_g)
     implicit none
     character(len=*), intent(in) :: fname
-    integer         , intent(in) :: ng
+    integer         , intent(in) :: lo_g,hi_g
     real(rp)        , intent(in), dimension(1-1:) :: rf_g,rc_g,drf_g,drc_g
-    integer :: iunit,q
+    integer :: iunit,q,ng
+    ng = hi_g-lo_g+1
     open(newunit=iunit,file=trim(fname)//'.bin',status='replace',access='direct',recl=4*ng*sizeof(1._rp))
-    write(iunit,rec=1) rf_g(1:ng),rc_g(1:ng),drf_g(1:ng),drc_g(1:ng)
+    write(iunit,rec=1) rf_g(lo_g:hi_g),rc_g(lo_g:hi_g),drf_g(lo_g:hi_g),drc_g(lo_g:hi_g)
     close(iunit)
     open(newunit=iunit,status='replace',file=trim(fname)//'.out')
-    do q=0,ng+1
+    do q=lo_g-1,hi_g+1
       write(iunit,'(5E15.7)') 0._rp,rf_g(q),rc_g(q),drf_g(q),drc_g(q)
     enddo
     close(iunit)

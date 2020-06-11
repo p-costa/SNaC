@@ -1,6 +1,6 @@
 module mod_output
   use mpi
-  use mod_common_mpi, only: ierr,myid
+  use mod_common_mpi, only: ierr,myid,myid_block,comm_block
   use mod_load      , only: io_field 
   use mod_types
   implicit none
@@ -74,7 +74,7 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(3),MPI_REAL_RP,MPI_SUM,comm_block,ierr)
       if(myid == 0) then
         open(newunit=iunit,file=fname)
         do k=1,ng(3)
@@ -92,7 +92,7 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(2),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(2),MPI_REAL_RP,MPI_SUM,comm_block,ierr)
       if(myid == 0) then
         open(newunit=iunit,file=fname)
         do j=1,ng(2)
@@ -110,7 +110,7 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(1),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(1),MPI_REAL_RP,MPI_SUM,comm_block,ierr)
       if(myid == 0) then
         open(newunit=iunit,file=fname)
         do i=1,ng(1)
@@ -123,7 +123,7 @@ module mod_output
     return
   end subroutine out1d
   !
-  subroutine out3d(fname,lo,hi,ng,nskip,p)
+  subroutine out3d(fname,comm,lo,hi,ng,nskip,p)
     !
     ! saves a 3D scalar field into a binary file
     !
@@ -141,11 +141,12 @@ module mod_output
     implicit none
     character(len=*), intent(in) :: fname
     integer , intent(in   ), dimension(3) :: lo,hi,ng,nskip
+    integer , intent(in   )               :: comm
     real(rp), intent(inout), dimension(lo(1)-1,lo(2)-1,lo(3)-1) :: p
     integer :: fh
     integer(kind=MPI_OFFSET_KIND) :: filesize,disp
     !
-    call MPI_FILE_OPEN(MPI_COMM_WORLD, fname, &
+    call MPI_FILE_OPEN(comm, fname, &
          MPI_MODE_CREATE+MPI_MODE_WRONLY, MPI_INFO_NULL,fh, ierr)
     filesize = 0_MPI_OFFSET_KIND
     call MPI_FILE_SET_SIZE(fh,filesize,ierr)
@@ -170,7 +171,7 @@ module mod_output
     ! istep     -> time step number
     !
     implicit none
-    character(len=*), intent(in) :: fname,fname_fld,varname
+    character(len=*), intent(in)       :: fname,fname_fld,varname
     integer , intent(in), dimension(3) :: nmin,nmax,nskip
     real(rp), intent(in)               :: time
     integer , intent(in)               :: istep
@@ -187,18 +188,19 @@ module mod_output
     return
   end subroutine write_log_output
   !
-  subroutine write_visu_3d(datadir,fname_bin,fname_log,varname,lo,hi,ng,nmin,nmax,nskip,time,istep,p)
+  subroutine write_visu_3d(datadir,fname_bin,comm,fname_log,varname,lo,hi,ng,nmin,nmax,nskip,time,istep,p)
     !
     ! wraps the calls of out3d and write-log_output into the same subroutine
     !
     implicit none
-    character(len=*), intent(in)          :: datadir,fname_bin,fname_log,varname
+    character(len=*), intent(in)             :: datadir,fname_bin,fname_log,varname
+    integer , intent(in   )                  :: comm
     integer , intent(in   ), dimension(3)    :: lo,hi,ng,nmin,nmax,nskip
     real(rp), intent(in   )                  :: time
     integer , intent(in   )                  :: istep
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     !
-    call out3d(trim(datadir)//trim(fname_bin),lo,hi,ng,nskip,p)
+    call out3d(trim(datadir)//trim(fname_bin),comm,lo,hi,ng,nskip,p)
     call write_log_output(trim(datadir)//trim(fname_log),trim(fname_bin),trim(varname),nmin,nmax,nskip,time,istep)
     return
   end subroutine write_visu_3d

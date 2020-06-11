@@ -4,31 +4,25 @@ module mod_rk
   private
   public rk_mom,rk_scal
   contains
-  subroutine rk_mom(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,l,dt,bforce,is_forced,velf,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,f)
+  subroutine rk_mom(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp)
     use mod_mom  , only: momx_a,momy_a,momz_a,momx_d,momy_d,momz_d,momx_p,momy_p,momz_p
-    use mod_debug, only: chkmean
     implicit none
     real(rp), intent(in   ), dimension(2) :: rkpar
     integer , intent(in   ), dimension(3) :: lo,hi
     real(rp), intent(in   ), dimension(lo(1)-1:) :: dxc,dxf
     real(rp), intent(in   ), dimension(lo(2)-1:) :: dyc,dyf
     real(rp), intent(in   ), dimension(lo(3)-1:) :: dzc,dzf
-    real(rp), intent(in   ), dimension(3) :: l
     real(rp), intent(in   )               :: visc,dt
     real(rp), intent(in   ), dimension(3) :: bforce
-    logical , intent(in   ), dimension(3) :: is_forced
-    real(rp), intent(in   ), dimension(3) :: velf
     real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u ,v ,w ,p
     real(rp), intent(inout), dimension(lo(1):  ,lo(2):  ,lo(3):  ) :: dudtrko,dvdtrko,dwdtrko
     real(rp), intent(out  ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: up,vp,wp
-    real(rp), intent(out  ), dimension(3) :: f
     real(rp),                dimension(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) :: dudtrk ,dvdtrk ,dwdtrk
 #ifdef _IMPDIFF
     real(rp),                dimension(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) :: dudtrkd,dvdtrkd,dwdtrkd
 #endif
     real(rp) :: factor1,factor2,factor12
     integer  :: i,j,k
-    real(rp) :: mean
     !
     ! low-storage 3rd-order Runge-Kutta scheme 
     ! for time integration of the momentum equations.
@@ -91,31 +85,6 @@ module mod_rk
       enddo
     enddo
     !$OMP END PARALLEL DO
-    !
-    ! bulk velocity forcing
-    !
-    f(:) = 0._rp
-    if(is_forced(1)) then
-      call chkmean(lo,hi,l,dxc,dyf,dzf,up,mean)
-      f(1) = velf(1) - mean
-      !$OMP WORKSHARE
-      up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) + f(1)
-      !$OMP END WORKSHARE
-    endif
-    if(is_forced(2)) then
-      call chkmean(lo,hi,l,dxf,dyc,dzf,vp,mean)
-      f(2) = velf(2) - mean
-      !$OMP WORKSHARE
-      vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) + f(2)
-      !$OMP END WORKSHARE
-    endif
-    if(is_forced(3)) then
-      call chkmean(lo,hi,l,dxf,dyf,dzc,wp,mean)
-      f(3) = velf(3) - mean
-      !$OMP WORKSHARE
-      wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) + f(3)
-      !$OMP END WORKSHARE
-    endif
 #ifdef _IMPDIFF
     !
     ! compute rhs of helmholtz equation

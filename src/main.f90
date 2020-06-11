@@ -21,10 +21,9 @@
 program snac
   use mpi
   use mod_bound          , only: bounduvw,boundp,updt_rhs
-  use mod_debug          , only: chkmean
   use mod_chkdiv         , only: chkdiv
   use mod_chkdt          , only: chkdt
-  use mod_common_mpi     , only: myid,ierr
+  use mod_common_mpi     , only: myid,myid_block,ierr,comm_block
   use mod_correc         , only: correc
   use mod_initflow       , only: initflow
   use mod_initgrid       , only: initgrid,distribute_grid,save_grid
@@ -36,14 +35,17 @@ program snac
                                  datadir,    &
                                  small,      &
                                  rkcoeff,    &
-                                 ng,l,gt,gr,cfl,dtmin,uref,lref,rey,visc,            &
-                                 inivel,is_wallturb,nstep,time_max,tw_max,stop_type, &
-                                 restart,is_overwrite_save,                          &
-                                 icheck,iout0d,iout1d,iout2d,iout3d,isave,           &
-                                 cbcvel,bcvel,cbcpre,bcpre,                          &
-                                 bforce, is_forced,velf,is_outflow,no_outflow,       &
-                                 dims,nthreadsmax
-  use mod_updt_pressure, only: updt_pressure
+                                 cfl,dtmin,uref,lref,rey,visc,                 &
+                                 nstep,time_max,tw_max,stop_type,              &
+                                 restart,is_overwrite_save,                    &
+                                 nthreadsmax,                                  &
+                                 icheck,iout0d,iout1d,iout2d,iout3d,isave,     &
+                                 dims,lo,hi,lmin,lmax,                         &
+                                 gt,gr,                                        &
+                                 cbcvel,bcvel,cbcpre,bcpre,                    &
+                                 bforce,is_outflow,no_outflow,periods,inivel,  &
+                                 vol_all,my_block
+  use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
   use mod_solver         , only: init_solver,setup_solver,solve_helmholtz,finalize_solver, &
@@ -53,8 +55,8 @@ program snac
   implicit none
   integer , dimension(0:1,3) :: nb
   logical , dimension(0:1,3) :: is_bound
-  integer , dimension(3    ) :: halos
-  integer , dimension(3) :: lo,hi
+  integer , dimension(    3) :: halos
+  integer , dimension(    3) :: ng,lo_g,hi_g
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
 #ifdef _IMPDIFF
   real(rp), allocatable, dimension(:,:,:) :: uo,vo,wo
@@ -72,7 +74,7 @@ program snac
 #endif
   real(rp), dimension(0:1,3) :: dl
 #ifdef _IMPDIFF
-  integer , dimension(    3) :: q,hiu,hiv,hiw,ngu,ngv,ngw
+  integer , dimension(    3) :: hiu,hiv,hiw,ngu,ngv,ngw ! more elegant to use eye
 #endif
   type(hypre_solver) :: psolver
 #ifdef _IMPDIFF
@@ -88,9 +90,9 @@ program snac
                                          dxc_g,dxf_g,xc_g,xf_g, &
                                          dyc_g,dyf_g,yc_g,yf_g, &
                                          dzc_g,dzf_g,zc_g,zf_g
-  real(rp), dimension(3) :: f,dpdl,meanvel
   !
   real(rp), dimension(100) :: var
+  character(len=3  ) :: cblock
   character(len=7  ) :: fldnum
   character(len=100) :: filename
   integer :: iunit
@@ -112,7 +114,7 @@ program snac
   ! initialize MPI/OpenMP
   !
   !$call omp_set_num_threads(nthreadsmax)
-  call initmpi(ng,dims,cbcpre,lo,hi,nb,is_bound,halos)
+  call initmpi(my_block,dims,cbcpre,bcpre,lo_g,hi_g,ng,periods,nb,is_bound,halos)
   !
   ! allocate variables
   !
@@ -181,31 +183,33 @@ program snac
   !
   ! generate grid
   !
-  call initgrid(ng(1),lo(1),hi(1),gt(1),gr(1),l(1), &
-                dxc_g,dxf_g,xc_g,xf_g)
-  call initgrid(ng(2),lo(2),hi(2),gt(2),gr(2),l(2), &
-                dyc_g,dyf_g,yc_g,yf_g)
-  call initgrid(ng(3),lo(3),hi(3),gt(3),gr(3),l(3), &
-                dzc_g,dzf_g,zc_g,zf_g)
-  call save_grid(trim(datadir)//'grid_x',ng(1),xf_g,xc_g,dxf_g,dxc_g)
-  call save_grid(trim(datadir)//'grid_y',ng(2),yf_g,yc_g,dyf_g,dyc_g)
-  call save_grid(trim(datadir)//'grid_z',ng(3),zf_g,zc_g,dzf_g,dzc_g)
-  open(newunit=iunit,status='replace',file=trim(datadir)//'geometry.out')
-    write(iunit,*) ng(1),ng(2),ng(3) 
-    write(iunit,*) l(1),l(2),l(3) 
-  close(iunit)
-  call distribute_grid(lo(1),hi(1),dxc_g,dxc)
-  call distribute_grid(lo(1),hi(1),dxf_g,dxf)
-  call distribute_grid(lo(1),hi(1), xc_g, xc)
-  call distribute_grid(lo(1),hi(1), xf_g, xf)
-  call distribute_grid(lo(2),hi(2),dyc_g,dyc)
-  call distribute_grid(lo(2),hi(2),dyf_g,dyf)
-  call distribute_grid(lo(2),hi(2), yc_g, yc)
-  call distribute_grid(lo(2),hi(2), yf_g, yf)
-  call distribute_grid(lo(3),hi(3),dzc_g,dzc)
-  call distribute_grid(lo(3),hi(3),dzf_g,dzf)
-  call distribute_grid(lo(3),hi(3), zc_g, zc)
-  call distribute_grid(lo(3),hi(3), zf_g, zf)
+  call initgrid(lo(1),hi(1),gt(1),gr(1),lmin(1),lmax(1),dxc_g,dxf_g,xc_g,xf_g)
+  call initgrid(lo(2),hi(2),gt(2),gr(2),lmin(2),lmax(2),dyc_g,dyf_g,yc_g,yf_g)
+  call initgrid(lo(3),hi(3),gt(3),gr(3),lmin(3),lmax(3),dzc_g,dzf_g,zc_g,zf_g)
+  if(myid_block == 0) then
+    write(cblock,'(i3.3)') my_block
+    call save_grid(trim(datadir)//'grid_x_'//cblock,lo_g(1),hi_g(1),xf_g,xc_g,dxf_g,dxc_g)
+    call save_grid(trim(datadir)//'grid_y_'//cblock,lo_g(2),hi_g(2),yf_g,yc_g,dyf_g,dyc_g)
+    call save_grid(trim(datadir)//'grid_z_'//cblock,lo_g(3),hi_g(3),zf_g,zc_g,dzf_g,dzc_g)
+    open(newunit=iunit,status='replace',file=trim(datadir)//'geometry_b'//cblock//'.out')
+      write(iunit,*) lo_g(1),lo_g(2),lo_g(3) 
+      write(iunit,*) hi_g(1),hi_g(2),hi_g(3) 
+      write(iunit,*) lmin(1),lmin(2),lmin(3) 
+      write(iunit,*) lmax(1),lmin(2),lmin(3) 
+    close(iunit)
+  endif
+  call distribute_grid(lo_g(1),lo(1),hi(1),dxc_g,dxc)
+  call distribute_grid(lo_g(1),lo(1),hi(1),dxf_g,dxf)
+  call distribute_grid(lo_g(1),lo(1),hi(1), xc_g, xc)
+  call distribute_grid(lo_g(1),lo(1),hi(1), xf_g, xf)
+  call distribute_grid(lo_g(2),lo(2),hi(2),dyc_g,dyc)
+  call distribute_grid(lo_g(2),lo(2),hi(2),dyf_g,dyf)
+  call distribute_grid(lo_g(2),lo(2),hi(2), yc_g, yc)
+  call distribute_grid(lo_g(2),lo(2),hi(2), yf_g, yf)
+  call distribute_grid(lo_g(3),lo(3),hi(3),dzc_g,dzc)
+  call distribute_grid(lo_g(3),lo(3),hi(3),dzf_g,dzf)
+  call distribute_grid(lo_g(3),lo(3),hi(3), zc_g, zc)
+  call distribute_grid(lo_g(3),lo(3),hi(3), zf_g, zf)
   !
   ! initialization of the flow fields
   !
@@ -216,11 +220,11 @@ program snac
   if(.not.restart) then
     istep = 0
     time = 0._rp
-    call initflow(inivel,is_wallturb,lo,hi,ng,l,uref,lref,visc,bforce(1), &
+    call initflow(inivel,.false.,lo,hi,lo_g,hi_g,lmax-lmin,uref,lref,visc,bforce(1), &
                   xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
     if(myid == 0) write(stdout,*) '*** Initial condition succesfully set ***'
   else
-    call load('r',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
+    call load('r',trim(datadir)//'fld_b'//cblock//'.bin',comm_block,ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
     if(myid == 0) write(stdout,*) '*** Checkpoint loaded at time = ', time, 'time step = ', istep, '. ***'
   endif
   call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
@@ -258,42 +262,32 @@ program snac
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
-  call init_solver(cbcpre,bcpre,dl,is_bound,[.true.,.true.,.true.],lo,hi,ng, &
+  call init_solver(cbcpre,bcpre,dl,is_bound,[.true.,.true.,.true.],lo,hi,periods, &
                    1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzc,dzf, &
                    rhsp%x,rhsp%y,rhsp%z,psolver)
   call setup_solver(lo,hi,psolver,0._rp)
 #ifdef _IMPDIFF
-  q  = [1,0,0]
-  if(cbcpre(0,1)//cbcpre(0,1) == 'PP') q(:) = 0
   dl = reshape([dxf_g(1-0),dxf_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
   hiu(:) = hi(:)
-  if(is_bound(1,1)) hiu(:) = hiu(:)-q(:)
-  ngu(:) = ng(:) - q
-  call init_solver(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,[.false.,.true.,.true.],lo,hiu,ngu, &
+  if(is_bound(1,1)) hiu(:) = hiu(:)-[1,0,0]
+  call init_solver(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,[.false.,.true.,.true.],lo,hiu,periods, &
                    1.d-6,500,HYPRESolverPFMG,dxf,dxc,dyc,dyf,dzc,dzf, &
                    rhsu%x,rhsu%y,rhsu%z,usolver)
-  q  = [0,1,0] 
-  if(cbcpre(0,2)//cbcpre(0,2) == 'PP') q(:) = 0
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyf_g(1-0),dyf_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
   hiv(:) = hi(:)
-  if(is_bound(1,2)) hiv(:) = hiv(:)-q(:)
-  ngv(:) = ng(:) - q(:)
-  call init_solver(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,[.true.,.false.,.true.],lo,hiv,ngv, &
+  if(is_bound(1,2)) hiv(:) = hiv(:)-[0,1,0]
+  call init_solver(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,[.true.,.false.,.true.],lo,hiv,periods, &
                    1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyf,dyc,dzc,dzf, &
                    rhsv%x,rhsv%y,rhsv%z,vsolver)
-  q  = [0,0,1] 
-  if(cbcpre(0,3)//cbcpre(0,3) == 'PP') q(:) = 0
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzf_g(1-0),dzf_g(ng(3))],shape(dl))
-  hiw(:) = hi(:)
-  if(is_bound(1,3)) hiw(:) = hiw(:)-q(:)
-  ngw(:) = ng(:) - q(:)
-  call init_solver(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,[.true.,.true.,.false.],lo,hiw,ngw, &
+  if(is_bound(1,3)) hiw(:) = hiw(:)-[0,0,1]
+  call init_solver(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,[.true.,.true.,.false.],lo,hiw,periods, &
                    1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzf,dzc, &
                    rhsw%x,rhsw%y,rhsw%z,wsolver)
 #endif
@@ -310,13 +304,11 @@ program snac
     istep = istep + 1
     time  = time  + dt
     if(myid == 0) write(stdout,*) 'Timestep #', istep, 'Time = ', time
-    dpdl(:)  = 0._rp
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
       alpha = -visc*dtrk/2._rp
-      call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,l,dt,bforce, &
-                  is_forced,velf,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,f)
-      dpdl(:) = dpdl(:) - f(:)/dt
+      call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce, &
+                  visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp)
 #ifdef _IMPDIFF
       alphai = alpha**(-1)
       !
@@ -393,14 +385,14 @@ program snac
         kill = .true.
       endif
       !
-      call chkdiv(lo,hi,dxf,dyf,dzf,l,u,v,w,divtot,divmax)
-      if(myid == 0) write(stdout,*) 'Total divergence = ', divtot, '| Maximum divergence = ', divmax
-      if(divtot /= divtot) then!divmax > small.or.divtot /= divtot) then
-        if(myid == 0) write(stderr,*) 'ERROR: maximum divergence is too large.'
-        if(myid == 0) write(stderr,*) 'Aborting...'
-        is_done = .true.
-        kill = .true.
-      endif
+      !call chkdiv(lo,hi,dxf,dyf,dzf,l,u,v,w,divtot,divmax)
+      !if(myid == 0) write(stdout,*) 'Total divergence = ', divtot, '| Maximum divergence = ', divmax
+      !if(divtot /= divtot) then!divmax > small.or.divtot /= divtot) then
+      !  if(myid == 0) write(stderr,*) 'ERROR: maximum divergence is too large.'
+      !  if(myid == 0) write(stderr,*) 'Aborting...'
+      !  is_done = .true.
+      !  kill = .true.
+      !endif
     endif
     !
     ! output routines below
@@ -411,24 +403,6 @@ program snac
       var(2) = dt
       var(3) = time
       call out0d(trim(datadir)//'time.out',3,var)
-      !
-      if(any(is_forced(:)).or.any(abs(bforce(:)) > 0._rp)) then
-        meanvel(:) = 0._rp
-        if(is_forced(1).or.abs(bforce(1)) > 0._rp) then
-          call chkmean(lo,hi,l,dxc,dyf,dzf,u,meanvel(1))
-        endif
-        if(is_forced(2).or.abs(bforce(2)) > 0._rp) then
-          call chkmean(lo,hi,l,dxf,dyc,dzf,v,meanvel(2))
-        endif
-        if(is_forced(3).or.abs(bforce(3)) > 0._rp) then
-          call chkmean(lo,hi,l,dxf,dyf,dzc,w,meanvel(3))
-        endif
-        if(.not.any(is_forced(:))) dpdl(:) = -bforce(:) ! constant pressure gradient
-        var(1)   = time
-        var(2:4) = dpdl(:)
-        var(5:7) = meanvel(:)
-        call out0d(trim(datadir)//'forcing.out',7,var)
-      endif
     endif
     write(fldnum,'(i7.7)') istep
     if(mod(istep,iout1d) == 0) then
@@ -446,14 +420,15 @@ program snac
       else
         filename = 'fld_'//fldnum//'.bin'
       endif
-      call load('w',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
+      call load('w',trim(datadir)//'fld_b'//cblock//'.bin',comm_block,ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
       if(.not.is_overwrite_save) then
         !
         ! fld.bin -> last checkpoint file (symbolic link)
         !
-        if(myid == 0) call system('ln -sf '//trim(filename)//' '//trim(datadir)//'fld.bin')
+        if(myid_block == 0) call system('ln -sf '//trim(filename)//' '//trim(datadir)//'fld_b'//cblock//'.bin')
       endif
-      if(myid == 0) write(stdout,*) '*** Checkpoint saved at time = ', time, 'time step = ', istep, '. ***'
+      if(myid_block == 0) write(stdout,*) '*** Checkpoint saved at time = ', time, &
+                                          'time step = ', istep, 'block = ',my_block,'. ***'
     endif
 #ifdef _TIMING
       dt12 = MPI_WTIME()-dt12

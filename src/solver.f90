@@ -16,7 +16,7 @@ module mod_solver
     integer    :: stype
   end type hypre_solver 
   contains
-  subroutine init_solver(cbc,bc,dl,is_bound,is_centered,lo,hi,ng,maxerror,maxiter,stype, &
+  subroutine init_solver(cbc,bc,dl,is_bound,is_centered,lo,hi,periods,maxerror,maxiter,stype, &
                          dx1,dx2,dy1,dy2,dz1,dz2,rhsx,rhsy,rhsz,asolver)
     !
     ! description
@@ -28,7 +28,7 @@ module mod_solver
     real(rp)          , intent(in ), dimension(0:1,3) ::  dl
     logical           , intent(in ), dimension(0:1,3) ::  is_bound
     logical           , intent(in ), dimension(    3) ::  is_centered
-    integer           , intent(in ), dimension(3) :: lo,hi,ng
+    integer           , intent(in ), dimension(3    ) :: lo,hi,periods
     real(rp)          , intent(in ) :: maxerror
     integer           , intent(in ) :: maxiter,stype
     real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dx1,dx2
@@ -38,7 +38,7 @@ module mod_solver
     real(rp)          , intent(out), dimension(lo(2):,lo(3):,0:)    :: rhsx
     real(rp)          , intent(out), dimension(lo(1):,lo(3):,0:)    :: rhsy
     real(rp)          , intent(out), dimension(lo(1):,lo(2):,0:)    :: rhsz
-    integer, dimension(3         ) :: periods,qqq
+    integer, dimension(3         ) :: qqq
     integer, dimension(3,nstencil) :: offsets
     real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
     real(rp), dimension(0:1,3) :: factor,sgn
@@ -49,8 +49,7 @@ module mod_solver
     integer            :: comm_hypre
     !
     comm_hypre = MPI_COMM_WORLD
-    periods(:) = 0
-    where(cbc(0,:)//cbc(1,:) == 'PP') periods(:) = ng(:)
+    !
     qqq(:) = 0
     where(.not.is_centered(:)) qqq(:) = 1
     factor(:,:) = 0._rp

@@ -6,7 +6,7 @@ module mod_chkdiv
   private
   public chkdiv
   contains
-  subroutine chkdiv(lo,hi,dxf,dyf,dzf,l,u,v,w,divtot,divmax)
+    subroutine chkdiv(lo,hi,dxf,dyf,dzf,l,u,v,w,divtot,divmax)! DO FOR ALL AND DIVIDE BY NBLOCKS?
     !
     ! checks the divergence of the velocity field
     !

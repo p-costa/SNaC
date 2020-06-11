@@ -6,6 +6,7 @@
   !
   ! datadir   -> name of the directory where the data is saved
   ! fname_bin -> name of the output binary file
+  ! comm      -> name of the mpi communicator of the block being saved
   ! fname_log -> name of the log file (can be the same for a time series of data with the same grid)
   ! varname   -> name of the variable that is saved
   !              to create a vector, append _X _Y and _Z to the variable name, denoting the
@@ -21,11 +22,11 @@
   ! modify the calls below as desired
   !
   ! write_visu_3d(datadir,fname_bin,fname_log,varname,lo,hi,ng,nmin,nmax,nskip,time,istep,p)
-  call write_visu_3d(datadir,'vex_fld_'//fldnum//'.bin','log_visu_3d.out','Velocity_X', &
+  call write_visu_3d(datadir,'vex_fld_'//fldnum//'_b'//cblock//'.bin',comm_block,'log_visu_3d.out','Velocity_X', &
                      lo,hi,ng,[1,1,1],[ng(1),ng(2),ng(3)],[1,1,1],time,istep,u)
-  call write_visu_3d(datadir,'vey_fld_'//fldnum//'.bin','log_visu_3d.out','Velocity_Y', &
+  call write_visu_3d(datadir,'vey_fld_'//fldnum//'_b'//cblock//'.bin',comm_block,'log_visu_3d.out','Velocity_Y', &
                      lo,hi,ng,[1,1,1],[ng(1),ng(2),ng(3)],[1,1,1],time,istep,v)
-  call write_visu_3d(datadir,'vez_fld_'//fldnum//'.bin','log_visu_3d.out','Velocity_Z', &
+  call write_visu_3d(datadir,'vez_fld_'//fldnum//'_b'//cblock//'.bin',comm_block,'log_visu_3d.out','Velocity_Z', &
                      lo,hi,ng,[1,1,1],[ng(1),ng(2),ng(3)],[1,1,1],time,istep,w)
-  call write_visu_3d(datadir,'pre_fld_'//fldnum//'.bin','log_visu_3d.out','Pressure_P', &
+  call write_visu_3d(datadir,'pre_fld_'//fldnum//'_b'//cblock//'.bin',comm_block,'log_visu_3d.out','Pressure_P', &
                      lo,hi,ng,[1,1,1],[ng(1),ng(2),ng(3)],[1,1,1],time,istep,p)

@@ -1,13 +1,13 @@
 module mod_initflow
   use mpi
-  use mod_common_mpi, only: myid,ierr
+  use mod_common_mpi, only: myid_block,ierr,comm_block
   use mod_param     , only: pi
   use mod_types
   implicit none
   private
   public initflow
   contains
-  subroutine initflow(inivel,is_wallturb,lo,hi,ng,l,uref,lref,visc,bforce, &
+  subroutine initflow(inivel,is_wallturb,lo,hi,lo_g,hi_g,l,uref,lref,visc,bforce, &
                       xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
     !
     ! computes initial conditions for the velocity field
@@ -15,7 +15,7 @@ module mod_initflow
     implicit none
     character(len=3), intent(in) :: inivel
     logical , intent(in) :: is_wallturb
-    integer , intent(in), dimension(3) :: lo,hi,ng
+    integer , intent(in), dimension(3) :: lo,hi,lo_g,hi_g
     real(rp), intent(in), dimension(3) :: l
     real(rp), intent(inout) :: uref
     real(rp), intent(in) :: lref,visc,bforce
@@ -79,10 +79,10 @@ module mod_initflow
       call poiseuille(lo(3),hi(3),zc,l(3),uref,u1d)
       is_mean=.true.
     case default
-      if(myid == 0) write(stderr,*) 'ERROR: invalid name for initial velocity field'
-      if(myid == 0) write(stderr,*) ''
-      if(myid == 0) write(stderr,*) '*** Simulation abortited due to errors in the case file ***'
-      if(myid == 0) write(stderr,*) '    check INFO_INPUT.md'
+      if(myid_block == 0) write(stderr,*) 'ERROR: invalid name for initial velocity field'
+      if(myid_block == 0) write(stderr,*) ''
+      if(myid_block == 0) write(stderr,*) '*** Simulation abortited due to errors in the case file ***'
+      if(myid_block == 0) write(stderr,*) '    check INFO_INPUT.md'
       call MPI_FINALIZE(ierr)
       error stop
     end select
@@ -99,9 +99,9 @@ module mod_initflow
       enddo
     endif
     if(is_noise) then
-      call add_noise(lo,hi,ng,123,.5_rp,u)
-      call add_noise(lo,hi,ng,456,.5_rp,v)
-      call add_noise(lo,hi,ng,789,.5_rp,w)
+      call add_noise(lo,hi,lo_g,hi_g,123,.5_rp,u)
+      call add_noise(lo,hi,lo_g,hi_g,456,.5_rp,v)
+      call add_noise(lo,hi,lo_g,hi_g,789,.5_rp,w)
     endif
     if(is_mean) then
       call set_mean(lo,hi,l,dxc,dyf,dzf,uref,u)
@@ -158,9 +158,9 @@ module mod_initflow
     return
   end subroutine initflow
   !
-  subroutine add_noise(lo,hi,ng,iseed,norm,p)
+  subroutine add_noise(lo,hi,lo_g,hi_g,iseed,norm,p)
     implicit none
-    integer , intent(in), dimension(3) :: lo,hi,ng
+    integer , intent(in), dimension(3) :: lo,hi,lo_g,hi_g
     integer , intent(in) :: iseed
     real(rp), intent(in) :: norm
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
@@ -170,9 +170,9 @@ module mod_initflow
     allocate(seed(64))
     seed(:) = iseed
     call random_seed( put = seed )
-    do k=1,ng(3)
-      do j=1,ng(2)
-        do i=1,ng(1)
+    do k=lo_g(3),hi_g(3)
+      do j=lo_g(2),hi_g(2)
+        do i=lo_g(1),hi_g(1)
           call random_number(rn)
           if(i>=lo(1).and.i<=hi(1) .and. &
              j>=lo(2).and.j<=hi(2) .and. &
@@ -210,7 +210,7 @@ module mod_initflow
       enddo
     enddo
     !$OMP END PARALLEL DO
-    call mpi_allreduce(MPI_IN_PLACE,meanold,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+    call mpi_allreduce(MPI_IN_PLACE,meanold,1,MPI_REAL_RP,MPI_SUM,comm_block,ierr)
     if(meanold /= 0._rp) then
       !$OMP WORKSHARE
       p(:,:,:) = p(:,:,:)/meanold*mean

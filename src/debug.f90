@@ -6,7 +6,7 @@ module mod_debug
   private
   public chkmean,chk_helmholtz
   contains
-  subroutine chkmean(lo,hi,l,dx,dy,dz,p,mean)
+  subroutine chkmean(lo,hi,l,dx,dy,dz,p,vol,mpi_comm,mean)
     !
     ! compute the mean value of an observable over the entire domain
     !
@@ -17,22 +17,24 @@ module mod_debug
     real(rp), intent(in ), dimension(lo(2)-1:) :: dy
     real(rp), intent(in ), dimension(lo(3)-1:) :: dz
     real(rp), intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
+    real(rp), intent(in ) :: vol
+    integer , intent(in ) :: mpi_comm
     real(rp), intent(out) :: mean
     integer :: i,j,k
     mean = 0._rp
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP SHARED(lo,hi,p,dx,dy,dz,l) &
+    !$OMP SHARED(lo,hi,p,dx,dy,dz,vol) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP REDUCTION(+:mean)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
-          mean = mean + p(i,j,k)*dx(i)*dy(j)*dz(k)/(l(1)*l(2)*l(3))
+          mean = mean + p(i,j,k)*dx(i)*dy(j)*dz(k)/vol
         enddo
       enddo
     enddo
     !$OMP END PARALLEL DO
-    call mpi_allreduce(MPI_IN_PLACE,mean,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+    call mpi_allreduce(MPI_IN_PLACE,mean,1,MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
     return
   end subroutine chkmean
   subroutine chk_helmholtz(lo,hi,is_centered,dx1,dx2,dy1,dy2,dz1,dz2,alpha,fpp,fp,diffmax)

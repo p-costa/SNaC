@@ -447,7 +447,7 @@ module mod_bound
   end subroutine updt_rhs
   !
   subroutine updthalo(lo,hi,nh,halo,nb,idir,p)
-    use mod_common_mpi, only: comm_cart,ierr
+    use mod_common_mpi, only: ierr
     implicit none
     integer , dimension(3), intent(in) :: lo,hi
     integer , intent(in) :: nh,halo ! n -> number of ghost points
@@ -463,50 +463,50 @@ module mod_bound
     case(1) ! x direction
       call MPI_SENDRECV(p(lo(1)   ,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
                         p(hi(1)+nh,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
-                        comm_cart,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
       call MPI_SENDRECV(p(hi(1)   ,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
                         p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
-                        comm_cart,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
          !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),1, &
-         !                comm_cart,requests(1),error)
+         !                MPI_COMM_WORLD,requests(1),error)
          !call MPI_IRECV( p(hi(1)+nh,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
-         !                comm_cart,requests(2),error)
+         !                MPI_COMM_WORLD,requests(2),error)
          !call MPI_ISSEND(p(hi(1)   ,lo(2)-nh,lo(3)-nh),1,halo,nb(1),1, &
-         !                comm_cart,requests(3),error)
+         !                MPI_COMM_WORLD,requests(3),error)
          !call MPI_ISSEND(p(lo(1)   ,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
-         !                comm_cart,requests(4),error)
+         !                MPI_COMM_WORLD,requests(4),error)
          !call MPI_WAITALL(4, requests, statuses, error)
     case(2) ! y direction
       call MPI_SENDRECV(p(lo(1)-nh,lo(2)   ,lo(3)-nh),1,halo,nb(0),0, &
                         p(lo(1)-nh,hi(2)+nh,lo(3)-nh),1,halo,nb(1),0, &
-                        comm_cart,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
       call MPI_SENDRECV(p(lo(1)-nh,hi(2)   ,lo(3)-nh),1,halo,nb(1),0, &
                         p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
-                        comm_cart,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
          !call MPI_IRECV( p(lo(1)-nh,hi(2)+nh,lo(3)-nh),1,halo,nb(1),0, &
-         !                comm_cart,requests(1),error)
+         !                MPI_COMM_WORLD,requests(1),error)
          !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),1, &
-         !                comm_cart,requests(2),error)
+         !                MPI_COMM_WORLD,requests(2),error)
          !call MPI_ISSEND(p(lo(1)-nh,lo(2)   ,lo(3)-nh),1,halo,nb(0),0, &
-         !               comm_cart,requests(3),error)
+         !               MPI_COMM_WORLD,requests(3),error)
          !call MPI_ISSEND(p(lo(1)-nh,hi(2)   ,lo(3)-nh),1,halo,nb(1),1, &
-         !               comm_cart,requests(4),error)
+         !               MPI_COMM_WORLD,requests(4),error)
          !call MPI_WAITALL(4, requests, statuses, error)
     case(3) ! z direction
       call MPI_SENDRECV(p(lo(1)-nh,lo(2)-nh,lo(3)   ),1,halo,nb(0),0, &
                         p(lo(1)-nh,lo(2)-nh,hi(3)+nh),1,halo,nb(1),0, &
-                        comm_cart,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
       call MPI_SENDRECV(p(lo(1)-nh,lo(2)-nh,hi(3)   ),1,halo,nb(1),0, &
                         p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
-                        comm_cart,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
       !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,hi(3)+nh),1,halo,nb(1),0, &
-      !                comm_cart,requests(1),error)
+      !                MPI_COMM_WORLD,requests(1),error)
       !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,lo(3)-nh),1,halo,nb(0),1, &
-      !                comm_cart,requests(2),error)
+      !                MPI_COMM_WORLD,requests(2),error)
       !call MPI_ISSEND(p(lo(1)-nh,lo(2)-nh,lo(3)   ),1,halo,nb(0),0, &
-      !               comm_cart,requests(3),error)
+      !               MPI_COMM_WORLD,requests(3),error)
       !call MPI_ISSEND(p(lo(1)-nh,lo(2)-nh,hi(3)   ),1,halo,nb(1),1, &
-      !               comm_cart,requests(4),error)
+      !               MPI_COMM_WORLD,requests(4),error)
       !call MPI_WAITALL(4, requests, statuses, error)
     end select
     return

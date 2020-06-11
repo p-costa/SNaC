@@ -1,18 +1,19 @@
 module mod_load
   use mpi
-  use mod_common_mpi, only:myid,ierr
+  use mod_common_mpi, only:myid,ierr,myid_block
   use mod_types
   implicit none
   private
   public load,io_field
   contains
-  subroutine load(io,filename,ng,nh,lo,hi,u,v,w,p,time,istep)
+  subroutine load(io,filename,comm,ng,nh,lo,hi,u,v,w,p,time,istep)
     !
     ! reads/writes a restart file
     !
     implicit none
     character(len=1), intent(in) :: io
     character(len=*), intent(in) :: filename
+    integer , intent(in)         :: comm
     integer , intent(in), dimension(3) :: ng,lo,hi,nh
     real(rp), intent(inout), dimension(lo(1)-nh(1):,lo(2)-nh(2):,lo(3)-nh(3):) :: u,v,w,p
     real(rp), intent(inout) :: time
@@ -23,7 +24,7 @@ module mod_load
     !
     select case(io)
     case('r')
-      call MPI_FILE_OPEN(MPI_COMM_WORLD, filename, &
+      call MPI_FILE_OPEN(comm, filename, &
            MPI_MODE_RDONLY, MPI_INFO_NULL,fh, ierr)
       !
       ! check file size first
@@ -31,10 +32,9 @@ module mod_load
       call MPI_FILE_GET_SIZE(fh,filesize,ierr)
       good = (product(ng)*4+2)*sizeof(1._rp)
       if(filesize /= good) then
-        if(myid == 0) write(stderr,*) ''
-        if(myid == 0) write(stderr,*) '*** Simulation aborted due a checkpoint file with incorrect size ***'
-        if(myid == 0) write(stderr,*) '    file: ', filename, ' | expected size: ', good, '| actual size: ', filesize
-        call MPI_FINALIZE(ierr)
+        if(myid_block == 0) write(stderr,*) ''
+        if(myid_block == 0) write(stderr,*) '*** Simulation aborted due a checkpoint file with incorrect size ***'
+        if(myid_block == 0) write(stderr,*) '    file: ', filename, ' | expected size: ', good, '| actual size: ', filesize
         error stop
       endif
       !
@@ -47,17 +47,17 @@ module mod_load
       call io_field('r',fh,ng,lo,hi,nh,disp,p)
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       nreals_myid = 0
-      if(myid == 0) nreals_myid = 2
+      if(myid_block == 0) nreals_myid = 2
       call MPI_FILE_READ(fh,fldinfo,nreals_myid,MPI_REAL_RP,MPI_STATUS_IGNORE,ierr)
       call MPI_FILE_CLOSE(fh,ierr)
-      call MPI_BCAST(fldinfo,2,MPI_REAL_RP,0,MPI_COMM_WORLD,ierr)
+      call MPI_BCAST(fldinfo,2,MPI_REAL_RP,0,comm,ierr)
       time  =      fldinfo(1)
       istep = nint(fldinfo(2))
     case('w')
       !
       ! write
       !
-      call MPI_FILE_OPEN(MPI_COMM_WORLD, filename                 , &
+      call MPI_FILE_OPEN(comm, filename                 , &
            MPI_MODE_CREATE+MPI_MODE_WRONLY, MPI_INFO_NULL,fh, ierr)
       filesize = 0_MPI_OFFSET_KIND
       call MPI_FILE_SET_SIZE(fh,filesize,ierr)
@@ -69,7 +69,7 @@ module mod_load
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       fldinfo = [time,1._rp*istep]
       nreals_myid = 0
-      if(myid == 0) nreals_myid = 2
+      if(myid_block == 0) nreals_myid = 2
       call MPI_FILE_WRITE(fh,fldinfo,nreals_myid,MPI_REAL_RP,MPI_STATUS_IGNORE,ierr)
       call MPI_FILE_CLOSE(fh,ierr)
     end select
