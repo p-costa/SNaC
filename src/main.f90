@@ -43,7 +43,7 @@ program snac
                                  cbcvel,bcvel,cbcpre,bcpre,                          &
                                  bforce, is_forced,velf,is_outflow,no_outflow,       &
                                  dims,nthreadsmax
-  use mod_updt_pressure, only: updt_pressure
+  use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
   use mod_solver         , only: init_solver,setup_solver,solve_helmholtz,finalize_solver, &
@@ -187,13 +187,15 @@ program snac
                 dyc_g,dyf_g,yc_g,yf_g)
   call initgrid(ng(3),lo(3),hi(3),gt(3),gr(3),l(3), &
                 dzc_g,dzf_g,zc_g,zf_g)
-  call save_grid(trim(datadir)//'grid_x',ng(1),xf_g,xc_g,dxf_g,dxc_g)
-  call save_grid(trim(datadir)//'grid_y',ng(2),yf_g,yc_g,dyf_g,dyc_g)
-  call save_grid(trim(datadir)//'grid_z',ng(3),zf_g,zc_g,dzf_g,dzc_g)
-  open(newunit=iunit,status='replace',file=trim(datadir)//'geometry.out')
-    write(iunit,*) ng(1),ng(2),ng(3) 
-    write(iunit,*) l(1),l(2),l(3) 
-  close(iunit)
+  if( myid == 0 ) then
+    call save_grid(trim(datadir)//'grid_x',ng(1),xf_g,xc_g,dxf_g,dxc_g)
+    call save_grid(trim(datadir)//'grid_y',ng(2),yf_g,yc_g,dyf_g,dyc_g)
+    call save_grid(trim(datadir)//'grid_z',ng(3),zf_g,zc_g,dzf_g,dzc_g)
+    open(newunit=iunit,status='replace',file=trim(datadir)//'geometry.out')
+      write(iunit,*) ng(1),ng(2),ng(3) 
+      write(iunit,*) l(1),l(2),l(3) 
+    close(iunit)
+  endif
   call distribute_grid(lo(1),hi(1),dxc_g,dxc)
   call distribute_grid(lo(1),hi(1),dxf_g,dxf)
   call distribute_grid(lo(1),hi(1), xc_g, xc)

@@ -28,7 +28,7 @@ module mod_solver
     real(rp)          , intent(in ), dimension(0:1,3) ::  dl
     logical           , intent(in ), dimension(0:1,3) ::  is_bound
     logical           , intent(in ), dimension(    3) ::  is_centered
-    integer           , intent(in ), dimension(3) :: lo,hi,ng
+    integer           , intent(in ), dimension(    3) :: lo,hi,ng
     real(rp)          , intent(in ) :: maxerror
     integer           , intent(in ) :: maxiter,stype
     real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dx1,dx2
@@ -311,11 +311,12 @@ module mod_solver
       enddo
     enddo
     !
+    !
+    ! create rhs and solution vector
+    !
     call HYPRE_StructVectorSetBoxValues(rhs,lo,hi, &
                                         rhsvalues,ierr)
     call HYPRE_StructVectorAssemble(rhs,ierr)
-    !
-    ! create soluction vector
     !
     call HYPRE_StructVectorSetBoxValues(sol,lo,hi, &
                                         solvalues,ierr)
@@ -343,7 +344,7 @@ module mod_solver
     !
     ! end of part based on the Paris Simulator code
     !
-    ! fecth results
+    ! retrieve solution
     !
     call HYPRE_StructVectorGetBoxValues(sol,lo,hi,solvalues,ierr)
     q = 0
