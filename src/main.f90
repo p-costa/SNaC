@@ -385,14 +385,14 @@ program snac
         kill = .true.
       endif
       !
-      !call chkdiv(lo,hi,dxf,dyf,dzf,l,u,v,w,divtot,divmax)
-      !if(myid == 0) write(stdout,*) 'Total divergence = ', divtot, '| Maximum divergence = ', divmax
-      !if(divtot /= divtot) then!divmax > small.or.divtot /= divtot) then
-      !  if(myid == 0) write(stderr,*) 'ERROR: maximum divergence is too large.'
-      !  if(myid == 0) write(stderr,*) 'Aborting...'
-      !  is_done = .true.
-      !  kill = .true.
-      !endif
+      call chkdiv(lo,hi,dxf,dyf,dzf,u,v,w,vol_all,MPI_COMM_WORLD,divtot,divmax)
+      if(myid == 0) write(stdout,*) 'Total divergence = ', divtot, '| Maximum divergence = ', divmax
+      if(divtot /= divtot) then!divmax > small.or.divtot /= divtot) then
+        if(myid == 0) write(stderr,*) 'ERROR: maximum divergence is too large.'
+        if(myid == 0) write(stderr,*) 'Aborting...'
+        is_done = .true.
+        kill = .true.
+      endif
     endif
     !
     ! output routines below

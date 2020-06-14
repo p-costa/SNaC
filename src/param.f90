@@ -76,20 +76,24 @@ contains
     visc = uref*lref/rey
     ! 
     exists = .true.
-    nblocks = 0
+    nblocks = 1
     filename = 'geo/block.'
     do while(exists)
       write(cblock,'(i3.3)') nblocks
       inquire(file=trim(filename)//cblock, exist = exists)
       if(exists) nblocks = nblocks + 1
     enddo
+    nblocks = nblocks - 1
     maxrank = 0
     do iblock = 1,nblocks
-      write(cblock,'(i3.3)') nblocks
+      write(cblock,'(i3.3)') iblock
       open(newunit=iunit,file=trim(filename)//cblock,status='old',action='read',iostat=ierr)
         if( ierr == 0 ) then
           read(iunit,*) dims(1),dims(2),dims(3)
           maxrank = maxrank + product(dims(:))-1
+          !
+          ! WRONG: NEED AN MPI_SCAN HERE TO DETERMINE THE EXTENTS 
+          !
           if(myid <= maxrank) then
             read(iunit,*) lo(1),lo(2),lo(3)
             read(iunit,*) hi(1),hi(2),hi(3)
@@ -105,8 +109,8 @@ contains
             read(iunit,*)  bcvel(0,1,2), bcvel(1,1,2), bcvel(0,2,2), bcvel(1,2,2), bcvel(0,3,2), bcvel(1,3,2)
             read(iunit,*)  bcvel(0,1,3), bcvel(1,1,3), bcvel(0,2,3), bcvel(1,2,3), bcvel(0,3,3), bcvel(1,3,3)
             read(iunit,*)  bcpre(0,1  ), bcpre(1,1  ), bcpre(0,2  ), bcpre(1,2  ), bcpre(0,3  ), bcpre(1,3  )
-            read(iunit,*) is_outflow(0,1),is_outflow(1,1),is_outflow(0,2),is_outflow(1,2),is_outflow(0,3),is_outflow(1,3)
             read(iunit,*) periods(1),periods(2),periods(3)
+            read(iunit,*) is_outflow(0,1),is_outflow(1,1),is_outflow(0,2),is_outflow(1,2),is_outflow(0,3),is_outflow(1,3)
             read(iunit,*) inivel
             my_block = iblock
           endif
@@ -121,8 +125,10 @@ contains
     !
     ! compute volume of all blocks (useful to compute bulk averages)
     !
-    vol_all = product(lmax(:)-lmin(:))
+    vol_all = product(lmax(:)-lmin(:))/product(dims(:))
     call mpi_allreduce(MPI_IN_PLACE,vol_all,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+    !
+    print*,'delete later; total volume = ', vol_all
   return
   end subroutine read_input
 end module mod_param

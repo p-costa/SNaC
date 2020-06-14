@@ -1,6 +1,6 @@
 module mod_output
   use mpi
-  use mod_common_mpi, only: ierr,myid,myid_block,comm_block
+  use mod_common_mpi, only: ierr,myid,myid_block
   use mod_load      , only: io_field 
   use mod_types
   implicit none
@@ -32,7 +32,7 @@ module mod_output
     return
   end subroutine out0d
   !
-  subroutine out1d(fname,lo,hi,ng,idir,l,dx,dy,dz,x,y,z,x_g,y_g,z_g,p)
+  subroutine out1d(fname,lo,hi,lo_g,hi_g,idir,l,dx,dy,dz,x,y,z,x_g,y_g,z_g,mpi_comm,p)
     !
     ! writes the profile of a variable averaged
     ! over two domain directions
@@ -49,23 +49,26 @@ module mod_output
     !
     implicit none
     character(len=*), intent(in) :: fname
-    integer , intent(in), dimension(3) :: lo,hi,ng
+    integer , intent(in), dimension(3) :: lo,hi,lo_g,hi_g
     integer , intent(in) :: idir
     real(rp), intent(in), dimension(3) :: l
-    real(rp), intent(in), dimension(lo(1)-1:) :: x,dx
-    real(rp), intent(in), dimension(lo(2)-1:) :: y,dy
-    real(rp), intent(in), dimension(lo(3)-1:) :: z,dz
-    real(rp), intent(in), dimension(1-1    :) :: x_g
-    real(rp), intent(in), dimension(1-1    :) :: y_g
-    real(rp), intent(in), dimension(1-1    :) :: z_g
+    real(rp), intent(in), dimension(lo(1)-1:  ) :: x,dx
+    real(rp), intent(in), dimension(lo(2)-1:  ) :: y,dy
+    real(rp), intent(in), dimension(lo(3)-1:  ) :: z,dz
+    real(rp), intent(in), dimension(lo_g(1)-1:) :: x_g
+    real(rp), intent(in), dimension(lo_g(2)-1:) :: y_g
+    real(rp), intent(in), dimension(lo_g(3)-1:) :: z_g
+    integer , intent(in)                      :: mpi_comm
     real(rp), intent(in), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     real(rp), allocatable, dimension(:) :: p1d
+    integer, dimension(3) :: ng
     integer :: i,j,k
     integer :: iunit
     !
+    ng = hi_g(:)-lo_g(:) + 1
     select case(idir)
     case(3)
-      allocate(p1d(ng(3)))
+      allocate(p1d(lo_g(3):hi_g(3)))
       p1d(:) = 0._rp
       do k=lo(3),hi(3)
         do j=lo(2),hi(2)
@@ -74,16 +77,16 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(3),MPI_REAL_RP,MPI_SUM,comm_block,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d,ng(3),MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
       if(myid == 0) then
         open(newunit=iunit,file=fname)
-        do k=1,ng(3)
+        do k=lo_g(3),hi_g(3)
           write(iunit,'(2E15.7)') z_g(k),p1d(k)
         enddo
         close(iunit)
       endif
     case(2)
-      allocate(p1d(ng(2)))
+      allocate(p1d(lo_g(2):hi_g(2)))
       p1d(:) = 0._rp
       do j=lo(2),hi(2)
         do k=lo(3),hi(3)
@@ -92,16 +95,16 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(2),MPI_REAL_RP,MPI_SUM,comm_block,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d,ng(2),MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
       if(myid == 0) then
         open(newunit=iunit,file=fname)
-        do j=1,ng(2)
+        do j=lo_g(2),hi_g(2)
           write(iunit,'(2E15.7)') y_g(j),p1d(j)
         enddo
         close(iunit)
       endif
     case(1)
-      allocate(p1d(ng(1)))
+      allocate(p1d(lo_g(1):hi_g(1)))
       p1d(:) = 0._rp
       do i=lo(1),hi(1)
         do k=lo(3),hi(3)
@@ -110,10 +113,10 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(1),MPI_REAL_RP,MPI_SUM,comm_block,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d,ng(1),MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
       if(myid == 0) then
         open(newunit=iunit,file=fname)
-        do i=1,ng(1)
+        do i=lo_g(1),hi_g(1)
           write(iunit,'(2E15.7)') x_g(i),p1d(i)
         enddo
         close(iunit)
