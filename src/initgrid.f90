@@ -70,17 +70,17 @@ module mod_initgrid
   end subroutine initgrid
   subroutine distribute_grid(lo_g,lo,hi,grid_g,grid)
     implicit none
-    integer  :: lo,hi,lo_g
+    integer  :: lo_g,lo,hi
     real(rp), intent(in ), dimension(lo_g-1:) :: grid_g
     real(rp), intent(out), dimension(lo  -1:) :: grid
-    grid(lo-1:hi+1) = grid_g(lo-1:hi+1) ! THIS NEEDS TO BE CHANGED !
+    grid(lo-1:hi+1) = grid_g(lo-1:hi+1)
     return
   end subroutine distribute_grid
   subroutine save_grid(fname,lo_g,hi_g,rf_g,rc_g,drf_g,drc_g)
     implicit none
     character(len=*), intent(in) :: fname
     integer         , intent(in) :: lo_g,hi_g
-    real(rp)        , intent(in), dimension(1-1:) :: rf_g,rc_g,drf_g,drc_g
+    real(rp)        , intent(in), dimension(lo_g-1:) :: rf_g,rc_g,drf_g,drc_g
     integer :: iunit,q,ng
     ng = hi_g-lo_g+1
     open(newunit=iunit,file=trim(fname)//'.bin',status='replace',access='direct',recl=4*ng*sizeof(1._rp))

@@ -110,11 +110,13 @@ program snac
   ! read parameter file
   !
   call read_input()
+  lo_g(:) = lo(:)
+  hi_g(:) = hi(:)
   !
   ! initialize MPI/OpenMP
   !
   !$call omp_set_num_threads(nthreadsmax)
-  call initmpi(my_block,dims,cbcpre,bcpre,lo_g,hi_g,ng,periods,nb,is_bound,halos)
+  call initmpi(my_block,dims,cbcpre,bcpre,lo,hi,ng,periods,nb,is_bound,halos)
   !
   ! allocate variables
   !
@@ -147,18 +149,18 @@ program snac
            dzf(lo(3)-1:hi(3)+1), &
             zc(lo(3)-1:hi(3)+1), &
             zf(lo(3)-1:hi(3)+1))
-  allocate(dxc_g(1-1:ng(1)+1), &
-           dxf_g(1-1:ng(1)+1), &
-            xc_g(1-1:ng(1)+1), &
-            xf_g(1-1:ng(1)+1), &
-           dyc_g(1-1:ng(2)+1), &
-           dyf_g(1-1:ng(2)+1), &
-            yc_g(1-1:ng(2)+1), &
-            yf_g(1-1:ng(2)+1), &
-           dzc_g(1-1:ng(3)+1), &
-           dzf_g(1-1:ng(3)+1), &
-            zc_g(1-1:ng(3)+1), &
-            zf_g(1-1:ng(3)+1))
+  allocate(dxc_g(lo_g(1)-1:hi_g(1)+1), &
+           dxf_g(lo_g(1)-1:hi_g(1)+1), &
+            xc_g(lo_g(1)-1:hi_g(1)+1), &
+            xf_g(lo_g(1)-1:hi_g(1)+1), &
+           dyc_g(lo_g(2)-1:hi_g(2)+1), &
+           dyf_g(lo_g(2)-1:hi_g(2)+1), &
+            yc_g(lo_g(2)-1:hi_g(2)+1), &
+            yf_g(lo_g(2)-1:hi_g(2)+1), &
+           dzc_g(lo_g(3)-1:hi_g(3)+1), &
+           dzf_g(lo_g(3)-1:hi_g(3)+1), &
+            zc_g(lo_g(3)-1:hi_g(3)+1), &
+            zf_g(lo_g(3)-1:hi_g(3)+1))
   allocate(rhsp%x(lo(2):hi(2),lo(3):hi(3),0:1), &
            rhsp%y(lo(1):hi(1),lo(3):hi(3),0:1), &
            rhsp%z(lo(1):hi(1),lo(2):hi(2),0:1))
@@ -183,9 +185,9 @@ program snac
   !
   ! generate grid
   !
-  call initgrid(lo(1),hi(1),gt(1),gr(1),lmin(1),lmax(1),dxc_g,dxf_g,xc_g,xf_g)
-  call initgrid(lo(2),hi(2),gt(2),gr(2),lmin(2),lmax(2),dyc_g,dyf_g,yc_g,yf_g)
-  call initgrid(lo(3),hi(3),gt(3),gr(3),lmin(3),lmax(3),dzc_g,dzf_g,zc_g,zf_g)
+  call initgrid(lo_g(1),hi_g(1),gt(1),gr(1),lmin(1),lmax(1),dxc_g,dxf_g,xc_g,xf_g)
+  call initgrid(lo_g(2),hi_g(2),gt(2),gr(2),lmin(2),lmax(2),dyc_g,dyf_g,yc_g,yf_g)
+  call initgrid(lo_g(3),hi_g(3),gt(3),gr(3),lmin(3),lmax(3),dzc_g,dzf_g,zc_g,zf_g)
   if(myid_block == 0) then
     write(cblock,'(i3.3)') my_block
     call save_grid(trim(datadir)//'grid_x_'//cblock,lo_g(1),hi_g(1),xf_g,xc_g,dxf_g,dxc_g)
@@ -198,6 +200,7 @@ program snac
       write(iunit,*) lmax(1),lmin(2),lmin(3) 
     close(iunit)
   endif
+  print*,lo_g,lo,hi,myid
   call distribute_grid(lo_g(1),lo(1),hi(1),dxc_g,dxc)
   call distribute_grid(lo_g(1),lo(1),hi(1),dxf_g,dxf)
   call distribute_grid(lo_g(1),lo(1),hi(1), xc_g, xc)
@@ -259,33 +262,33 @@ program snac
   !
   ! initialize Poisson solver
   !
-  dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
-                dyc_g(1-1),dyc_g(ng(2)), &
-                dzc_g(1-1),dzc_g(ng(3))],shape(dl))
+  dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
+                dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
+                dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
   call init_solver(cbcpre,bcpre,dl,is_bound,[.true.,.true.,.true.],lo,hi,periods, &
                    1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzc,dzf, &
                    rhsp%x,rhsp%y,rhsp%z,psolver)
   call setup_solver(lo,hi,psolver,0._rp)
 #ifdef _IMPDIFF
-  dl = reshape([dxf_g(1-0),dxf_g(ng(1)), &
-                dyc_g(1-1),dyc_g(ng(2)), &
-                dzc_g(1-1),dzc_g(ng(3))],shape(dl))
+  dl = reshape([dxf_g(lo_g(1)-0),dxf_g(hi_g(1)), &
+                dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
+                dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
   hiu(:) = hi(:)
   if(is_bound(1,1)) hiu(:) = hiu(:)-[1,0,0]
   call init_solver(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,[.false.,.true.,.true.],lo,hiu,periods, &
                    1.d-6,500,HYPRESolverPFMG,dxf,dxc,dyc,dyf,dzc,dzf, &
                    rhsu%x,rhsu%y,rhsu%z,usolver)
-  dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
-                dyf_g(1-0),dyf_g(ng(2)), &
-                dzc_g(1-1),dzc_g(ng(3))],shape(dl))
+  dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
+                dyf_g(lo_g(2)-0),dyf_g(hi_g(2)), &
+                dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
   hiv(:) = hi(:)
   if(is_bound(1,2)) hiv(:) = hiv(:)-[0,1,0]
   call init_solver(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,[.true.,.false.,.true.],lo,hiv,periods, &
                    1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyf,dyc,dzc,dzf, &
                    rhsv%x,rhsv%y,rhsv%z,vsolver)
-  dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
-                dyc_g(1-1),dyc_g(ng(2)), &
-                dzf_g(1-0),dzf_g(ng(3))],shape(dl))
+  dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
+                dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
+                dzf_g(lo_g(3)-0),dzf_g(hi_g(3))],shape(dl))
   if(is_bound(1,3)) hiw(:) = hiw(:)-[0,0,1]
   call init_solver(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,[.true.,.true.,.false.],lo,hiw,periods, &
                    1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzf,dzc, &
