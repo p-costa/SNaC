@@ -74,6 +74,7 @@ module mod_initmpi
     call MPI_ALLGATHER(lo      ,3,MPI_INTEGER,lo_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(hi      ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(my_block,1,MPI_INTEGER,blocks_all,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+    print*,blocks_all
     do idir=1,3
       do inb=0,1
         if(nb(inb,idir) == MPI_PROC_NULL.and.cbc(inb,idir) == 'F') then

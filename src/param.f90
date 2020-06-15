@@ -104,7 +104,8 @@ contains
       write(cblock,'(i3.3)') iblock
       open(newunit=iunit,file=trim(filename)//cblock,status='old',action='read',iostat=ierr)
         if( ierr == 0 ) then
-          if(myid <= sum(nranks(1:iblock))-1) then
+          if( myid >= sum(nranks(1:iblock-1)).and. &
+              myid <  sum(nranks(1:iblock  )) ) then
             read(iunit,*) dims(1),dims(2),dims(3)
             read(iunit,*) lo(1),lo(2),lo(3)
             read(iunit,*) hi(1),hi(2),hi(3)

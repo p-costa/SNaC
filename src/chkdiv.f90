@@ -37,7 +37,6 @@ module mod_chkdiv
                 (u(i,j,k)-u(i-1,j,k))/dxf(i)
           divmax = max(divmax,abs(div))
           divtot = divtot + div*dxf(i)*dyf(j)*dzf(k)/vol
-          if(abs(div).gt.0.001) print*,div,i,j,k
         enddo
       enddo
     enddo
