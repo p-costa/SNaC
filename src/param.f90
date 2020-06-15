@@ -52,7 +52,8 @@ contains
   use mpi
   use mod_common_mpi, only:myid,ierr
   implicit none
-  integer :: iunit,iblock,nblocks,maxrank
+  integer :: iunit,iblock,nblocks
+  integer, allocatable, dimension(:) :: nranks
   logical :: exists
   character(len=100) :: filename
   character(len=  3) :: cblock
@@ -84,17 +85,27 @@ contains
       if(exists) nblocks = nblocks + 1
     enddo
     nblocks = nblocks - 1
-    maxrank = 0
+    allocate(nranks(nblocks))
     do iblock = 1,nblocks
       write(cblock,'(i3.3)') iblock
       open(newunit=iunit,file=trim(filename)//cblock,status='old',action='read',iostat=ierr)
         if( ierr == 0 ) then
           read(iunit,*) dims(1),dims(2),dims(3)
-          maxrank = maxrank + product(dims(:))-1
-          !
-          ! WRONG: NEED AN MPI_SCAN HERE TO DETERMINE THE EXTENTS 
-          !
-          if(myid <= maxrank) then
+          nranks(iblock) = product(dims(:))
+        else
+          if(myid == 0) write(stderr,*) '*** Error reading the input file *** ' 
+          if(myid == 0) write(stderr,*) 'Aborting...'
+          call MPI_FINALIZE(ierr)
+          error stop
+        endif
+      close(iunit)
+    enddo
+    do iblock = 1,nblocks
+      write(cblock,'(i3.3)') iblock
+      open(newunit=iunit,file=trim(filename)//cblock,status='old',action='read',iostat=ierr)
+        if( ierr == 0 ) then
+          if(myid <= sum(nranks(1:iblock))-1) then
+            read(iunit,*) dims(1),dims(2),dims(3)
             read(iunit,*) lo(1),lo(2),lo(3)
             read(iunit,*) hi(1),hi(2),hi(3)
             read(iunit,*) lmin(1),lmin(2),lmin(3)
@@ -122,13 +133,12 @@ contains
         endif
       close(iunit)
     enddo
+    deallocate(nranks)
     !
     ! compute volume of all blocks (useful to compute bulk averages)
     !
     vol_all = product(lmax(:)-lmin(:))/product(dims(:))
     call mpi_allreduce(MPI_IN_PLACE,vol_all,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
-    !
-    print*,'delete later; total volume = ', vol_all
   return
   end subroutine read_input
 end module mod_param

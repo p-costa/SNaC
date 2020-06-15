@@ -1,2 +1,1 @@
-do while inquire exists geo/block.$i, to loop through the block files.
-
+need to make the error handling a bit neater, maybe in an utils subroutine.

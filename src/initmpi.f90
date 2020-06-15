@@ -70,10 +70,10 @@ module mod_initmpi
       hi(:) = hi(:) +    mod(ng(:),dims(:))
     end where
     !
+    allocate(lo_all(0:nrank-1,3),hi_all(0:nrank-1,3),blocks_all(0:nrank-1))
     call MPI_ALLGATHER(lo      ,3,MPI_INTEGER,lo_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(hi      ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(my_block,1,MPI_INTEGER,blocks_all,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-    allocate(lo_all(0:nrank-1,3),hi_all(0:nrank-1,3),blocks_all(0:nrank-1))
     do idir=1,3
       do inb=0,1
         if(nb(inb,idir) == MPI_PROC_NULL.and.cbc(inb,idir) == 'F') then
@@ -124,7 +124,7 @@ module mod_initmpi
         endif
       enddo
     enddo
-    deallocate(lo_all,hi_all)
+    deallocate(lo_all,hi_all,blocks_all)
     !
     do idir=1,3
       is_bound(:,idir) = .false.
