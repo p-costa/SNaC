@@ -45,14 +45,13 @@ module mod_initmpi
         do i=0,dims(1)-1
           id_coords = id_coords+1
           if( myid == id_coords ) then
-            coords(1) = i
-            coords(2) = j
-            coords(3) = k
+            coords(:) = [i,j,k]
           endif
           id_grid(i,j,k) = id_coords
         enddo
       enddo
     enddo
+    eye(:,:) = 0
     forall (idir=1:3) eye(idir,idir) = 1
     nb(:,:) = MPI_PROC_NULL
     do idir=1,3
@@ -70,22 +69,22 @@ module mod_initmpi
       hi(:) = hi(:) +    mod(ng(:),dims(:))
     end where
     !
-    allocate(lo_all(0:nrank-1,3),hi_all(0:nrank-1,3),blocks_all(0:nrank-1))
+    allocate(lo_all(3,0:nrank-1),hi_all(3,0:nrank-1),blocks_all(0:nrank-1))
     call MPI_ALLGATHER(lo      ,3,MPI_INTEGER,lo_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(hi      ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(my_block,1,MPI_INTEGER,blocks_all,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-    print*,blocks_all
     do idir=1,3
       do inb=0,1
         if(nb(inb,idir) == MPI_PROC_NULL.and.cbc(inb,idir) == 'F') then
           do irank=0,nrank-1
             if(nint(bc(inb,idir)) == blocks_all(irank)) then
-              is_nb = .true. 
+              is_nb = .true.
               do iidir = 1,3 ! ensure that the sub blocks blocks share the same extents in the two directions normal to the boundary
                 if(iidir /= idir) then
                   is_nb = is_nb.and. &
-                  lo(iidir).eq.lo_all(irank,iidir).and. &
-                  hi(iidir).eq.hi_all(irank,iidir)
+                  lo(iidir) == lo_all(iidir,irank).and. &
+                  hi(iidir) == hi_all(iidir,irank)
+                  print*,is_nb,irank,myid,lo(iidir),lo_all(iidir,irank)
                 endif
               enddo
               !
@@ -95,20 +94,20 @@ module mod_initmpi
               !
               if(is_nb) then
                 if(      inb == 0 ) then
-                  if(    lo(idir) == hi_all(irank,idir)+1) then
+                  if(    lo(idir) == hi_all(idir,irank)+1) then
                     nb(inb,idir) = irank
-                  elseif(lo(idir) <  hi_all(irank,idir)+1) then
-                    if(periods(idir) == hi_all(irank,idir)-lo(idir)+1) then
+                  elseif(lo(idir) <  hi_all(idir,irank)+1) then
+                    if(periods(idir) == hi_all(idir,irank)-lo(idir)+1) then
                       nb(inb,idir) = irank
                     else
                       write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
                     endif
                   endif
                 elseif ( inb == 1 ) then
-                  if(    hi(idir) == lo_all(irank,idir)-1) then
+                  if(    hi(idir) == lo_all(idir,irank)-1) then
                     nb(inb,idir) = irank
-                  elseif(hi(idir) >  lo_all(irank,idir)-1) then
-                    if(periods(idir) == hi(idir)-lo_all(irank,idir)+1) then
+                  elseif(hi(idir) >  lo_all(idir,irank)-1) then
+                    if(periods(idir) == hi(idir)-lo_all(idir,irank)+1) then
                       nb(inb,idir) = irank
                     else
                       write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
