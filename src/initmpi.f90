@@ -113,10 +113,10 @@ module mod_initmpi
                     endif
                   endif
                 endif
-                if(nb(inb,idir) == MPI_PROC_NULL) then
-                  write(stderr,*) 'ERROR: Expected connectivity between blocks not found.'
-                  !error stop
-                endif
+                !if(nb(inb,idir) == MPI_PROC_NULL) then
+                !  !write(stderr,*) 'ERROR: Expected connectivity between blocks not found.'
+                !  !error stop
+                !endif
               endif
             endif
           enddo

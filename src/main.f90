@@ -57,7 +57,7 @@ program snac
   integer , dimension(0:1,3) :: nb
   logical , dimension(0:1,3) :: is_bound
   integer , dimension(    3) :: halos
-  integer , dimension(    3) :: ng,lo_g,hi_g
+  integer , dimension(    3) :: ng,lo_g,hi_g,lo_1,hi_1
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
 #ifdef _IMPDIFF
   real(rp), allocatable, dimension(:,:,:) :: uo,vo,wo
@@ -118,6 +118,8 @@ program snac
   !
   !$call omp_set_num_threads(nthreadsmax)
   call initmpi(my_block,id_first,dims,cbcpre,bcpre,lo,hi,ng,periods,nb,is_bound,halos)
+  lo_1(:) = lo(:) - lo_g(:) + 1 ! lo(:) with 1 as first index in the begining of each block
+  hi_1(:) = hi(:) - lo_g(:) + 1 ! hi(:) with 1 as first index in the begining of each block
   !
   ! allocate variables
   !
@@ -227,7 +229,7 @@ program snac
                   xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
     if(myid == 0) write(stdout,*) '*** Initial condition succesfully set ***'
   else
-    call load('r',trim(datadir)//'fld_b_'//cblock//'.bin',comm_block,ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
+    call load('r',trim(datadir)//'fld_b_'//cblock//'.bin',comm_block,ng,[1,1,1],lo_1,hi_1,u,v,w,p,time,istep)
     if(myid == 0) write(stdout,*) '*** Checkpoint loaded at time = ', time, 'time step = ', istep, '. ***'
   endif
   call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
@@ -429,7 +431,7 @@ program snac
       else
         filename = 'fld_'//fldnum//'.bin'
       endif
-      call load('w',trim(datadir)//'fld_b'//cblock//'.bin',comm_block,ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
+      call load('w',trim(datadir)//'fld_b'//cblock//'.bin',comm_block,ng,[1,1,1],lo_1,hi_1,u,v,w,p,time,istep)
       if(.not.is_overwrite_save) then
         !
         ! fld.bin -> last checkpoint file (symbolic link)
