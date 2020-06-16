@@ -4,7 +4,8 @@ module mod_solver
   use mod_types
   implicit none
   private
-  public init_solver,setup_solver,solve_helmholtz,finalize_solver, &
+  public init_matrix,create_solver,setup_solver,add_to_diagonal, &
+         solve_helmholtz,finalize_matrix,finalize_solver, &
          hypre_solver, &
          HYPRESolverSMG,HYPRESolverPFMG,HYPRESolverGMRES,HYPRESolverBiCGSTAB
   integer, parameter :: HYPRESolverSMG      = 1, &
@@ -13,10 +14,10 @@ module mod_solver
                         HYPRESolverBiCGSTAB = 4
   type hypre_solver 
     integer(8) :: grid,stencil,precond,solver,mat,rhs,sol
-    integer    :: stype
+    integer    :: stype,comm_hypre
   end type hypre_solver 
   contains
-  subroutine init_solver(cbc,bc,dl,is_bound,is_centered,lo,hi,ng,maxerror,maxiter,stype, &
+  subroutine init_matrix(cbc,bc,dl,is_bound,is_centered,lo,hi,ng, &
                          dx1,dx2,dy1,dy2,dz1,dz2,rhsx,rhsy,rhsz,asolver)
     !
     ! description
@@ -29,8 +30,6 @@ module mod_solver
     logical           , intent(in ), dimension(0:1,3) ::  is_bound
     logical           , intent(in ), dimension(    3) ::  is_centered
     integer           , intent(in ), dimension(    3) :: lo,hi,ng
-    real(rp)          , intent(in ) :: maxerror
-    integer           , intent(in ) :: maxiter,stype
     real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dx1,dx2
     real(rp)          , intent(in ), target, dimension(lo(2)-1:) :: dy1,dy2
     real(rp)          , intent(in ), target, dimension(lo(3)-1:) :: dz1,dz2
@@ -42,8 +41,7 @@ module mod_solver
     integer, dimension(3,nstencil) :: offsets
     real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
     real(rp), dimension(0:1,3) :: factor,sgn
-    integer(8) :: grid,stencil,precond,solver,mat,rhs,sol
-    integer :: precond_id
+    integer(8) :: grid,stencil,mat,rhs,sol
     integer :: i,j,k,q,qq
     real(rp) :: cc,cxm,cxp,cym,cyp,czm,czp
     integer            :: comm_hypre
@@ -171,7 +169,23 @@ module mod_solver
     enddo
     call HYPRE_StructMatrixSetBoxValues(mat,lo,hi,nstencil, &
                                         [0,1,2,3,4,5,6],matvalues,ierr)
-    !call HYPRE_StructMatrixAssemble(mat,ierr)
+    call HYPRE_StructMatrixAssemble(mat,ierr)
+    asolver%grid       = grid
+    asolver%stencil    = stencil
+    asolver%mat        = mat
+    asolver%rhs        = rhs
+    asolver%sol        = sol
+    asolver%comm_hypre = comm_hypre
+    return
+  end subroutine init_matrix
+  subroutine create_solver(maxiter,maxerror,stype,asolver)
+    implicit none
+    integer           ,         intent(   in) :: maxiter
+    real(rp)          ,         intent(   in) :: maxerror
+    integer           ,         intent(   in) :: stype
+    type(hypre_solver), target, intent(inout) :: asolver
+    integer(8) :: solver,precond
+    integer :: precond_id
     !
     ! setup solver
     !
@@ -180,13 +194,13 @@ module mod_solver
     !       http://www.ida.upmc.fr/~zaleski/paris
     !
     if     ( stype == HYPRESolverSMG ) then
-      call HYPRE_StructSMGCreate(comm_hypre,solver,ierr)
+      call HYPRE_StructSMGCreate(asolver%comm_hypre,solver,ierr)
       call HYPRE_StructSMGSetMaxIter(solver,maxiter,ierr)
       call HYPRE_StructSMGSetTol(solver,maxerror,ierr)
       call hypre_structSMGsetLogging(solver,1,ierr)
       call HYPRE_StructSMGSetPrintLevel(solver,1,ierr)
     elseif ( stype == HYPRESolverPFMG ) then
-      call HYPRE_StructPFMGCreate(comm_hypre,solver,ierr)
+      call HYPRE_StructPFMGCreate(asolver%comm_hypre,solver,ierr)
       call HYPRE_StructPFMGSetMaxIter(solver,maxiter,ierr)
       call HYPRE_StructPFMGSetTol(solver,maxerror,ierr)
       call HYPRE_structPFMGsetLogging(solver,1,ierr)
@@ -203,17 +217,17 @@ module mod_solver
     elseif ( stype == HYPRESolverGMRES .or. &
              stype == HYPRESolverBiCGSTAB   ) then
       if     (stype == HYPRESolverGMRES) then
-        call HYPRE_StructGMRESCreate(comm_hypre,solver,ierr)
+        call HYPRE_StructGMRESCreate(asolver%comm_hypre,solver,ierr)
         call HYPRE_StructGMRESSetMaxIter(solver,maxiter,ierr)
         call HYPRE_StructGMRESSetTol(solver,maxerror,ierr)
         !call HYPRE_StructGMRESSetLogging(solver, 1 ,ierr)
       elseif (stype == HYPRESolverBiCGSTAB) then
-        call HYPRE_StructBiCGSTABCreate(comm_hypre,solver,ierr)
+        call HYPRE_StructBiCGSTABCreate(asolver%comm_hypre,solver,ierr)
         call HYPRE_StructBiCGSTABSetMaxIter(solver,maxiter,ierr)
         call HYPRE_StructBiCGSTABSetTol(solver,maxerror,ierr)
       endif
       ! Use PFMG as preconditioner
-      call HYPRE_StructPFMGCreate(comm_hypre,precond,ierr)
+      call HYPRE_StructPFMGCreate(asolver%comm_hypre,precond,ierr)
       call HYPRE_StructPFMGSetMaxIter(precond,10,ierr)
       call HYPRE_StructPFMGSetTol(precond,0._rp,ierr)
       call HYPRE_StructPFMGSetZeroGuess(precond,ierr)
@@ -226,41 +240,22 @@ module mod_solver
         call HYPRE_StructBiCGSTABSetPrecond(solver,precond_id,precond,ierr)
       endif
     endif
-    asolver%grid    = grid
-    asolver%stencil = stencil
     asolver%precond = precond
     asolver%solver  = solver
-    asolver%mat     = mat
-    asolver%rhs     = rhs
-    asolver%sol     = sol
     asolver%stype   = stype
     return
-  end subroutine init_solver
-  subroutine setup_solver(lo,hi,asolver,alpha)
+  end subroutine create_solver
+  subroutine setup_solver(asolver)
     implicit none
-    integer , intent(in), dimension(3) :: lo,hi
-    real(rp), intent(in) :: alpha
     type(hypre_solver), target, intent(inout) :: asolver
     integer(8), pointer :: solver,mat,rhs,sol
     integer   , pointer :: stype
-    real(rp), dimension(product(hi(:)-lo(:)+1)) :: matvalues
-    integer :: i,j,k,q
-    solver  => asolver%solver
-    mat     => asolver%mat
-    rhs     => asolver%rhs
-    sol     => asolver%sol
-    stype   => asolver%stype
-    q = 0
-    do k=lo(3),hi(3)
-      do j=lo(2),hi(2)
-        do i=lo(1),hi(1)
-          q=q+1
-          matvalues(q) = alpha
-        enddo
-      enddo
-    enddo
-    call HYPRE_StructMatrixAddToBoxValues(mat,lo,hi,1,[0],matvalues,ierr)
-    call HYPRE_StructMatrixAssemble(mat,ierr)
+    !
+    solver => asolver%solver
+    stype  => asolver%stype
+    mat    => asolver%mat
+    rhs    => asolver%rhs
+    sol    => asolver%sol
     !
     ! setup solver
     !
@@ -280,12 +275,28 @@ module mod_solver
         call HYPRE_StructBiCGSTABSetup(solver,mat,rhs,sol,ierr)
       endif
     endif
-    asolver%solver  = solver
-    asolver%mat     = mat
-    asolver%rhs     = rhs
-    asolver%sol     = sol
     return
   end subroutine setup_solver
+  !
+  subroutine add_to_diagonal(lo,hi,alpha,mat)
+    implicit none
+    integer   , intent(in   ), dimension(3) :: lo,hi
+    real(rp)  , intent(in   ) :: alpha
+    integer(8), intent(inout) :: mat
+    real(rp), dimension(product(hi(:)-lo(:)+1)) :: matvalues
+    integer :: i,j,k,q
+    q = 0
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+          q=q+1
+          matvalues(q) = alpha
+        enddo
+      enddo
+    enddo
+    call HYPRE_StructMatrixAddToBoxValues(mat,lo,hi,1,[0],matvalues,ierr)
+    return
+  end subroutine add_to_diagonal
   subroutine solve_helmholtz(asolver,lo,hi,p,po)
     implicit none
     type(hypre_solver), target, intent(in   )               :: asolver
@@ -296,10 +307,10 @@ module mod_solver
     real(rp), dimension(product(hi(:)-lo(:)+1)) :: solvalues,rhsvalues
     integer :: i,j,k,q
     solver  => asolver%solver
-    mat     => asolver%mat     
-    rhs     => asolver%rhs     
-    sol     => asolver%sol     
-    stype   => asolver%stype   
+    mat     => asolver%mat
+    rhs     => asolver%rhs
+    sol     => asolver%sol
+    stype   => asolver%stype
     q = 0
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -359,38 +370,45 @@ module mod_solver
     enddo
     return
   end subroutine solve_helmholtz
+  !
   subroutine finalize_solver(asolver)
     implicit none
     type(hypre_solver), target, intent(in) :: asolver
-    integer(8), pointer :: grid,stencil,precond,solver,mat,rhs,sol
+    integer(8), pointer :: precond,solver
     integer   , pointer :: stype
     !
-    grid    => asolver%grid
-    stencil => asolver%stencil
     precond => asolver%precond
     solver  => asolver%solver
-    mat     => asolver%mat
-    rhs     => asolver%rhs
-    sol     => asolver%sol
     stype   => asolver%stype
     !
     ! note: this part was based on the the Paris Simulator code
     !       freely available under a GPL license; see:
     !       http://www.ida.upmc.fr/~zaleski/paris/
     !
-    if     ( stype == HYPRESolverSMG ) then 
+    if     ( stype == HYPRESolverSMG ) then
       call HYPRE_StructSMGDestroy(solver,ierr)
-    elseif ( stype == HYPRESolverPFMG ) then  
+    elseif ( stype == HYPRESolverPFMG ) then
       call HYPRE_StructPFMGDestroy(solver,ierr)
-    elseif ( stype == HYPRESolverGMRES ) then  
+    elseif ( stype == HYPRESolverGMRES ) then
       call HYPRE_StructGMRESDestroy(solver,ierr)
       call HYPRE_StructPFMGDestroy(precond,ierr)
-    elseif ( stype == HYPRESolverBiCGSTAB ) then  
+    elseif ( stype == HYPRESolverBiCGSTAB ) then
       call HYPRE_StructBiCGSTABDestroy(solver,ierr)
       call HYPRE_StructPFMGDestroy(precond,ierr)
     endif
     !
-    ! end of part based on the Paris Simulator code
+    return 
+  end subroutine finalize_solver
+  subroutine finalize_matrix(asolver)
+    implicit none
+    type(hypre_solver), target, intent(in) :: asolver
+    integer(8), pointer :: grid,stencil,mat,rhs,sol
+    !
+    grid    => asolver%grid
+    stencil => asolver%stencil
+    mat     => asolver%mat
+    rhs     => asolver%rhs
+    sol     => asolver%sol
     !
     call HYPRE_StructGridDestroy(grid,ierr)
     call HYPRE_StructStencilDestroy(stencil,ierr)
@@ -399,5 +417,5 @@ module mod_solver
     call HYPRE_StructVectorDestroy(sol,ierr)
     !
     return 
-  end subroutine finalize_solver
+  end subroutine finalize_matrix
 end module mod_solver

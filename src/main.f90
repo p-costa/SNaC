@@ -46,7 +46,8 @@ program snac
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
-  use mod_solver         , only: init_solver,setup_solver,solve_helmholtz,finalize_solver, &
+  use mod_solver         , only: init_matrix,create_solver,setup_solver,add_to_diagonal, &
+                                 solve_helmholtz,finalize_solver,finalize_matrix,        &
                                  hypre_solver,HYPRESolverPFMG
   use mod_types
   !$ use omp_lib
@@ -260,10 +261,10 @@ program snac
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
-  call init_solver(cbcpre,bcpre,dl,is_bound,[.true.,.true.,.true.],lo,hi,ng, &
-                   1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzc,dzf, &
-                   rhsp%x,rhsp%y,rhsp%z,psolver)
-  call setup_solver(lo,hi,psolver,0._rp)
+  call init_matrix(cbcpre,bcpre,dl,is_bound,[.true.,.true.,.true.],lo,hi,ng, &
+                   dxc,dxf,dyc,dyf,dzc,dzf,rhsp%x,rhsp%y,rhsp%z,psolver)
+  call create_solver(500,1.d-6,HYPRESolverPFMG,psolver)
+  call setup_solver(psolver)
 #ifdef _IMPDIFF
   q  = [1,0,0]
   if(cbcpre(0,1)//cbcpre(0,1) == 'PP') q(:) = 0
@@ -273,10 +274,9 @@ program snac
   hiu(:) = hi(:)
   if(is_bound(1,1)) hiu(:) = hiu(:)-q(:)
   ngu(:) = ng(:) - q
-  call init_solver(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,[.false.,.true.,.true.],lo,hiu,ngu, &
-                   1.d-6,500,HYPRESolverPFMG,dxf,dxc,dyc,dyf,dzc,dzf, &
-                   rhsu%x,rhsu%y,rhsu%z,usolver)
-  q  = [0,1,0] 
+  call init_matrix(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,[.false.,.true.,.true.],lo,hiu,ngu, &
+                   dxf,dxc,dyc,dyf,dzc,dzf,rhsu%x,rhsu%y,rhsu%z,usolver)
+  q  = [0,1,0]
   if(cbcpre(0,2)//cbcpre(0,2) == 'PP') q(:) = 0
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyf_g(1-0),dyf_g(ng(2)), &
@@ -284,10 +284,9 @@ program snac
   hiv(:) = hi(:)
   if(is_bound(1,2)) hiv(:) = hiv(:)-q(:)
   ngv(:) = ng(:) - q(:)
-  call init_solver(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,[.true.,.false.,.true.],lo,hiv,ngv, &
-                   1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyf,dyc,dzc,dzf, &
-                   rhsv%x,rhsv%y,rhsv%z,vsolver)
-  q  = [0,0,1] 
+  call init_matrix(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,[.true.,.false.,.true.],lo,hiv,ngv, &
+                   dxc,dxf,dyf,dyc,dzc,dzf,rhsv%x,rhsv%y,rhsv%z,vsolver)
+  q  = [0,0,1]
   if(cbcpre(0,3)//cbcpre(0,3) == 'PP') q(:) = 0
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
@@ -295,9 +294,8 @@ program snac
   hiw(:) = hi(:)
   if(is_bound(1,3)) hiw(:) = hiw(:)-q(:)
   ngw(:) = ng(:) - q(:)
-  call init_solver(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,[.true.,.true.,.false.],lo,hiw,ngw, &
-                   1.d-6,500,HYPRESolverPFMG,dxc,dxf,dyc,dyf,dzf,dzc, &
-                   rhsw%x,rhsw%y,rhsw%z,wsolver)
+  call init_matrix(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,[.true.,.true.,.false.],lo,hiw,ngw, &
+                   dxc,dxf,dyc,dyf,dzf,dzc,rhsw%x,rhsw%y,rhsw%z,wsolver)
 #endif
   !
   ! main loop
@@ -326,22 +324,31 @@ program snac
       up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
       call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,up)
-      call setup_solver(lo,hiu,usolver,alphai-alphaoi) ! correct diagonal term
+      call add_to_diagonal(lo,hiu,alphai-alphaoi,usolver%mat) ! correct diagonal term
+      call create_solver(500,1.d-6,HYPRESolverPFMG,usolver)
+      call setup_solver(usolver)
       call solve_helmholtz(usolver,lo,hiu,up,uo)
+      call finalize_solver(usolver)
       !
       !$OMP WORKSHARE
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
       call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,vp)
-      call setup_solver(lo,hiv,vsolver,alphai-alphaoi) ! correct diagonal term
+      call add_to_diagonal(lo,hiv,alphai-alphaoi,vsolver%mat) ! correct diagonal term
+      call create_solver(500,1.d-6,HYPRESolverPFMG,vsolver)
+      call setup_solver(vsolver)
       call solve_helmholtz(vsolver,lo,hiv,vp,vo)
+      call finalize_solver(vsolver)
       !
       !$OMP WORKSHARE
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
       call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,wp)
-      call setup_solver(lo,hiw,wsolver,alphai-alphaoi) ! correct diagonal term
+      call add_to_diagonal(lo,hiw,alphai-alphaoi,wsolver%mat) ! correct diagonal term
+      call create_solver(500,1.d-6,HYPRESolverPFMG,wsolver)
+      call setup_solver(wsolver)
       call solve_helmholtz(wsolver,lo,hiw,wp,wo)
+      call finalize_solver(wsolver)
       !
       alphaoi = alphai
 #endif
@@ -467,10 +474,11 @@ program snac
 #endif
   enddo
   call finalize_solver(psolver)
+  call finalize_matrix(psolver)
 #ifdef _IMPDIFF
-  call finalize_solver(usolver)
-  call finalize_solver(vsolver)
-  call finalize_solver(wsolver)
+  call finalize_matrix(usolver)
+  call finalize_matrix(vsolver)
+  call finalize_matrix(wsolver)
 #endif
   if(myid == 0.and.(.not.kill)) write(stdout,*) '*** Fim ***'
   call MPI_FINALIZE(ierr)
