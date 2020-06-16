@@ -6,9 +6,9 @@ module mod_initmpi
   private
   public initmpi
   contains
-  subroutine initmpi(my_block,dims,cbc,bc,lo,hi,ng,periods,nb,is_bound,halos)
+  subroutine initmpi(my_block,id_first,dims,cbc,bc,lo,hi,ng,periods,nb,is_bound,halos)
     implicit none
-    integer         , intent(in   )                   :: my_block
+    integer         , intent(in   )                   :: my_block,id_first
     integer         , intent(inout), dimension(    3) :: dims
     character(len=1), intent(in   ), dimension(0:1,3) :: cbc
     real(rp)        , intent(in   ), dimension(0:1,3) ::  bc
@@ -43,16 +43,15 @@ module mod_initmpi
     do k=0,dims(3)-1
       do j=0,dims(2)-1
         do i=0,dims(1)-1
-          id_coords = id_coords+1
-          if( myid == id_coords ) then
-            coords(1) = i
-            coords(2) = j
-            coords(3) = k
+          if( myid == id_first + id_coords ) then
+            coords(:) = [i,j,k]
           endif
-          id_grid(i,j,k) = id_coords
+          id_grid(i,j,k) = id_first + id_coords
+          id_coords = id_coords+1
         enddo
       enddo
     enddo
+    eye(:,:) = 0
     forall (idir=1:3) eye(idir,idir) = 1
     nb(:,:) = MPI_PROC_NULL
     do idir=1,3
@@ -70,22 +69,21 @@ module mod_initmpi
       hi(:) = hi(:) +    mod(ng(:),dims(:))
     end where
     !
-    allocate(lo_all(0:nrank-1,3),hi_all(0:nrank-1,3),blocks_all(0:nrank-1))
+    allocate(lo_all(3,0:nrank-1),hi_all(3,0:nrank-1),blocks_all(0:nrank-1))
     call MPI_ALLGATHER(lo      ,3,MPI_INTEGER,lo_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(hi      ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(my_block,1,MPI_INTEGER,blocks_all,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-    print*,blocks_all
     do idir=1,3
       do inb=0,1
         if(nb(inb,idir) == MPI_PROC_NULL.and.cbc(inb,idir) == 'F') then
           do irank=0,nrank-1
             if(nint(bc(inb,idir)) == blocks_all(irank)) then
-              is_nb = .true. 
+              is_nb = .true.
               do iidir = 1,3 ! ensure that the sub blocks blocks share the same extents in the two directions normal to the boundary
                 if(iidir /= idir) then
                   is_nb = is_nb.and. &
-                  lo(iidir).eq.lo_all(irank,iidir).and. &
-                  hi(iidir).eq.hi_all(irank,iidir)
+                  lo(iidir) == lo_all(iidir,irank).and. &
+                  hi(iidir) == hi_all(iidir,irank)
                 endif
               enddo
               !
@@ -95,20 +93,20 @@ module mod_initmpi
               !
               if(is_nb) then
                 if(      inb == 0 ) then
-                  if(    lo(idir) == hi_all(irank,idir)+1) then
+                  if(    lo(idir) == hi_all(idir,irank)+1) then
                     nb(inb,idir) = irank
-                  elseif(lo(idir) <  hi_all(irank,idir)+1) then
-                    if(periods(idir) == hi_all(irank,idir)-lo(idir)+1) then
+                  elseif(lo(idir) <  hi_all(idir,irank)+1) then
+                    if(periods(idir) == hi_all(idir,irank)-lo(idir)+1) then
                       nb(inb,idir) = irank
                     else
                       write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
                     endif
                   endif
                 elseif ( inb == 1 ) then
-                  if(    hi(idir) == lo_all(irank,idir)-1) then
+                  if(    hi(idir) == lo_all(idir,irank)-1) then
                     nb(inb,idir) = irank
-                  elseif(hi(idir) >  lo_all(irank,idir)-1) then
-                    if(periods(idir) == hi(idir)-lo_all(irank,idir)+1) then
+                  elseif(hi(idir) >  lo_all(idir,irank)-1) then
+                    if(periods(idir) == hi(idir)-lo_all(idir,irank)+1) then
                       nb(inb,idir) = irank
                     else
                       write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
@@ -117,7 +115,7 @@ module mod_initmpi
                 endif
                 if(nb(inb,idir) == MPI_PROC_NULL) then
                   write(stderr,*) 'ERROR: Expected connectivity between blocks not found.'
-                  error stop
+                  !error stop
                 endif
               endif
             endif

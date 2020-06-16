@@ -44,7 +44,7 @@ program snac
                                  gt,gr,                                        &
                                  cbcvel,bcvel,cbcpre,bcpre,                    &
                                  bforce,is_outflow,no_outflow,periods,inivel,  &
-                                 vol_all,my_block
+                                 vol_all,my_block,id_first
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
@@ -117,7 +117,7 @@ program snac
   ! initialize MPI/OpenMP
   !
   !$call omp_set_num_threads(nthreadsmax)
-  call initmpi(my_block,dims,cbcpre,bcpre,lo,hi,ng,periods,nb,is_bound,halos)
+  call initmpi(my_block,id_first,dims,cbcpre,bcpre,lo,hi,ng,periods,nb,is_bound,halos)
   !
   ! allocate variables
   !
@@ -191,10 +191,10 @@ program snac
   call initgrid(lo_g(3),hi_g(3),gt(3),gr(3),lmin(3),lmax(3),dzc_g,dzf_g,zc_g,zf_g)
   if(myid_block == 0) then
     write(cblock,'(i3.3)') my_block
-    call save_grid(trim(datadir)//'grid_x_'//cblock,lo_g(1),hi_g(1),xf_g,xc_g,dxf_g,dxc_g)
-    call save_grid(trim(datadir)//'grid_y_'//cblock,lo_g(2),hi_g(2),yf_g,yc_g,dyf_g,dyc_g)
-    call save_grid(trim(datadir)//'grid_z_'//cblock,lo_g(3),hi_g(3),zf_g,zc_g,dzf_g,dzc_g)
-    open(newunit=iunit,status='replace',file=trim(datadir)//'geometry_b'//cblock//'.out')
+    call save_grid(trim(datadir)//'grid_x_b_'//cblock,lo_g(1),hi_g(1),xf_g,xc_g,dxf_g,dxc_g)
+    call save_grid(trim(datadir)//'grid_y_b_'//cblock,lo_g(2),hi_g(2),yf_g,yc_g,dyf_g,dyc_g)
+    call save_grid(trim(datadir)//'grid_z_b_'//cblock,lo_g(3),hi_g(3),zf_g,zc_g,dzf_g,dzc_g)
+    open(newunit=iunit,status='replace',file=trim(datadir)//'geometry_b_'//cblock//'.out')
       write(iunit,*) lo_g(1),lo_g(2),lo_g(3) 
       write(iunit,*) hi_g(1),hi_g(2),hi_g(3) 
       write(iunit,*) lmin(1),lmin(2),lmin(3) 
@@ -227,7 +227,7 @@ program snac
                   xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
     if(myid == 0) write(stdout,*) '*** Initial condition succesfully set ***'
   else
-    call load('r',trim(datadir)//'fld_b'//cblock//'.bin',comm_block,ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
+    call load('r',trim(datadir)//'fld_b_'//cblock//'.bin',comm_block,ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
     if(myid == 0) write(stdout,*) '*** Checkpoint loaded at time = ', time, 'time step = ', istep, '. ***'
   endif
   call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &

@@ -46,7 +46,7 @@ integer           , dimension(      3) :: periods
 character(len=100)                     :: inivel
 !
 real(rp) :: vol_all
-integer  :: my_block
+integer  :: my_block,id_first
 contains 
   subroutine read_input()
   use mpi
@@ -125,6 +125,7 @@ contains
             read(iunit,*) is_outflow(0,1),is_outflow(1,1),is_outflow(0,2),is_outflow(1,2),is_outflow(0,3),is_outflow(1,3)
             read(iunit,*) inivel
             my_block = iblock
+            id_first = sum(nranks(1:iblock-1))
           endif
         else
           if(myid == 0) write(stderr,*) '*** Error reading the input file *** ' 
