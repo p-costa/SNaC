@@ -32,7 +32,7 @@ module mod_output
     return
   end subroutine out0d
   !
-  subroutine out1d(fname,lo,hi,lo_g,hi_g,idir,l,dx,dy,dz,x,y,z,x_g,y_g,z_g,mpi_comm,p)
+  subroutine out1d(fname,lo,hi,lo_g,hi_g,idir,l,dx,dy,dz,x,y,z,x_g,y_g,z_g,mpi_comm,myrank,p)
     !
     ! writes the profile of a variable averaged
     ! over two domain directions
@@ -58,7 +58,7 @@ module mod_output
     real(rp), intent(in), dimension(lo_g(1)-1:) :: x_g
     real(rp), intent(in), dimension(lo_g(2)-1:) :: y_g
     real(rp), intent(in), dimension(lo_g(3)-1:) :: z_g
-    integer , intent(in)                      :: mpi_comm
+    integer , intent(in)                      :: mpi_comm,myrank
     real(rp), intent(in), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     real(rp), allocatable, dimension(:) :: p1d
     integer, dimension(3) :: ng
@@ -78,7 +78,7 @@ module mod_output
         enddo
       enddo
       call mpi_allreduce(MPI_IN_PLACE,p1d,ng(3),MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
-      if(myid == 0) then
+      if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do k=lo_g(3),hi_g(3)
           write(iunit,'(2E15.7)') z_g(k),p1d(k)
@@ -96,7 +96,7 @@ module mod_output
         enddo
       enddo
       call mpi_allreduce(MPI_IN_PLACE,p1d,ng(2),MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
-      if(myid == 0) then
+      if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do j=lo_g(2),hi_g(2)
           write(iunit,'(2E15.7)') y_g(j),p1d(j)
@@ -114,7 +114,7 @@ module mod_output
         enddo
       enddo
       call mpi_allreduce(MPI_IN_PLACE,p1d,ng(1),MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
-      if(myid == 0) then
+      if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do i=lo_g(1),hi_g(1)
           write(iunit,'(2E15.7)') x_g(i),p1d(i)
@@ -183,7 +183,7 @@ module mod_output
     !
     iunit = 10
     write(cfmt, '(A)') '(A,A,A,9i5,E15.7,i7)'
-    if (myid == 0) then
+    if (myid_block == 0) then
       open(iunit,file=fname,position='append')
       write(iunit,trim(cfmt)) trim(fname_fld),' ',trim(varname),nmin,nmax,nskip,time,istep
       close(iunit)

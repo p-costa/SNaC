@@ -200,7 +200,7 @@ program snac
       write(iunit,*) lo_g(1),lo_g(2),lo_g(3) 
       write(iunit,*) hi_g(1),hi_g(2),hi_g(3) 
       write(iunit,*) lmin(1),lmin(2),lmin(3) 
-      write(iunit,*) lmax(1),lmin(2),lmin(3) 
+      write(iunit,*) lmax(1),lmax(2),lmax(3) 
     close(iunit)
   endif
   call distribute_grid(lo_g(1),lo(1),hi(1),dxc_g,dxc)

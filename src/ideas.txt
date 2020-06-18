@@ -1,1 +1,2 @@
+need to loop through the blocks to generate the files; maybe for fld restart add block keyword
 need to make the error handling a bit neater, maybe in an utils subroutine.
