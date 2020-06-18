@@ -460,7 +460,7 @@ program snac
         !
         ! fld.bin -> last checkpoint file (symbolic link)
         !
-        if(myid == 0) call system('ln -sf '//trim(filename)//' '//trim(datadir)//'fld.bin')
+        if(myid == 0) call execute_command_line('ln -sf '//trim(filename)//' '//trim(datadir)//'fld.bin')
       endif
       if(myid == 0) write(stdout,*) '*** Checkpoint saved at time = ', time, 'time step = ', istep, '. ***'
     endif

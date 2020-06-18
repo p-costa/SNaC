@@ -2,7 +2,7 @@
 FC   = mpifort
 # flags
 BIG :=
-DBG := -O0 -g -fbacktrace -Wall -Wextra -pedantic -fcheck=all# -finit-real=snan -ffpe-trap=invalid 
+DBG := -O0 -g -fbacktrace -Wall -Wextra -pedantic -fcheck=all# -finit-real=snan -ffpe-trap=invalid -std=f2018
 OMP :=
 OPT := #-O3
 OTH := 

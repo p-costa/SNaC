@@ -79,7 +79,7 @@ module mod_initgrid
     integer         , intent(in) :: ng
     real(rp)        , intent(in), dimension(1-1:) :: rf_g,rc_g,drf_g,drc_g
     integer :: iunit,q
-    open(newunit=iunit,file=trim(fname)//'.bin',status='replace',access='direct',recl=4*ng*sizeof(1._rp))
+    open(newunit=iunit,file=trim(fname)//'.bin',status='replace',access='direct',recl=4*ng*storage_size(1._rp)/8)
     write(iunit,rec=1) rf_g(1:ng),rc_g(1:ng),drf_g(1:ng),drc_g(1:ng)
     close(iunit)
     open(newunit=iunit,status='replace',file=trim(fname)//'.out')
