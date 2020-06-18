@@ -427,16 +427,16 @@ program snac
     endif
     if(mod(istep,isave ) == 0.or.(is_done.and..not.kill)) then
       if(is_overwrite_save) then
-        filename = 'fld.bin'
+        filename = 'fld_b_'//cblock//'.bin'
       else
-        filename = 'fld_'//fldnum//'.bin'
+        filename = 'fld_'//fldnum//'_b_'//cblock//'.bin'
       endif
-      call load('w',trim(datadir)//'fld_b'//cblock//'.bin',comm_block,ng,[1,1,1],lo_1,hi_1,u,v,w,p,time,istep)
+      call load('w',trim(datadir)//trim(filename),comm_block,ng,[1,1,1],lo_1,hi_1,u,v,w,p,time,istep)
       if(.not.is_overwrite_save) then
         !
         ! fld.bin -> last checkpoint file (symbolic link)
         !
-        if(myid_block == 0) call system('ln -sf '//trim(filename)//' '//trim(datadir)//'fld_b'//cblock//'.bin')
+        if(myid_block == 0) call execute_command_line('ln -sf '//trim(filename)//' '//trim(datadir)//'fld_b_'//cblock//'.bin')
       endif
       if(myid_block == 0) write(stdout,*) '*** Checkpoint saved at time = ', time, &
                                           'time step = ', istep, 'block = ',my_block,'. ***'

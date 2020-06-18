@@ -52,7 +52,9 @@ module mod_initmpi
       enddo
     enddo
     eye(:,:) = 0
-    forall (idir=1:3) eye(idir,idir) = 1
+    do idir=1,3
+      eye(idir,idir) = 1
+    enddo
     nb(:,:) = MPI_PROC_NULL
     do idir=1,3
       if(coords(idir)-1 >= 0           ) &
