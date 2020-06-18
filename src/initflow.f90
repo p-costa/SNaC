@@ -81,7 +81,7 @@ module mod_initflow
     case default
       if(myid == 0) write(stderr,*) 'ERROR: invalid name for initial velocity field'
       if(myid == 0) write(stderr,*) ''
-      if(myid == 0) write(stderr,*) '*** Simulation abortited due to errors in the case file ***'
+      if(myid == 0) write(stderr,*) '*** Simulation aborted due to errors in the case file ***'
       if(myid == 0) write(stderr,*) '    check INFO_INPUT.md'
       call MPI_FINALIZE(ierr)
       error stop
