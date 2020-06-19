@@ -150,7 +150,7 @@ module mod_output
     filesize = 0_MPI_OFFSET_KIND
     call MPI_FILE_SET_SIZE(fh,filesize,ierr)
     disp = 0_MPI_OFFSET_KIND
-    call io_field('w',fh,ng,lo,hi,[1,1,1],disp,p)
+    call io_field('w',fh,ng,[1,1,1],lo,hi,disp,p)
     call MPI_FILE_CLOSE(fh,ierr)
     return
   end subroutine out3d
@@ -189,7 +189,7 @@ module mod_output
   !
   subroutine write_visu_3d(datadir,fname_bin,fname_log,varname,lo,hi,ng,nmin,nmax,nskip,time,istep,p)
     !
-    ! wraps the calls of out3d and write-log_output into the same subroutine
+    ! wraps the calls of out3d and write_log_output into the same subroutine
     !
     implicit none
     character(len=*), intent(in)          :: datadir,fname_bin,fname_log,varname

@@ -13,7 +13,7 @@ module mod_load
     implicit none
     character(len=1), intent(in) :: io
     character(len=*), intent(in) :: filename
-    integer , intent(in), dimension(3) :: ng,lo,hi,nh
+    integer , intent(in), dimension(3) :: ng,nh,lo,hi
     real(rp), intent(inout), dimension(lo(1)-nh(1):,lo(2)-nh(2):,lo(3)-nh(3):) :: u,v,w,p
     real(rp), intent(inout) :: time
     integer , intent(inout) :: istep
@@ -41,10 +41,10 @@ module mod_load
       ! read
       !
       disp = 0_MPI_OFFSET_KIND
-      call io_field('r',fh,ng,lo,hi,nh,disp,u)
-      call io_field('r',fh,ng,lo,hi,nh,disp,v)
-      call io_field('r',fh,ng,lo,hi,nh,disp,w)
-      call io_field('r',fh,ng,lo,hi,nh,disp,p)
+      call io_field('r',fh,ng,nh,lo,hi,disp,u)
+      call io_field('r',fh,ng,nh,lo,hi,disp,v)
+      call io_field('r',fh,ng,nh,lo,hi,disp,w)
+      call io_field('r',fh,ng,nh,lo,hi,disp,p)
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       nreals_myid = 0
       if(myid == 0) nreals_myid = 2
@@ -62,10 +62,10 @@ module mod_load
       filesize = 0_MPI_OFFSET_KIND
       call MPI_FILE_SET_SIZE(fh,filesize,ierr)
       disp = 0_MPI_OFFSET_KIND
-      call io_field('w',fh,ng,lo,hi,nh,disp,u)
-      call io_field('w',fh,ng,lo,hi,nh,disp,v)
-      call io_field('w',fh,ng,lo,hi,nh,disp,w)
-      call io_field('w',fh,ng,lo,hi,nh,disp,p)
+      call io_field('w',fh,ng,nh,lo,hi,disp,u)
+      call io_field('w',fh,ng,nh,lo,hi,disp,v)
+      call io_field('w',fh,ng,nh,lo,hi,disp,w)
+      call io_field('w',fh,ng,nh,lo,hi,disp,p)
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       fldinfo = [time,1._rp*istep]
       nreals_myid = 0
@@ -75,11 +75,11 @@ module mod_load
     end select
     return
   end subroutine load
-  subroutine io_field(io,fh,ng,lo,hi,nh,disp,var)
+  subroutine io_field(io,fh,ng,nh,lo,hi,disp,var)
     implicit none
     character(len=1), intent(in)                 :: io
     integer , intent(in)                         :: fh
-    integer , intent(in), dimension(3)           :: ng,lo,hi,nh
+    integer , intent(in), dimension(3)           :: ng,nh,lo,hi
     integer(kind=MPI_OFFSET_KIND), intent(inout) :: disp
     real(rp), intent(inout), dimension(lo(1)-nh(1):,lo(2)-nh(2):,lo(3)-nh(3):) :: var
     integer , dimension(3) :: n
