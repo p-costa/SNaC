@@ -28,8 +28,8 @@ for iblock in range(1,nblocks+1):
                             ('time', np.float), ('isave', np.int)                    \
                            ])
     geofile  = "geometry"+blockname+".out"
-    logfile  = input("Name of the log file written by CaNS [log_visu_3d_b_???.out]: ") or "log_visu_3d"+blockname+".out"
-    gridname = input("Name to be appended to the grid files to prevent overwriting [_b_???]: ") or "" + blockname
+    logfile  = input("Name of the log file written by CaNS [log_visu_3d"+blockname+".out]: ") or "log_visu_3d"+blockname+".out"
+    gridname = input("Name to be appended to the grid files to prevent overwriting ["+blockname+"]: ") or "" + blockname
     xgridfile = "x"+gridname+'.bin'
     ygridfile = "y"+gridname+'.bin'
     zgridfile = "z"+gridname+'.bin'
@@ -159,7 +159,7 @@ for iblock in range(1,nblocks+1):
     #
     # write visualization file
     #
-    outfile = input("Name of the output file [viewfld_DNS_b_???.xmf]: ") or "viewfld_DNS"+blockname+".xmf"
+    outfile = input("Name of the output file [viewfld_DNS"+blockname+".xmf]: ") or "viewfld_DNS"+blockname+".xmf"
     xdmf_file = open(outfile, 'w')
     xdmf_file.write(output)
     xdmf_file.close
