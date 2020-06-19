@@ -259,8 +259,8 @@ program snac
   ! post-process and write initial condition
   !
   write(fldnum,'(i7.7)') istep
-  !include 'out1d.h90'
-  !include 'out3d.h90'
+  include 'out1d.h90'
+  include 'out3d.h90'
   !
   ! determine time step
   !

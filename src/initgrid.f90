@@ -82,12 +82,10 @@ module mod_initgrid
     integer , intent(in   )                     :: lo_g,hi_g,lo,hi
     integer , intent(in   ), dimension(0:1)     :: nb
     real(rp), intent(inout), dimension(lo  -1:) :: grid
-    if(lo == lo_g) then
+    if(lo == lo_g .or. hi == hi_g) then
       call MPI_SENDRECV(grid(lo  ),1,MPI_REAL_RP,nb(0),0, &
                         grid(hi+1),1,MPI_REAL_RP,nb(1),0, &
                         MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
-    endif
-    if(hi == hi_g) then
       call MPI_SENDRECV(grid(hi  ),1,MPI_REAL_RP,nb(1),0, &
                         grid(lo-1),1,MPI_REAL_RP,nb(0),0, &
                         MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
