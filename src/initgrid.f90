@@ -1,9 +1,10 @@
 module mod_initgrid
-  use mod_param, only:pi
+  use mod_common_mpi, only:ierr
+  use mod_param     , only:pi
   use mod_types
   implicit none
   private
-  public initgrid,distribute_grid,save_grid
+  public initgrid,distribute_grid,bound_grid,save_grid
   contains
   subroutine initgrid(lo,hi,gt,gr,lmin,lmax,drc_g,drf_g,rc_g,rf_g)
     !
@@ -70,12 +71,29 @@ module mod_initgrid
   end subroutine initgrid
   subroutine distribute_grid(lo_g,lo,hi,grid_g,grid)
     implicit none
-    integer  :: lo_g,lo,hi
+    integer , intent(in )                     :: lo_g,lo,hi
     real(rp), intent(in ), dimension(lo_g-1:) :: grid_g
     real(rp), intent(out), dimension(lo  -1:) :: grid
     grid(lo-1:hi+1) = grid_g(lo-1:hi+1)
     return
   end subroutine distribute_grid
+  subroutine bound_grid(lo_g,hi_g,lo,hi,nb,grid)
+    implicit none
+    integer , intent(in   )                     :: lo_g,hi_g,lo,hi
+    integer , intent(in   ), dimension(0:1)     :: nb
+    real(rp), intent(inout), dimension(lo  -1:) :: grid
+    if(lo == lo_g) then
+      call MPI_SENDRECV(grid(lo  ),1,MPI_REAL_RP,nb(0),0, &
+                        grid(hi+1),1,MPI_REAL_RP,nb(1),0, &
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+    endif
+    if(hi == hi_g) then
+      call MPI_SENDRECV(grid(hi  ),1,MPI_REAL_RP,nb(1),0, &
+                        grid(lo-1),1,MPI_REAL_RP,nb(0),0, &
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+    endif
+    return
+  end subroutine bound_grid
   subroutine save_grid(fname,lo_g,hi_g,rf_g,rc_g,drf_g,drc_g)
     implicit none
     character(len=*), intent(in) :: fname

@@ -50,7 +50,7 @@ fillps.o: fillps.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 initflow.o: initflow.f90 common_mpi.o param.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
-initgrid.o: initgrid.f90 param.o types.o
+initgrid.o: initgrid.f90 common_mpi.o param.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 initmpi.o: initmpi.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<

@@ -26,7 +26,7 @@ program snac
   use mod_common_mpi     , only: myid,myid_block,ierr,comm_block
   use mod_correc         , only: correc
   use mod_initflow       , only: initflow
-  use mod_initgrid       , only: initgrid,distribute_grid,save_grid
+  use mod_initgrid       , only: initgrid,distribute_grid,bound_grid,save_grid
   use mod_initmpi        , only: initmpi
   use mod_fillps         , only: fillps
   use mod_load           , only: load
@@ -215,6 +215,12 @@ program snac
   call distribute_grid(lo_g(3),lo(3),hi(3),dzf_g,dzf)
   call distribute_grid(lo_g(3),lo(3),hi(3), zc_g, zc)
   call distribute_grid(lo_g(3),lo(3),hi(3), zf_g, zf)
+  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),dxc)
+  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),dxf)
+  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),dyc)
+  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),dyf)
+  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),dzc)
+  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),dzf)
   !
   ! initialization of the flow fields
   !
