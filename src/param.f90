@@ -52,7 +52,7 @@ contains
   use mpi
   use mod_common_mpi, only:myid,ierr
   implicit none
-  integer :: iunit,iblock,nblocks
+  integer :: iunit,iblock,nblocks,nrank
   integer, allocatable, dimension(:) :: nranks
   logical :: exists
   character(len=100) :: filename
@@ -100,6 +100,14 @@ contains
         endif
       close(iunit)
     enddo
+    call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
+    if(nrank /= sum(nranks(1:nblocks))) then
+      if(myid == 0) write(stderr,*) '*** Error: invalid number of MPI tasks. ***'
+      if(myid == 0) write(stderr,*) 'Expected: ',sum(nranks(1:nblocks)), ' Found: ', nrank
+      if(myid == 0) write(stderr,*) 'Aborting...'
+      call MPI_FINALIZE(ierr)
+      error stop
+    endif
     do iblock = 1,nblocks
       write(cblock,'(i3.3)') iblock
       open(newunit=iunit,file=trim(filename)//cblock,status='old',action='read',iostat=ierr)
