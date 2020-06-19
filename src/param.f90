@@ -46,13 +46,13 @@ integer           , dimension(      3) :: periods
 character(len=100)                     :: inivel
 !
 real(rp) :: vol_all
-integer  :: my_block,id_first
+integer  :: my_block,id_first,nblocks,nrank
 contains 
   subroutine read_input()
   use mpi
   use mod_common_mpi, only:myid,ierr
   implicit none
-  integer :: iunit,iblock,nblocks,nrank
+  integer :: iunit,iblock
   integer, allocatable, dimension(:) :: nranks
   logical :: exists
   character(len=100) :: filename

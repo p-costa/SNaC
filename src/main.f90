@@ -44,7 +44,7 @@ program snac
                                  gt,gr,                                        &
                                  cbcvel,bcvel,cbcpre,bcpre,                    &
                                  bforce,is_outflow,no_outflow,periods,inivel,  &
-                                 vol_all,my_block,id_first
+                                 vol_all,my_block,id_first,nblocks,nrank
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
@@ -453,7 +453,7 @@ program snac
       call MPI_ALLREDUCE(dt12,dt12min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
       call MPI_ALLREDUCE(dt12,dt12max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
       if(myid == 0) write(stdout,*) 'Avrg, min & max elapsed time: '
-      if(myid == 0) write(stdout,*) dt12av/(1._rp*product(dims)),dt12min,dt12max
+      if(myid == 0) write(stdout,*) dt12av/(1._rp*nrank),dt12min,dt12max
 #endif
   enddo
   call finalize_solver(psolver)

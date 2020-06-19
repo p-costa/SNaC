@@ -14,6 +14,7 @@ non_uniform_grid = True
 geofiles  = "geometry_b_???.out"
 nblocks = np.size(glob.glob(geofiles))
 for iblock in range(1,nblocks+1):
+    print('Block # {:3}'.format(str(iblock).zfill(3)))
     blockname = "_b_{:3}".format(str(iblock).zfill(3))
     #
     # define data type and
