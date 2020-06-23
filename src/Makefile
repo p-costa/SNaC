@@ -2,7 +2,7 @@
 FC   = mpifort
 # flags
 BIG :=
-DBG := -O0 -g -fbacktrace -Wall -Wextra -pedantic -fcheck=all -finit-real=snan -ffpe-trap=invalid -std=f2018
+DBG := -O0 -g -fbacktrace -Wall -Wextra #-pedantic -fcheck=all -finit-real=snan -ffpe-trap=invalid -std=f2018
 OMP :=
 OPT := #-O3
 OTH := 
@@ -12,7 +12,7 @@ TARGET = snac
 #
 OBJ = bound.o debug.o initflow.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fillps.o initmpi.o load.o main.o mom.o output.o param.o updt_pressure.o rk.o scal.o sanity.o solver.o types.o
 #
-HYPRE_LIB_DIR=/home/pedro/software/hypre/lib
+HYPRE_LIB_DIR=$(HOME)/software/hypre/lib
 LIBS = -L$(HYPRE_LIB_DIR) -lHYPRE
 #
 all: $(TARGET)
