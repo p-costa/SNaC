@@ -300,7 +300,7 @@ module mod_bound
       !$OMP SHARED(lo,hi,i,u,v,w,dxf,dyf,dzf)
       do k=lo(3),hi(3)
         do j=hi(2),hi(2)
-          u(i  ,j,k) = u(i-1,j,k) - dxf(i)*((v(i,j,k)-v(i,j-1,k))*dyf(j)+(w(i,j,k)-w(i,j,k-1))*dzf(k))
+          u(i  ,j,k) = u(i-1,j,k) - dxf(i)*((v(i,j,k)-v(i,j-1,k))/dyf(j)+(w(i,j,k)-w(i,j,k-1))/dzf(k))
           u(i+1,j,k) = u(i  ,j,k) ! not needed
         enddo
       enddo
@@ -312,7 +312,7 @@ module mod_bound
       !$OMP SHARED(lo,hi,j,u,v,w,dyf,dxf,dzf)
       do k=lo(3),hi(3)
         do i=lo(1),hi(1)
-          v(i,j  ,k) = v(i,j-1,k) - dyf(j)*((u(i,j,k)-u(i-1,j,k))*dxf(i)+(w(i,j,k)-w(i,j,k-1))*dzf(k))
+          v(i,j  ,k) = v(i,j-1,k) - dyf(j)*((u(i,j,k)-u(i-1,j,k))/dxf(i)+(w(i,j,k)-w(i,j,k-1))/dzf(k))
           v(i,j+1,k) = v(i,j  ,k) ! not needed
         enddo
       enddo 
