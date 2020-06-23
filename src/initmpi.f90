@@ -6,14 +6,15 @@ module mod_initmpi
   private
   public initmpi
   contains
-  subroutine initmpi(my_block,id_first,dims,cbc,bc,lo,hi,ng,periods,nb,is_bound,halos)
+  subroutine initmpi(my_block,id_first,dims,cbc,bc,periods,lo,hi,ng,nb,is_bound,halos)
     implicit none
     integer         , intent(in   )                   :: my_block,id_first
     integer         , intent(inout), dimension(    3) :: dims
     character(len=1), intent(in   ), dimension(0:1,3) :: cbc
     real(rp)        , intent(in   ), dimension(0:1,3) ::  bc
+    integer         , intent(in   ), dimension(    3) :: periods
     integer         , intent(inout), dimension(    3) :: lo,hi
-    integer         , intent(out  ), dimension(    3) :: ng,periods
+    integer         , intent(out  ), dimension(    3) :: ng
     integer         , intent(out  ), dimension(0:1,3) :: nb
     logical         , intent(out  ), dimension(0:1,3) :: is_bound
     integer         , intent(out  ), dimension(    3) :: halos
