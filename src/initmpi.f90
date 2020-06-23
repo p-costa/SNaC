@@ -135,6 +135,7 @@ module mod_initmpi
     return
   end subroutine initmpi
   subroutine makehalo(idir,nh,n,halo)
+    implicit none
     integer, intent(in ) :: idir,nh
     integer, intent(in ), dimension(3) :: n
     integer, intent(out) :: halo
