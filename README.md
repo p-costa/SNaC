@@ -17,7 +17,7 @@ Some features are:
 
 ## Motivation
 
-This code for canonical fluid flows will eventually serve as base for a multi-block DNS code with adaptive mesh refinement.
+This code for canonical fluid flows will eventually serve as base for a multi-block DNS code for multiphase flows with adaptive mesh refinement.
 
 ## Method
 
