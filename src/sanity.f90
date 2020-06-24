@@ -56,6 +56,8 @@ module mod_sanity
   !
   subroutine chk_bc(cbcvel,cbcpre,passed)
     implicit none
+    character(len=2), parameter, dimension(9) :: bcs = ['ND', 'DN', 'NN', 'DD', &
+                                                        'FD', 'DF', 'FF', 'FN', 'NF']
     character(len=1), intent(in ), dimension(0:1,3,3) :: cbcvel
     character(len=1), intent(in ), dimension(0:1,3  ) :: cbcpre
     logical         , intent(out) :: passed
@@ -70,11 +72,7 @@ module mod_sanity
     do ivel = 1,3
       do idir=1,3
         bc01v = cbcvel(0,idir,ivel)//cbcvel(1,idir,ivel)
-        passed_loc = passed_loc.and.( (bc01v == 'PP').or. &
-                                      (bc01v == 'ND').or. &
-                                      (bc01v == 'DN').or. &
-                                      (bc01v == 'NN').or. &
-                                      (bc01v == 'DD') )
+        passed_loc = passed_loc.and.any(bc01v == bcs(:))
       enddo
     enddo
     if(.not.passed_loc) call write_error('velocity BCs not valid.')
@@ -83,11 +81,7 @@ module mod_sanity
     passed_loc = .true.
     do idir=1,3
       bc01p = cbcpre(0,idir)//cbcpre(1,idir)
-      passed_loc = passed_loc.and.( (bc01p == 'PP').or. &
-                                    (bc01p == 'ND').or. &
-                                    (bc01p == 'DN').or. &
-                                    (bc01p == 'NN').or. &
-                                    (bc01p == 'DD') )
+      passed_loc = passed_loc.and.any(bc01v == bcs(:))
     enddo
     if(.not.passed_loc) call write_error('pressure BCs not valid.')
     passed = passed.and.passed_loc
