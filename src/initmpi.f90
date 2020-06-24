@@ -141,10 +141,13 @@ module mod_initmpi
             endif
           enddo
         endif
-        call MPI_ALLREDUCE(is_nb,found_friend,1,MPI_LOGICAL,MPI_LOR,comm_block,ierr)
+        !
+        ! check for all ranks my_block if the expected connectivity was found
+        !
+        call MPI_ALLREDUCE(is_nb,found_friend,1,MPI_LOGICAL,MPI_LOR,comm_block,ierr) 
         if(cbc(inb,idir) == 'F'.and.(.not.found_friend)) then
           write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',nint(bc(inb,idir)), ' is not possible.'
-          write(stderr,*) 'Blocks must share the same boundaries.'
+          write(stderr,*) 'E.g. Blocks must share the same boundaries.'
           write(stderr,*) ''
           error stop
         endif
