@@ -10,9 +10,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: install software
-      run: sudo apt-get update; sudo apt-get install gfortran libopenmpi-dev libhypre-dev
+      run: sudo apt-get update; sudo apt-get install gfortran libopenmpi-dev libhypre
     - name: test compilation
       run: |
         cd src/
-        make LIBS=-lhypre && make run && make clean
-        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS=-lhypre && make run && make clean
+        make LIBS=-lHYPRE && make run && make clean
+        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS=-lHYPRE && make run && make clean
