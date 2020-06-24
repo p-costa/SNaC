@@ -1,0 +1,18 @@
+name: compilation test
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: install software
+      run: sudo apt-get update; sudo apt-get install gfortran libopenmpi-dev libhypre-dev
+    - name: test compilation
+      run: |
+        cd src/
+        make LIBS=-lHYPRE && make run && make clean
+        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS=-lHYPRE && make run && make clean
