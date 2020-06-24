@@ -1,0 +1,21 @@
+name: compilation test
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: install software
+      run: |
+        sudo apt-get update; sudo apt-get install gfortran libopenmpi-dev git
+        git clone https://github.com/hypre-space/hypre $HOME/hypre_repo && cd $HOME/hypre_repo/src && ./configure --prefix=$HOME/hypre && make && make install && cd -
+    - name: test compilation
+      run: |
+        cd src
+        export LIB_HYPRE="-L${HOME}/hypre/lib -lHYPRE"
+        make LIBS="${LIB_HYPRE}" && make run && make clean
+        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS="${LIB_HYPRE}" && make run && make clean
