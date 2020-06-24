@@ -14,5 +14,5 @@ jobs:
     - name: test compilation
       run: |
         cd src/
-        make LIBS=-lHYPRE && make run && make clean
-        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS=-lHYPRE && make run && make clean
+        make LIBS=-lhypre && make run && make clean
+        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS=-lhypre && make run && make clean
