@@ -17,5 +17,5 @@ jobs:
       run: |
         cd src
         export LIB_HYPRE="-L${HOME}/hypre/lib -lHYPRE"
-        make LIBS=${LIB_HYPRE} && make run && make clean
-        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS=${LIB_HYPRE} && make run && make clean
+        make LIBS="${LIB_HYPRE}" && make run && make clean
+        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS="${LIB_HYPRE}" && make run && make clean
