@@ -6,13 +6,12 @@ module mod_sanity
   private
   public test_sanity
   contains
-  subroutine test_sanity(ng,dims,gr,stop_type,cbcvel,cbcpre,is_outflow,is_forced)
+  subroutine test_sanity(ng,gr,stop_type,cbcvel,cbcpre,is_outflow,is_forced)
     !
     ! performs some a priori checks of the input files before the calculation starts
     !
     implicit none
     integer         , intent(in), dimension(3      ) :: ng
-    integer         , intent(in), dimension(3      ) :: dims
     real(rp)        , intent(in), dimension(3      ) :: gr
     logical         , intent(in), dimension(3      ) :: stop_type
     character(len=1), intent(in), dimension(0:1,3,3) :: cbcvel
@@ -21,7 +20,6 @@ module mod_sanity
     logical         , intent(in), dimension(3      ) :: is_forced
     logical :: passed
     !
-    call chk_dims(ng,dims,passed);               if(.not.passed) call abortit
     call chk_grid(gr,passed)
     call chk_stop_type(stop_type,passed);        if(.not.passed) call abortit
     call chk_bc(cbcvel,cbcpre,passed);           if(.not.passed) call abortit
@@ -42,20 +40,6 @@ module mod_sanity
     passed = passed.and.passed_loc
     return 
   end subroutine chk_stop_type
-  !
-  subroutine chk_dims(ng,dims,passed)
-    implicit none
-    integer, intent(in ), dimension(3) :: ng
-    integer, intent(in ), dimension(3) :: dims
-    logical, intent(out) :: passed
-    logical :: passed_loc
-    passed = .true.
-    passed_loc = all(mod(ng(1:3),dims(1:3)) == 0)
-    if(.not.passed_loc) &
-      call write_error('itot, jtot and ktot should be divisable by dims(1), dims(2) and dims(3), respectively (for now!).')
-    passed = passed.and.passed_loc
-    return
-  end subroutine chk_dims
   !
   subroutine chk_grid(gr,passed)
     implicit none
