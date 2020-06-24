@@ -10,10 +10,10 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: install software
-      run: sudo apt-get update; sudo apt-get install gfortran libopenmpi-dev libhypre-dev
+      run: sudo apt-get update; sudo apt-get install gfortran libopenmpi-dev libhypre-dev \
+           git clone https://github.com/hypre-space/hypre && cd hypre/src && ./configure --prefix=$HOME/hypre && make && make install
     - name: test compilation
       run: |
         cd src/
-        export LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
-        make LIBS=-lHYPRE && make run && make clean
-        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS=-lHYPRE && make run && make clean
+        make LIBS="-L$(HOME)/hypre -lHYPRE" && make run && make clean
+        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS="-L$(HOME)/hypre -lHYPRE" && make run && make clean
