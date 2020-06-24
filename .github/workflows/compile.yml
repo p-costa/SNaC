@@ -16,5 +16,6 @@ jobs:
     - name: test compilation
       run: |
         cd src
-        make LIBS="-L${HOME}/hypre -lHYPRE" && make run && make clean
-        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS="-L${HOME}/hypre -lHYPRE" && make run && make clean
+        export LIB_HYPRE="-L${HOME}/hypre/lib -lHYPRE"
+        make LIBS=${LIB_HYPRE} && make run && make clean
+        make OMP+=-fopenmp OTH+=-DIMPDIFF LIBS=${LIB_HYPRE} && make run && make clean
