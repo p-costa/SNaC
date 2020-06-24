@@ -25,7 +25,7 @@ module mod_initmpi
     integer, allocatable, dimension(  :) :: blocks_all
     integer, dimension(3,3) :: eye
     integer                 :: i,j,k,idir,iidir,inb,irank,id_coords
-    logical                 :: is_nb
+    logical                 :: is_nb,found_friend
     !
     call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
     call MPI_COMM_SPLIT(MPI_COMM_WORLD,my_block,myid,comm_block,ierr)
@@ -78,7 +78,16 @@ module mod_initmpi
     call MPI_ALLGATHER(my_block,1,MPI_INTEGER,blocks_all,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     do idir=1,3
       do inb=0,1
+        if(cbc(inb,idir) == 'F') then
+          if(nint(bc(inb,idir)) < 1 .or. nint(bc(inb,idir)) > blocks_all(nrank-1))  then
+            write(stderr,*) 'ERROR: invalid connectivity for block ', my_block, '.'
+            write(stderr,*) 'Block ', nint(bc(inb,idir)), ' does not exist.'
+            write(stderr,*) ''
+            error stop
+          endif
+        endif
         if(nb(inb,idir) == MPI_PROC_NULL.and.cbc(inb,idir) == 'F') then
+          is_nb = .false.
           do irank=0,nrank-1
             if(nint(bc(inb,idir)) == blocks_all(irank)) then
               is_nb = .true.
@@ -103,6 +112,10 @@ module mod_initmpi
                       nb(inb,idir) = irank
                     else
                       write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
+                      write(stderr,*) 'Expected: periods(',idir,') = ',hi_all(idir,irank)-lo(idir)+1
+                      write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)
+                      write(stderr,*) ''
+                      error stop
                     endif
                   endif
                 elseif ( inb == 1 ) then
@@ -112,17 +125,28 @@ module mod_initmpi
                     if(periods(idir) == hi(idir)-lo_all(idir,irank)+1) then
                       nb(inb,idir) = irank
                     else
-                      write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
+                      write(stderr,*) 'Expected: periods(',idir,') = ',hi(idir)-lo_all(idir,irank)+1
+                      write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)
+                      write(stderr,*) ''
+                      error stop
                     endif
                   endif
                 endif
-                !if(nb(inb,idir) == MPI_PROC_NULL) then
-                !  !write(stderr,*) 'ERROR: Expected connectivity between blocks not found.'
-                !  !error stop
-                !endif
+                if(nb(inb,idir) == MPI_PROC_NULL) then
+                  write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',blocks_all(irank),'not found.'
+                  write(stderr,*) ''
+                  error stop
+                endif
               endif
             endif
           enddo
+        endif
+        call MPI_ALLREDUCE(is_nb,found_friend,1,MPI_LOGICAL,MPI_LOR,comm_block,ierr)
+        if(cbc(inb,idir) == 'F'.and.(.not.found_friend)) then
+          write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',nint(bc(inb,idir)), ' is not possible.'
+          write(stderr,*) 'Blocks must share the same boundaries.'
+          write(stderr,*) ''
+          error stop
         endif
       enddo
     enddo
