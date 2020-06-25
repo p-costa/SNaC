@@ -114,6 +114,10 @@ program snac
   lo_g(:) = lo(:)
   hi_g(:) = hi(:)
   !
+  ! check sanity of input file
+  !
+  call test_sanity(gr,stop_type,cbcvel,cbcpre,is_outflow)
+  !
   ! initialize MPI/OpenMP
   !
   !$call omp_set_num_threads(nthreadsmax)
