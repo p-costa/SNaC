@@ -65,7 +65,7 @@ module mod_output
     integer :: i,j,k
     integer :: iunit
     !
-    ng = hi_g(:)-lo_g(:) + 1
+    ng(:) = hi_g(:)-lo_g(:) + 1
     select case(idir)
     case(3)
       allocate(p1d(lo_g(3):hi_g(3)))
