@@ -47,7 +47,7 @@ module mod_sanity
     logical , intent(out) :: passed
     logical :: passed_loc
     passed = .true.
-    passed_loc = any(gr(:) < 0._rp)
+    passed_loc = all(gr(:) >= 0._rp)
     if(.not.passed_loc) & 
       call write_error('grid growth parameter must be positive.')
     passed = passed.and.passed_loc
@@ -56,8 +56,7 @@ module mod_sanity
   !
   subroutine chk_bc(cbcvel,cbcpre,passed)
     implicit none
-    character(len=2), parameter, dimension(9) :: bcs = ['ND', 'DN', 'NN', 'DD', &
-                                                        'FD', 'DF', 'FF', 'FN', 'NF']
+    character(len=2), parameter, dimension(5) :: bcs = ['ND', 'DN', 'NN', 'DD', 'PP']
     character(len=1), intent(in ), dimension(0:1,3,3) :: cbcvel
     character(len=1), intent(in ), dimension(0:1,3  ) :: cbcpre
     logical         , intent(out) :: passed

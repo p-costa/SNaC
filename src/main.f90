@@ -110,6 +110,11 @@ program snac
   !
   call read_input()
   !
+  ! check sanity
+  !
+  print*,gr
+  call test_sanity(ng,gr,stop_type,cbcvel,cbcpre,is_outflow,is_forced)
+  !
   ! initialize MPI/OpenMP
   !
   !$call omp_set_num_threads(nthreadsmax)
