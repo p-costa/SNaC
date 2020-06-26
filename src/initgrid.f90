@@ -78,10 +78,10 @@ module mod_initgrid
     character(len=*), intent(in) :: fname
     integer         , intent(in) :: ng
     real(rp)        , intent(in), dimension(1-1:) :: rf_g,rc_g,drf_g,drc_g
-    integer :: iunit,q,reclen
+    integer :: iunit,q,rlen
     !
-    inquire(iolength=reclen) rf_g(1:ng),rc_g(1:ng),drf_g(1:ng),drc_g(1:ng)
-    open(newunit=iunit,file=trim(fname)//'.bin',status='replace',access='direct',recl=reclen)
+    inquire(iolength=rlen) 1._rp
+    open(newunit=iunit,file=trim(fname)//'.bin',status='replace',access='direct',recl=ng*4*rlen)
     write(iunit,rec=1) rf_g(1:ng),rc_g(1:ng),drf_g(1:ng),drc_g(1:ng)
     close(iunit)
     open(newunit=iunit,status='replace',file=trim(fname)//'.out')
