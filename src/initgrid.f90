@@ -97,10 +97,11 @@ module mod_initgrid
     character(len=*), intent(in) :: fname
     integer         , intent(in) :: lo_g,hi_g
     real(rp)        , intent(in), dimension(lo_g-1:) :: rf_g,rc_g,drf_g,drc_g
-    integer :: iunit,q,reclen
+    integer :: iunit,q,ng,rlen
     !
-    inquire(iolength=reclen) rf_g(lo_g:hi_g),rc_g(lo_g:hi_g),drf_g(lo_g:hi_g),drc_g(lo_g:hi_g)
-    open(newunit=iunit,file=trim(fname)//'.bin',status='replace',access='direct',recl=reclen)
+    inquire(iolength=rlen) 1._rp
+    ng = hi_g-lo_g+1
+    open(newunit=iunit,file=trim(fname)//'.bin',status='replace',access='direct',recl=4*ng*rlen)
     write(iunit,rec=1) rf_g(lo_g:hi_g),rc_g(lo_g:hi_g),drf_g(lo_g:hi_g),drc_g(lo_g:hi_g)
     close(iunit)
     open(newunit=iunit,status='replace',file=trim(fname)//'.out')
