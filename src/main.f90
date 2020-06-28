@@ -41,7 +41,7 @@ program snac
                                  restart,is_overwrite_save,                          &
                                  icheck,iout0d,iout1d,iout2d,iout3d,isave,           &
                                  cbcvel,bcvel,cbcpre,bcpre,                          &
-                                 bforce, is_forced,velf,is_outflow,no_outflow,       &
+                                 bforce, is_forced,velf,                             &
                                  dims,nthreadsmax
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
@@ -112,8 +112,7 @@ program snac
   !
   ! check sanity
   !
-  print*,gr
-  call test_sanity(ng,gr,stop_type,cbcvel,cbcpre,is_outflow,is_forced)
+  call test_sanity(ng,gr,stop_type,cbcvel,cbcpre,is_forced)
   !
   ! initialize MPI/OpenMP
   !
@@ -231,7 +230,7 @@ program snac
     call load('r',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
     if(myid == 0) write(stdout,*) '*** Checkpoint loaded at time = ', time, 'time step = ', istep, '. ***'
   endif
-  call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
+  call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
                 dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
   call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
   up(:,:,:)      = 0._rp
@@ -357,7 +356,7 @@ program snac
       !
       alphaoi = alphai
 #endif
-      call bounduvw(cbcvel,lo,hi,bcvel,no_outflow,halos,is_bound,nb, &
+      call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,up,vp,wp)
 #if defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
       dtrk  = dt
@@ -375,7 +374,7 @@ program snac
       call solve_helmholtz(psolver,lo,hi,pp,po)
       call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,pp)
       call correc(lo,hi,dxc,dyc,dzc,dtrk,pp,up,vp,wp,u,v,w)
-      call bounduvw(cbcvel,lo,hi,bcvel,is_outflow,halos,is_bound,nb, &
+      call bounduvw(cbcvel,lo,hi,bcvel,.true.,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
       call updt_pressure(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,pp,p)
       call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
