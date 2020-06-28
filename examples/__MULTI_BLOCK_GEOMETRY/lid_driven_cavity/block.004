@@ -14,6 +14,5 @@ F N  F N  N N            ! cbcpre(0:1,1:3  ) [p BC type]
 3. 0.  2. 0.  0. 0.      !  bcvel(0:1,1:3,3) [w BC value]
 3. 0.  2. 0.  0. 0.      !  bcpre(0:1,1:3  ) [p BC value]
 0 0 0                    ! periods(1:3)
-F F  F F  F F            ! is_outflow(0:1,1:3)
 zer                      ! inivel
 4                        ! id

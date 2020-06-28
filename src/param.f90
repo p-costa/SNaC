@@ -7,11 +7,6 @@ public
 !
 real(rp), parameter :: pi = acos(-1._rp)
 real(rp), parameter :: small = epsilon(pi)*10._rp**(precision(pi)/2._rp)
-logical , parameter, dimension(2,3) :: no_outflow = & 
-    reshape([.false.,.false.,   & ! no outflow in x lower,upper bound
-             .false.,.false.,   & ! no outflow in y lower,upper bound
-             .false.,.false.], & ! no outflow in z lower,upper bound
-              shape(no_outflow))
 character(len=100), parameter :: datadir = 'data/'
 real(rp), parameter, dimension(2,3) :: rkcoeff = reshape( [32._rp/60._rp,  0._rp        , &
                                                            25._rp/60._rp, -17._rp/60._rp, &
@@ -41,7 +36,6 @@ character(len=1  ), dimension(0:1,3,3) :: cbcvel
 real(rp)          , dimension(0:1,3,3) ::  bcvel
 character(len=1  ), dimension(0:1,  3) :: cbcpre
 real(rp)          , dimension(0:1,  3) ::  bcpre
-logical           , dimension(0:1,  3) :: is_outflow
 integer           , dimension(      3) :: periods
 character(len=100)                     :: inivel
 !
@@ -130,7 +124,6 @@ contains
             read(iunit,*)  bcvel(0,1,3), bcvel(1,1,3), bcvel(0,2,3), bcvel(1,2,3), bcvel(0,3,3), bcvel(1,3,3)
             read(iunit,*)  bcpre(0,1  ), bcpre(1,1  ), bcpre(0,2  ), bcpre(1,2  ), bcpre(0,3  ), bcpre(1,3  )
             read(iunit,*) periods(1),periods(2),periods(3)
-            read(iunit,*) is_outflow(0,1),is_outflow(1,1),is_outflow(0,2),is_outflow(1,2),is_outflow(0,3),is_outflow(1,3)
             read(iunit,*) inivel
             my_block = iblock
             id_first = sum(nranks(1:iblock-1))

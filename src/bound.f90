@@ -5,7 +5,7 @@ module mod_bound
   private
   public boundp,bounduvw,updt_rhs
   contains
-  subroutine bounduvw(cbc,lo,hi,bc,isoutflow,halos,is_bound,nb, &
+  subroutine bounduvw(cbc,lo,hi,bc,is_correc,halos,is_bound,nb, &
                       dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
     !
     ! imposes velocity boundary conditions
@@ -14,7 +14,7 @@ module mod_bound
     character(len=1), intent(in), dimension(0:1,3,3) :: cbc
     integer , intent(in   ), dimension(3) :: lo,hi
     real(rp), intent(in   ), dimension(0:1,3,3) :: bc
-    logical , intent(in   ), dimension(0:1,3) :: isoutflow
+    logical , intent(in   )                   :: is_correc
     integer , intent(in   ), dimension(3    ) :: halos
     logical , intent(in   ), dimension(0:1,3) :: is_bound
     integer , intent(in   ), dimension(0:1,3) :: nb
@@ -22,7 +22,6 @@ module mod_bound
     real(rp), intent(in   ), dimension(lo(2)-1:) :: dyc,dyf
     real(rp), intent(in   ), dimension(lo(3)-1:) :: dzc,dzf
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
-    integer :: q,idir,sgn,ioutflowdir
     !
     call updthalo(lo,hi,1,halos(1),nb(:,1),1,u)
     call updthalo(lo,hi,1,halos(2),nb(:,2),2,u)
@@ -35,46 +34,35 @@ module mod_bound
     call updthalo(lo,hi,1,halos(3),nb(:,3),3,w)
     !
     if(is_bound(0,1)) then
-      call set_bc(cbc(0,1,1),0,lo,hi,1,.false.,bc(0,1,1),dxf(lo(1)-1),u)
-      call set_bc(cbc(0,1,2),0,lo,hi,1,.true. ,bc(0,1,2),dxc(lo(1)-1),v)
-      call set_bc(cbc(0,1,3),0,lo,hi,1,.true. ,bc(0,1,3),dxc(lo(1)-1),w)
+      if(.not.is_correc) call set_bc(cbc(0,1,1),0,lo,hi,1,.false.,bc(0,1,1),dxf(lo(1)-1),u)
+                         call set_bc(cbc(0,1,2),0,lo,hi,1,.true. ,bc(0,1,2),dxc(lo(1)-1),v)
+                         call set_bc(cbc(0,1,3),0,lo,hi,1,.true. ,bc(0,1,3),dxc(lo(1)-1),w)
     endif
     if(is_bound(1,1)) then
-      call set_bc(cbc(1,1,1),1,lo,hi,1,.false.,bc(1,1,1),dxf(hi(1)  ),u)
-      call set_bc(cbc(1,1,2),1,lo,hi,1,.true. ,bc(1,1,2),dxc(hi(1)  ),v)
-      call set_bc(cbc(1,1,3),1,lo,hi,1,.true. ,bc(1,1,3),dxc(hi(1)  ),w)
+      if(.not.is_correc) call set_bc(cbc(1,1,1),1,lo,hi,1,.false.,bc(1,1,1),dxf(hi(1)  ),u)
+                         call set_bc(cbc(1,1,2),1,lo,hi,1,.true. ,bc(1,1,2),dxc(hi(1)  ),v)
+                         call set_bc(cbc(1,1,3),1,lo,hi,1,.true. ,bc(1,1,3),dxc(hi(1)  ),w)
     endif
     if(is_bound(0,2)) then
-      call set_bc(cbc(0,2,1),0,lo,hi,2,.true. ,bc(0,2,1),dyc(lo(2)-1),u)
-      call set_bc(cbc(0,2,2),0,lo,hi,2,.false.,bc(0,2,2),dyf(lo(2)-1),v)
-      call set_bc(cbc(0,2,3),0,lo,hi,2,.true. ,bc(0,2,3),dyc(lo(2)-1),w)
+                         call set_bc(cbc(0,2,1),0,lo,hi,2,.true. ,bc(0,2,1),dyc(lo(2)-1),u)
+      if(.not.is_correc) call set_bc(cbc(0,2,2),0,lo,hi,2,.false.,bc(0,2,2),dyf(lo(2)-1),v)
+                         call set_bc(cbc(0,2,3),0,lo,hi,2,.true. ,bc(0,2,3),dyc(lo(2)-1),w)
      endif
     if(is_bound(1,2)) then
-      call set_bc(cbc(1,2,1),1,lo,hi,2,.true. ,bc(1,2,1),dyc(hi(2)  ),u)
-      call set_bc(cbc(1,2,2),1,lo,hi,2,.false.,bc(1,2,2),dyf(hi(2)  ),v)
-      call set_bc(cbc(1,2,3),1,lo,hi,2,.true. ,bc(1,2,3),dyc(hi(2)  ),w)
+                         call set_bc(cbc(1,2,1),1,lo,hi,2,.true. ,bc(1,2,1),dyc(hi(2)  ),u)
+      if(.not.is_correc) call set_bc(cbc(1,2,2),1,lo,hi,2,.false.,bc(1,2,2),dyf(hi(2)  ),v)
+                         call set_bc(cbc(1,2,3),1,lo,hi,2,.true. ,bc(1,2,3),dyc(hi(2)  ),w)
     endif
     if(is_bound(0,3)) then
-      call set_bc(cbc(0,3,1),0,lo,hi,3,.true. ,bc(0,3,1),dzc(lo(3)-1),u)
-      call set_bc(cbc(0,3,2),0,lo,hi,3,.true. ,bc(0,3,2),dzc(lo(3)-1),v)
-      call set_bc(cbc(0,3,3),0,lo,hi,3,.false.,bc(0,3,3),dzf(lo(3)-1),w)
+                         call set_bc(cbc(0,3,1),0,lo,hi,3,.true. ,bc(0,3,1),dzc(lo(3)-1),u)
+                         call set_bc(cbc(0,3,2),0,lo,hi,3,.true. ,bc(0,3,2),dzc(lo(3)-1),v)
+      if(.not.is_correc) call set_bc(cbc(0,3,3),0,lo,hi,3,.false.,bc(0,3,3),dzf(lo(3)-1),w)
     endif
     if(is_bound(1,3)) then
-      call set_bc(cbc(1,3,1),1,lo,hi,3,.true. ,bc(1,3,1),dzc(hi(3)  ),u)
-      call set_bc(cbc(1,3,2),1,lo,hi,3,.true. ,bc(1,3,2),dzc(hi(3)  ),v)
-      call set_bc(cbc(1,3,3),1,lo,hi,3,.false.,bc(1,3,3),dzf(hi(3)  ),w)
+                         call set_bc(cbc(1,3,1),1,lo,hi,3,.true. ,bc(1,3,1),dzc(hi(3)  ),u)
+                         call set_bc(cbc(1,3,2),1,lo,hi,3,.true. ,bc(1,3,2),dzc(hi(3)  ),v)
+      if(.not.is_correc) call set_bc(cbc(1,3,3),1,lo,hi,3,.false.,bc(1,3,3),dzf(hi(3)  ),w)
     endif
-    !
-    do q = 1,3
-      do idir = 0,1
-        if(isoutflow(idir,q).and.is_bound(idir,q)) then
-          if(idir == 0) sgn = -1
-          if(idir == 1) sgn = +1
-          ioutflowdir = q*sgn
-          call outflow(lo,hi,ioutflowdir,dxf,dyf,dzf,u,v,w)
-        endif
-      enddo
-    enddo
     return
   end subroutine bounduvw
   !
@@ -279,92 +267,6 @@ module mod_bound
     end select
     return
   end subroutine set_bc
-  !
-  subroutine outflow(lo,hi,idir,dxf,dyf,dzf,u,v,w)
-    implicit none
-    integer , intent(in), dimension(3) :: lo,hi
-    integer , intent(in) :: idir
-    real(rp), intent(in), dimension(lo(1)-1:) :: dxf
-    real(rp), intent(in), dimension(lo(2)-1:) :: dyf
-    real(rp), intent(in), dimension(lo(3)-1:) :: dzf
-    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(inout) :: u,v,w
-    integer :: i,j,k
-    !
-    ! determine face velocity from zero divergence
-    !
-    select case(idir)
-    case(1) ! x direction, right
-      i = hi(idir)
-      !$OMP PARALLEL DO DEFAULT(none) &
-      !$OMP PRIVATE(j,k) &
-      !$OMP SHARED(lo,hi,i,u,v,w,dxf,dyf,dzf)
-      do k=lo(3),hi(3)
-        do j=hi(2),hi(2)
-          u(i  ,j,k) = u(i-1,j,k) - dxf(i)*((v(i,j,k)-v(i,j-1,k))/dyf(j)+(w(i,j,k)-w(i,j,k-1))/dzf(k))
-          u(i+1,j,k) = u(i  ,j,k) ! not needed
-        enddo
-      enddo
-      !$OMP END PARALLEL DO
-    case(2) ! y direction, back
-      j = hi(idir)
-      !$OMP PARALLEL DO DEFAULT(none) &
-      !$OMP PRIVATE(i,k) &
-      !$OMP SHARED(lo,hi,j,u,v,w,dyf,dxf,dzf)
-      do k=lo(3),hi(3)
-        do i=lo(1),hi(1)
-          v(i,j  ,k) = v(i,j-1,k) - dyf(j)*((u(i,j,k)-u(i-1,j,k))/dxf(i)+(w(i,j,k)-w(i,j,k-1))/dzf(k))
-          v(i,j+1,k) = v(i,j  ,k) ! not needed
-        enddo
-      enddo 
-      !$OMP END PARALLEL DO
-    case(3) ! z direction, top
-      k = hi(idir)
-      !$OMP PARALLEL DO DEFAULT(none) &
-      !$OMP PRIVATE(i,j) &
-      !$OMP SHARED(lo,hi,k,u,v,w,dzf,dxf,dyf)
-      do j=lo(2),hi(2)
-        do i=lo(1),hi(1)
-          w(i,j,k  ) = w(i,j,k-1) - dzf(k)*((u(i,j,k)-u(i-1,j,k))/dxf(i)+(v(i,j,k)-v(i,j-1,k))/dyf(j))
-          w(i,j,k+1) = w(i,j,k  ) ! not needed
-        enddo
-      enddo 
-      !$OMP END PARALLEL DO
-    case(-1) ! x direction, left
-      i = lo(idir)-1
-      !$OMP PARALLEL DO DEFAULT(none) &
-      !$OMP PRIVATE(j,k) &
-      !$OMP SHARED(lo,hi,i,u,v,w,dxf,dyf,dzf)
-      do k=lo(3),hi(3)
-        do j=lo(2),hi(2)
-          u(i,j,k) = u(i+1,j,k) + dxf(i)*((v(i+1,j,k)-v(i+1,j-1,k))/dyf(j)+(w(i+1,j,k)-w(i+1,j,k-1))/dzf(k))
-        enddo
-      enddo 
-      !$OMP END PARALLEL DO
-    case(-2) ! y direction, front
-      j = lo(idir)-1
-      !$OMP PARALLEL DO DEFAULT(none) &
-      !$OMP PRIVATE(i,k) &
-      !$OMP SHARED(lo,hi,j,u,v,w,dyf,dxf,dzf)
-      do k=lo(3),hi(3)
-        do i=lo(1),hi(1)
-          v(i,j,k) = v(i,j+1,k) + dyf(j)*((u(i,j+1,k)-u(i-1,j+1,k))/dxf(i)+(w(i,j+1,k)-w(i,j+1,k-1))/dzf(k))
-        enddo
-      enddo 
-      !$OMP END PARALLEL DO
-    case(-3) ! z direction, bottom
-      k = lo(idir)-1
-      !$OMP PARALLEL DO DEFAULT(none) &
-      !$OMP PRIVATE(i,j) &
-      !$OMP SHARED(lo,hi,k,u,v,w,dzf,dxf,dyf)
-      do j=lo(2),hi(2)
-        do i=lo(1),hi(1)
-          w(i,j,k) = w(i,j,k+1) + dzf(k)*((u(i,j,k+1)-u(i-1,j,k+1))/dxf(i)+(v(i,j,k+1)-v(i,j-1,k+1))/dyf(j))
-        enddo
-      enddo 
-      !$OMP END PARALLEL DO
-    end select
-    return
-  end subroutine outflow
   !
   subroutine inflow(lo,hi,idir,vel2d,u,v,w)
     !

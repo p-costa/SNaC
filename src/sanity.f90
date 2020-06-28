@@ -6,7 +6,7 @@ module mod_sanity
   private
   public test_sanity
   contains
-  subroutine test_sanity(gr,stop_type,cbcvel,cbcpre,is_outflow)
+  subroutine test_sanity(gr,stop_type,cbcvel,cbcpre)
     !
     ! performs some a priori checks of the input files before the calculation starts
     !
@@ -15,13 +15,11 @@ module mod_sanity
     logical         , intent(in), dimension(3      ) :: stop_type
     character(len=1), intent(in), dimension(0:1,3,3) :: cbcvel
     character(len=1), intent(in), dimension(0:1,3  ) :: cbcpre
-    logical         , intent(in), dimension(0:1,3  ) :: is_outflow
     logical :: passed
     !
     call chk_grid(gr,passed)
     call chk_stop_type(stop_type,passed);        if(.not.passed) call abortit
     call chk_bc(cbcvel,cbcpre,passed);           if(.not.passed) call abortit
-    call chk_outflow(cbcpre,is_outflow,passed);  if(.not.passed) call abortit
     return
   end subroutine test_sanity
   !
@@ -103,28 +101,6 @@ module mod_sanity
     !
     return 
   end subroutine chk_bc
-  !
-  subroutine chk_outflow(cbcpre,is_outflow,passed)
-    implicit none
-    logical         , intent(in ), dimension(0:1,3  ) :: is_outflow
-    character(len=1), intent(in ), dimension(0:1,3  ) :: cbcpre
-    logical         , intent(out) :: passed
-    integer :: idir,ibound
-    passed = .true.
-    !
-    ! 1) check for compatibility between pressure BCs and outflow BC
-    !
-    do idir=1,3
-      do ibound = 0,1
-        passed = passed.and. &
-                 (cbcpre(ibound,idir) == 'D'.and.(is_outflow(ibound,idir))) .or. &
-                 (.not.is_outflow(ibound,idir))
-      enddo
-    enddo
-    if(.not.passed) &
-      call write_error('Dirichlet pressure BC should be an outflow direction; check the BC or is_outflow in dns.in.')
-    return 
-  end subroutine chk_outflow
   !
   subroutine abortit
     implicit none
