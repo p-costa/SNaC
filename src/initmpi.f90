@@ -125,6 +125,7 @@ module mod_initmpi
                     if(periods(idir) == hi(idir)-lo_all(idir,irank)+1) then
                       nb(inb,idir) = irank
                     else
+                      write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
                       write(stderr,*) 'Expected: periods(',idir,') = ',hi(idir)-lo_all(idir,irank)+1
                       write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)
                       write(stderr,*) ''
