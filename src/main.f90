@@ -42,7 +42,8 @@ program snac
                                  icheck,iout0d,iout1d,iout2d,iout3d,isave,           &
                                  cbcvel,bcvel,cbcpre,bcpre,                          &
                                  bforce, is_forced,velf,                             &
-                                 dims,nthreadsmax
+                                 dims,nthreadsmax,                                   &
+                                 hypre_tol,hypre_maxiter
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
@@ -267,7 +268,7 @@ program snac
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
   call init_matrix(cbcpre,bcpre,dl,is_bound,[.true.,.true.,.true.],lo,hi,ng, &
                    dxc,dxf,dyc,dyf,dzc,dzf,rhsp%x,rhsp%y,rhsp%z,psolver)
-  call create_solver(500,1.d-6,HYPRESolverPFMG,psolver)
+  call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver)
   call setup_solver(psolver)
 #ifdef _IMPDIFF
   q  = [1,0,0]
@@ -329,7 +330,7 @@ program snac
       !$OMP END WORKSHARE
       call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,up)
       call add_to_diagonal(lo,hiu,alphai-alphaoi,usolver%mat) ! correct diagonal term
-      call create_solver(500,1.d-6,HYPRESolverPFMG,usolver)
+      call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,usolver)
       call setup_solver(usolver)
       call solve_helmholtz(usolver,lo,hiu,up,uo)
       call finalize_solver(usolver)
@@ -339,7 +340,7 @@ program snac
       !$OMP END WORKSHARE
       call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,vp)
       call add_to_diagonal(lo,hiv,alphai-alphaoi,vsolver%mat) ! correct diagonal term
-      call create_solver(500,1.d-6,HYPRESolverPFMG,vsolver)
+      call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,vsolver)
       call setup_solver(vsolver)
       call solve_helmholtz(vsolver,lo,hiv,vp,vo)
       call finalize_solver(vsolver)
@@ -349,7 +350,7 @@ program snac
       !$OMP END WORKSHARE
       call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,wp)
       call add_to_diagonal(lo,hiw,alphai-alphaoi,wsolver%mat) ! correct diagonal term
-      call create_solver(500,1.d-6,HYPRESolverPFMG,wsolver)
+      call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,wsolver)
       call setup_solver(wsolver)
       call solve_helmholtz(wsolver,lo,hiw,wp,wo)
       call finalize_solver(wsolver)
