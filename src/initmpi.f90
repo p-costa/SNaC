@@ -26,6 +26,7 @@ module mod_initmpi
     integer, dimension(3,3) :: eye
     integer                 :: i,j,k,idir,iidir,inb,irank,id_coords
     logical                 :: is_nb,found_friend
+    integer                 :: ntot,ntot_max,ntot_min,ntot_sum
     !
     call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
     call MPI_COMM_SPLIT(MPI_COMM_WORLD,my_block,myid,comm_block,ierr)
@@ -161,6 +162,18 @@ module mod_initmpi
       where(nb(0:1,idir) == MPI_PROC_NULL) is_bound(0:1,idir) = .true.
       call makehalo(idir,1,n,halos(idir))
     enddo
+    !
+    ! check distribution of grid points over the different tasks
+    !
+    ntot = product(hi(:)-lo(:)+1)
+    call MPI_ALLREDUCE(ntot,ntot_min,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(ntot,ntot_max,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(ntot,ntot_sum,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr)
+    write(stdout,*) 'Maximum, minimum, average, and normalized average average number of grid points for task ',myid, &
+                    '(block',my_block,'): ',ntot_max, &
+                                            ntot_min, &
+                                            (1.*ntot_sum)/(1._rp*nrank), &
+                                            (1._rp*ntot*nrank)/(1._rp*ntot_sum)
     return
   end subroutine initmpi
   subroutine makehalo(idir,nh,n,halo)
