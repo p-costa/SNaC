@@ -82,13 +82,17 @@ module mod_initgrid
     integer , intent(in   )                     :: lo_g,hi_g,lo,hi
     integer , intent(in   ), dimension(0:1)     :: nb
     real(rp), intent(inout), dimension(lo  -1:) :: grid
-    if(lo == lo_g .or. hi == hi_g) then
-      call MPI_SENDRECV(grid(lo  ),1,MPI_REAL_RP,nb(0),0, &
-                        grid(hi+1),1,MPI_REAL_RP,nb(1),0, &
-                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
-      call MPI_SENDRECV(grid(hi  ),1,MPI_REAL_RP,nb(1),0, &
-                        grid(lo-1),1,MPI_REAL_RP,nb(0),0, &
-                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+    if(lo == lo_g) then
+      call MPI_SEND(grid(lo  ),1,MPI_REAL_RP,nb(0),lo_g  , &
+                    MPI_COMM_WORLD,ierr)
+      call MPI_RECV(grid(lo-1),1,MPI_REAL_RP,nb(0),lo_g-1, &
+                    MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+    endif
+    if(hi == hi_g) then
+      call MPI_SEND(grid(hi  ),1,MPI_REAL_RP,nb(1),hi_g  , &
+                    MPI_COMM_WORLD,ierr)
+      call MPI_RECV(grid(hi+1),1,MPI_REAL_RP,nb(1),hi_g+1, &
+                    MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
     endif
     return
   end subroutine bound_grid
@@ -97,11 +101,9 @@ module mod_initgrid
     character(len=*), intent(in) :: fname
     integer         , intent(in) :: lo_g,hi_g
     real(rp)        , intent(in), dimension(lo_g-1:) :: rf_g,rc_g,drf_g,drc_g
-    integer :: iunit,q,ng,rlen
-    !
-    inquire(iolength=rlen) 1._rp
-    ng = hi_g-lo_g+1
-    open(newunit=iunit,file=trim(fname)//'.bin',status='replace',access='direct',recl=4*ng*rlen)
+    integer :: iunit,q,reclen
+    inquire(iolength=reclen) rf_g(lo_g:hi_g),rc_g(lo_g:hi_g),drf_g(lo_g:hi_g),drc_g(lo_g:hi_g)
+    open(newunit=iunit,file=trim(fname)//'.bin',status='replace',access='direct',recl=reclen)
     write(iunit,rec=1) rf_g(lo_g:hi_g),rc_g(lo_g:hi_g),drf_g(lo_g:hi_g),drc_g(lo_g:hi_g)
     close(iunit)
     open(newunit=iunit,status='replace',file=trim(fname)//'.out')
