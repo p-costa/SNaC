@@ -32,29 +32,30 @@ module mod_output
     return
   end subroutine out0d
   !
-  subroutine out1d(fname,lo,hi,lo_g,hi_g,idir,l,dx,dy,dz,x,y,z,x_g,y_g,z_g,mpi_comm,myrank,p)
+  subroutine out1d(fname,lo,hi,lo_g,hi_g,idir,l,dx,dy,dz,x_g,y_g,z_g,mpi_comm,myrank,p)
     !
-    ! writes the profile of a variable averaged
-    ! over two domain directions
+    ! writes the profile of a variable averaged over two domain directions
     !
-    ! fname    -> name of the file
-    ! lo,hi    -> local lower and upper bounds of input array 
-    !             in global coordinates
-    ! ng       -> global sizes of the input array
-    ! idir     -> direction of the profile
-    ! l        -> domain dimensions
-    ! dx,dy,dz -> grid spacings
-    !  x, y, z -> coodinates of grid points
-    ! p        -> 3D input scalar field
+    ! fname       -> name of the file
+    ! lo  ,hi     -> local lower and upper bounds of input array 
+    !                in global coordinates
+    ! lo_g,hi_g   -> local lower and upper bounds of input array 
+    !                containing all the points of the block
+    ! idir        -> direction of the profile
+    ! l           -> domain dimensions
+    ! dx,dy,dz    -> grid spacings
+    ! x_g,y_g,z_g -> coodinates of grid points for the entire block
+    ! mpi_comm    -> communicator pertaining to the group of tasks of each block
+    ! p           -> 3D input scalar field
     !
     implicit none
     character(len=*), intent(in) :: fname
     integer , intent(in), dimension(3) :: lo,hi,lo_g,hi_g
     integer , intent(in) :: idir
     real(rp), intent(in), dimension(3) :: l
-    real(rp), intent(in), dimension(lo(1)-1:  ) :: x,dx
-    real(rp), intent(in), dimension(lo(2)-1:  ) :: y,dy
-    real(rp), intent(in), dimension(lo(3)-1:  ) :: z,dz
+    real(rp), intent(in), dimension(lo(1)-1:  ) :: dx
+    real(rp), intent(in), dimension(lo(2)-1:  ) :: dy
+    real(rp), intent(in), dimension(lo(3)-1:  ) :: dz
     real(rp), intent(in), dimension(lo_g(1)-1:) :: x_g
     real(rp), intent(in), dimension(lo_g(2)-1:) :: y_g
     real(rp), intent(in), dimension(lo_g(3)-1:) :: z_g
