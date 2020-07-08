@@ -300,6 +300,7 @@ program snac
   dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
                 dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
                 dzf_g(lo_g(3)-0),dzf_g(hi_g(3))],shape(dl))
+  hiw(:) = hi(:)
   if(is_bound(1,3)) hiw(:) = hiw(:)-[0,0,1]
   call init_matrix(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,[.true.,.true.,.false.],lo,hiw,periods, &
                    dxc,dxf,dyc,dyf,dzf,dzc,rhsw%x,rhsw%y,rhsw%z,wsolver)
