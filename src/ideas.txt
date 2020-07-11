@@ -1,3 +1,6 @@
 need to make the error handling a bit neater, maybe in an utils subroutine.
 2d validation of multi-block: Measurements in Three-Dimensional Laminar Separated Flow, IJHMT, 46 pp.3573–3582, 2003.
--> instead of explicitly defining the periodicity, I can compute periods(:) from max(n(idir))-min(n(idir)) when a variable periods(:) is .true.
+
+two issues to solve to account for periodicity:
+ -> boundary conditions of the grid cells
+ -> connectivity in initmpi.f90

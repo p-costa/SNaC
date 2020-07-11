@@ -77,23 +77,35 @@ module mod_initgrid
     grid(lo-1:hi+1) = grid_g(lo-1:hi+1)
     return
   end subroutine distribute_grid
-  subroutine bound_grid(lo_g,hi_g,lo,hi,nb,grid)
+  subroutine bound_grid(lo_g,hi_g,lo,hi,nb,periods,grid)
     implicit none
-    integer , intent(in   )                     :: lo_g,hi_g,lo,hi
-    integer , intent(in   ), dimension(0:1)     :: nb
-    real(rp), intent(inout), dimension(lo  -1:) :: grid
+    integer , intent(in   )                   :: lo_g,hi_g,lo,hi
+    integer , intent(in   ), dimension(0:1)   :: nb
+    integer , intent(in   )                   :: periods
+    real(rp), intent(inout), dimension(lo-1:) :: grid
+    integer                                   :: shift
+    integer , dimension(4)                    :: requests
+    integer                                   :: nrequests
+    nrequests = 0
+    shift = 0
     if(lo == lo_g) then
-      call MPI_SEND(grid(lo  ),1,MPI_REAL_RP,nb(0),lo_g  , &
-                    MPI_COMM_WORLD,ierr)
-      call MPI_RECV(grid(lo-1),1,MPI_REAL_RP,nb(0),lo_g-1, &
-                    MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+      if(lo_g == 1      ) shift = periods
+      call MPI_ISEND(grid(lo  ),1,MPI_REAL_RP,nb(0),lo_g+shift, &
+                     MPI_COMM_WORLD,requests(nrequests+1),ierr)
+      call MPI_IRECV(grid(lo-1),1,MPI_REAL_RP,nb(0),lo_g-1    , &
+                     MPI_COMM_WORLD,requests(nrequests+2),ierr)
+      nrequests = nrequests + 2
     endif
+    shift = 0
     if(hi == hi_g) then
-      call MPI_SEND(grid(hi  ),1,MPI_REAL_RP,nb(1),hi_g  , &
-                    MPI_COMM_WORLD,ierr)
-      call MPI_RECV(grid(hi+1),1,MPI_REAL_RP,nb(1),hi_g+1, &
-                    MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+      if(hi_g == periods) shift = periods
+      call MPI_ISEND(grid(hi  ),1,MPI_REAL_RP,nb(1),hi_g-shift, &
+                     MPI_COMM_WORLD,requests(nrequests+1),ierr)
+      call MPI_IRECV(grid(hi+1),1,MPI_REAL_RP,nb(1),hi_g+1    , &
+                     MPI_COMM_WORLD,requests(nrequests+2),ierr)
+      nrequests = nrequests + 2
     endif
+    call MPI_WAITALL(nrequests,requests,MPI_STATUSES_IGNORE,ierr)
     return
   end subroutine bound_grid
   subroutine save_grid(fname,lo_g,hi_g,rf_g,rc_g,drf_g,drc_g)

@@ -26,7 +26,6 @@ logical                :: restart,is_overwrite_save
 integer                :: icheck,iout0d,iout1d,iout2d,iout3d,isave
 real(rp), dimension(3) :: bforce
 integer                :: nthreadsmax
-logical , dimension(3) :: is_periodic
 !
 ! parameters specific to each block
 !
@@ -43,6 +42,7 @@ character(len=100)                     :: inivel
 !
 real(rp) :: vol_all
 integer  :: my_block,id_first,nblocks,nrank
+logical , dimension(3) :: is_periodic
 integer , dimension(3) :: periods
 real(rp), dimension(3) :: l_periodic
 contains 
@@ -57,6 +57,7 @@ contains
   character(len=  3) :: cblock
   integer , dimension(3) :: lo_min,hi_max
   real(rp), dimension(3) :: lmax_periodic,lmin_periodic
+  integer :: q
     open(newunit=iunit,file='dns.in',status='old',action='read',iostat=ierr)
       if( ierr == 0 ) then
         read(iunit,*) cfl,dtmin
@@ -67,7 +68,6 @@ contains
         read(iunit,*) icheck,iout0d,iout1d,iout2d,iout3d,isave
         read(iunit,*)  bforce(1),bforce(2),bforce(3)
         read(iunit,*) nthreadsmax
-        read(iunit,*) is_periodic(1),is_periodic(2),is_periodic(3)
       else
         if(myid == 0) write(stderr,*) '*** Error reading the input file *** ' 
         if(myid == 0) write(stderr,*) 'Aborting...'
@@ -109,6 +109,7 @@ contains
       call MPI_FINALIZE(ierr)
       error stop
     endif
+    is_periodic(:) = .true.
     do iblock = 1,nblocks
       write(cblock,'(i3.3)') iblock
       open(newunit=iunit,file=trim(filename)//cblock,status='old',action='read',iostat=ierr)
@@ -133,6 +134,9 @@ contains
             read(iunit,*) inivel
             my_block = iblock
             id_first = sum(nranks(1:iblock-1))
+            do q=1,3
+              is_periodic(q) = is_periodic(q).and.(cbcpre(0,q)//cbcpre(1,q) == 'FF')
+            enddo
           endif
         else
           if(myid == 0) write(stderr,*) '*** Error reading the input file *** ' 

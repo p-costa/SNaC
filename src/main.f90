@@ -221,12 +221,12 @@ program snac
   call distribute_grid(lo_g(3),lo(3),hi(3),dzf_g,dzf)
   call distribute_grid(lo_g(3),lo(3),hi(3), zc_g, zc)
   call distribute_grid(lo_g(3),lo(3),hi(3), zf_g, zf)
-  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),dxc)
-  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),dxf)
-  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),dyc)
-  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),dyf)
-  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),dzc)
-  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),dzf)
+  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),periods(1),dxc)
+  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),periods(1),dxf)
+  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),periods(2),dyc)
+  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),periods(2),dyf)
+  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),periods(3),dzc)
+  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),periods(3),dzf)
   !
   ! initialization of the flow fields
   !
