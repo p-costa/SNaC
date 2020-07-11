@@ -21,7 +21,7 @@ module mod_initmpi
     integer                 :: nrank
     integer         , dimension(0:dims(1)-1,0:dims(2)-1,0:dims(3)-1) :: id_grid
     integer, dimension(  3) :: n,start,coords,lo_g,hi_g
-    integer, allocatable, dimension(:,:) :: lo_all,hi_all
+    integer, allocatable, dimension(:,:) :: lo_all,hi_all,l,lo_g_all,hi_g_allo_g_all,hi_g_all
     integer, allocatable, dimension(  :) :: blocks_all
     integer, dimension(3,3) :: eye
     integer                 :: i,j,k,idir,iidir,inb,irank,id_coords
@@ -73,10 +73,12 @@ module mod_initmpi
       hi(:) = hi(:) +    mod(ng(:),dims(:))
     end where
     !
-    allocate(lo_all(3,0:nrank-1),hi_all(3,0:nrank-1),blocks_all(0:nrank-1))
+    allocate(lo_all(3,0:nrank-1),hi_all(3,0:nrank-1),lo_g_all(3,0:nrank-1),hi_g_all(3,0:nrank-1), &
+             blocks_all(0:nrank-1))
     call MPI_ALLGATHER(lo      ,3,MPI_INTEGER,lo_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-    print*,lo(1),myid,lo_all(1,0)
     call MPI_ALLGATHER(hi      ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+    call MPI_ALLGATHER(lo_g    ,3,MPI_INTEGER,lo_g_all  ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+    call MPI_ALLGATHER(hi_g    ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(my_block,1,MPI_INTEGER,blocks_all,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     do idir=1,3
       do inb=0,1
@@ -112,12 +114,12 @@ module mod_initmpi
                   elseif(lo(idir) <  hi_all(idir,irank)+1) then
                     if(periods(idir) == hi_all(idir,irank)-lo(idir)+1) then
                       nb(inb,idir) = irank
-                    else
-                      !write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
-                      !write(stderr,*) 'Expected: periods(',idir,') = ',hi_all(idir,irank)-lo(idir)+1
-                      !write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)
-                      !write(stderr,*) ''
-                      !error stop
+                    elseif(hi_all(idir,irank) == hi_g_all(idir,irank)) then
+                      write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
+                      write(stderr,*) 'Expected: periods(',idir,') = ',hi_all(idir,irank)-lo(idir)+1
+                      write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)
+                      write(stderr,*) ''
+                      error stop
                     endif
                   endif
                 elseif ( inb == 1 ) then
@@ -126,19 +128,19 @@ module mod_initmpi
                   elseif(hi(idir) >  lo_all(idir,irank)-1) then
                     if(periods(idir) == hi(idir)-lo_all(idir,irank)+1) then
                       nb(inb,idir) = irank
-                    else
-                      !write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
-                      !write(stderr,*) 'Expected: periods(',idir,') = ',hi(idir)-lo_all(idir,irank)+1
-                      !write(stderr,*) 'Found   : periods(',idir,') =', periods(idir)
-                      !write(stderr,*) ''
-                      !error stop
+                    elseif(lo_all(idir,irank) == lo_g_all(idir,irank)) then
+                      write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
+                      write(stderr,*) 'Expected: periods(',idir,') = ',hi(idir)-lo_all(idir,irank)+1
+                      write(stderr,*) 'Found   : periods(',idir,') =', periods(idir)
+                      write(stderr,*) ''
+                      error stop
                     endif
                   endif
                 endif
                 if(nb(inb,idir) == MPI_PROC_NULL) then
-                  !write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',blocks_all(irank),'not found.'
-                  !write(stderr,*) ''
-                  !error stop
+                  write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',blocks_all(irank),'not found.'
+                  write(stderr,*) ''
+                  error stop
                 endif
               endif
             endif
