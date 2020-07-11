@@ -45,6 +45,8 @@ integer  :: my_block,id_first,nblocks,nrank
 logical , dimension(3) :: is_periodic
 integer , dimension(3) :: periods
 real(rp), dimension(3) :: l_periodic
+integer , dimension(3) :: lo_min,hi_max
+real(rp), dimension(3) :: lmin_min,lmax_max
 contains 
   subroutine read_input()
   use mpi
@@ -55,8 +57,6 @@ contains
   logical :: exists
   character(len=100) :: filename
   character(len=  3) :: cblock
-  integer , dimension(3) :: lo_min,hi_max
-  real(rp), dimension(3) :: lmax_periodic,lmin_periodic
   integer :: q
     open(newunit=iunit,file='dns.in',status='old',action='read',iostat=ierr)
       if( ierr == 0 ) then
@@ -155,12 +155,12 @@ contains
     !
     ! determine size and length of the domain in the periodic direction
     !
-    call MPI_ALLREDUCE(lmin(1),lmin_periodic(1),3,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
-    call MPI_ALLREDUCE(lmax(1),lmax_periodic(1),3,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
-    call MPI_ALLREDUCE(lo(1)  ,lo_min(1)       ,3,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD,ierr)
-    call MPI_ALLREDUCE(hi(1)  ,hi_max(1)       ,3,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(lmin(1),lmin_min(1),3,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(lmax(1),lmax_max(1),3,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(lo(1)  ,lo_min(1)  ,3,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(hi(1)  ,hi_max(1)  ,3,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,ierr)
     where(is_periodic(:))
-      l_periodic(:) = lmax_periodic(:)-lmin_periodic(:)
+      l_periodic(:) = lmax_max(:)-lmin_min(:)
       periods(:)    = hi_max(:)-lo_min(:)+1
     elsewhere
       l_periodic(:) = 0._rp

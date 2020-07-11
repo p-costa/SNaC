@@ -77,11 +77,12 @@ module mod_initgrid
     grid(lo-1:hi+1) = grid_g(lo-1:hi+1)
     return
   end subroutine distribute_grid
-  subroutine bound_grid(lo_g,hi_g,lo,hi,nb,periods,grid)
+  subroutine bound_grid(lo_g,hi_g,lo,hi,nb,is_periodic,lo_min,hi_max,grid)
     implicit none
     integer , intent(in   )                   :: lo_g,hi_g,lo,hi
     integer , intent(in   ), dimension(0:1)   :: nb
-    integer , intent(in   )                   :: periods
+    logical , intent(in   )                   :: is_periodic
+    integer , intent(in   )                   :: lo_min,hi_max
     real(rp), intent(inout), dimension(lo-1:) :: grid
     integer                                   :: shift
     integer , dimension(4)                    :: requests
@@ -89,7 +90,7 @@ module mod_initgrid
     nrequests = 0
     shift = 0
     if(lo == lo_g) then
-      if(lo_g == 1      ) shift = periods
+      if(is_periodic.and.lo == lo_min) shift = hi_max-lo_min + 1
       call MPI_ISEND(grid(lo  ),1,MPI_REAL_RP,nb(0),lo_g+shift, &
                      MPI_COMM_WORLD,requests(nrequests+1),ierr)
       call MPI_IRECV(grid(lo-1),1,MPI_REAL_RP,nb(0),lo_g-1    , &
@@ -98,7 +99,7 @@ module mod_initgrid
     endif
     shift = 0
     if(hi == hi_g) then
-      if(hi_g == periods) shift = periods
+      if(is_periodic.and.hi == hi_max) shift = hi_max-lo_min + 1
       call MPI_ISEND(grid(hi  ),1,MPI_REAL_RP,nb(1),hi_g-shift, &
                      MPI_COMM_WORLD,requests(nrequests+1),ierr)
       call MPI_IRECV(grid(hi+1),1,MPI_REAL_RP,nb(1),hi_g+1    , &

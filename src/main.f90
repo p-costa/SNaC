@@ -35,17 +35,18 @@ program snac
                                  datadir,    &
                                  small,      &
                                  rkcoeff,    &
-                                 cfl,dtmin,uref,lref,rey,visc,                 &
-                                 nstep,time_max,tw_max,stop_type,              &
-                                 restart,is_overwrite_save,                    &
-                                 nthreadsmax,                                  &
-                                 icheck,iout0d,iout1d,iout2d,iout3d,isave,     &
-                                 dims,lo,hi,lmin,lmax,                         &
-                                 gt,gr,                                        &
-                                 cbcvel,bcvel,cbcpre,bcpre,                    &
-                                 bforce,periods,inivel,                        &
-                                 vol_all,my_block,id_first,nblocks,nrank,      &
-                                 is_periodic,l_periodic,                       &
+                                 cfl,dtmin,uref,lref,rey,visc,             &
+                                 nstep,time_max,tw_max,stop_type,          &
+                                 restart,is_overwrite_save,                &
+                                 nthreadsmax,                              &
+                                 icheck,iout0d,iout1d,iout2d,iout3d,isave, &
+                                 dims,lo,hi,lmin,lmax,                     &
+                                 gt,gr,                                    &
+                                 cbcvel,bcvel,cbcpre,bcpre,                &
+                                 bforce,periods,inivel,                    &
+                                 vol_all,my_block,id_first,nblocks,nrank,  &
+                                 is_periodic,l_periodic,                   &
+                                 lmax_max,lmin_min,lo_min,hi_max,          &
                                  hypre_tol,hypre_maxiter
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
@@ -221,12 +222,12 @@ program snac
   call distribute_grid(lo_g(3),lo(3),hi(3),dzf_g,dzf)
   call distribute_grid(lo_g(3),lo(3),hi(3), zc_g, zc)
   call distribute_grid(lo_g(3),lo(3),hi(3), zf_g, zf)
-  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),periods(1),dxc)
-  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),periods(1),dxf)
-  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),periods(2),dyc)
-  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),periods(2),dyf)
-  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),periods(3),dzc)
-  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),periods(3),dzf)
+  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),is_periodic(1),lo_min(1),hi_max(1),dxc)
+  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),is_periodic(1),lo_min(1),hi_max(1),dxf)
+  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),is_periodic(2),lo_min(2),hi_max(2),dyc)
+  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),is_periodic(2),lo_min(2),hi_max(2),dyf)
+  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),is_periodic(3),lo_min(3),hi_max(3),dzc)
+  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),is_periodic(3),lo_min(3),hi_max(3),dzf)
   !
   ! initialization of the flow fields
   !
