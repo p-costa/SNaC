@@ -75,6 +75,7 @@ module mod_initmpi
     !
     allocate(lo_all(3,0:nrank-1),hi_all(3,0:nrank-1),blocks_all(0:nrank-1))
     call MPI_ALLGATHER(lo      ,3,MPI_INTEGER,lo_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+    print*,lo(1),myid,lo_all(1,0)
     call MPI_ALLGATHER(hi      ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(my_block,1,MPI_INTEGER,blocks_all,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     do idir=1,3
@@ -112,11 +113,11 @@ module mod_initmpi
                     if(periods(idir) == hi_all(idir,irank)-lo(idir)+1) then
                       nb(inb,idir) = irank
                     else
-                      write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
-                      write(stderr,*) 'Expected: periods(',idir,') = ',hi_all(idir,irank)-lo(idir)+1
-                      write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)
-                      write(stderr,*) ''
-                      error stop
+                      !write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
+                      !write(stderr,*) 'Expected: periods(',idir,') = ',hi_all(idir,irank)-lo(idir)+1
+                      !write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)
+                      !write(stderr,*) ''
+                      !error stop
                     endif
                   endif
                 elseif ( inb == 1 ) then
@@ -126,18 +127,18 @@ module mod_initmpi
                     if(periods(idir) == hi(idir)-lo_all(idir,irank)+1) then
                       nb(inb,idir) = irank
                     else
-                      write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
-                      write(stderr,*) 'Expected: periods(',idir,') = ',hi(idir)-lo_all(idir,irank)+1
-                      write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)
-                      write(stderr,*) ''
-                      error stop
+                      !write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
+                      !write(stderr,*) 'Expected: periods(',idir,') = ',hi(idir)-lo_all(idir,irank)+1
+                      !write(stderr,*) 'Found   : periods(',idir,') =', periods(idir)
+                      !write(stderr,*) ''
+                      !error stop
                     endif
                   endif
                 endif
                 if(nb(inb,idir) == MPI_PROC_NULL) then
-                  write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',blocks_all(irank),'not found.'
-                  write(stderr,*) ''
-                  error stop
+                  !write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',blocks_all(irank),'not found.'
+                  !write(stderr,*) ''
+                  !error stop
                 endif
               endif
             endif
@@ -146,7 +147,7 @@ module mod_initmpi
         !
         ! check for all ranks my_block if the expected connectivity was found
         !
-        call MPI_ALLREDUCE(is_nb,found_friend,1,MPI_LOGICAL,MPI_LOR,comm_block,ierr) 
+        call MPI_ALLREDUCE(is_nb,found_friend,1,MPI_LOGICAL,MPI_LOR,comm_block,ierr)
         if(cbc(inb,idir) == 'F'.and.(.not.found_friend)) then
           write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',nint(bc(inb,idir)), ' is not possible.'
           write(stderr,*) 'E.g. Blocks must share the same boundaries.'
