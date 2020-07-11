@@ -45,6 +45,7 @@ program snac
                                  cbcvel,bcvel,cbcpre,bcpre,                    &
                                  bforce,periods,inivel,                        &
                                  vol_all,my_block,id_first,nblocks,nrank,      &
+                                 is_periodic,l_periodic,                       &
                                  hypre_tol,hypre_maxiter
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom

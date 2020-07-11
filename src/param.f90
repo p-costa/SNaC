@@ -17,15 +17,16 @@ integer , parameter :: hypre_maxiter = 100
 !
 ! parameters to be determined from the input file 'dns.in'
 !
-real(rp)                             :: cfl,dtmin
-real(rp)                             :: uref,lref,rey,visc
-integer                              :: nstep
-real(rp)                             :: time_max,tw_max
-logical , dimension(3)               :: stop_type
-logical                              :: restart,is_overwrite_save
-integer                              :: icheck,iout0d,iout1d,iout2d,iout3d,isave
-real(rp), dimension(3)               :: bforce
-integer                              :: nthreadsmax
+real(rp)               :: cfl,dtmin
+real(rp)               :: uref,lref,rey,visc
+integer                :: nstep
+real(rp)               :: time_max,tw_max
+logical , dimension(3) :: stop_type
+logical                :: restart,is_overwrite_save
+integer                :: icheck,iout0d,iout1d,iout2d,iout3d,isave
+real(rp), dimension(3) :: bforce
+integer                :: nthreadsmax
+logical , dimension(3) :: is_periodic
 !
 ! parameters specific to each block
 !
@@ -38,11 +39,12 @@ character(len=1  ), dimension(0:1,3,3) :: cbcvel
 real(rp)          , dimension(0:1,3,3) ::  bcvel
 character(len=1  ), dimension(0:1,  3) :: cbcpre
 real(rp)          , dimension(0:1,  3) ::  bcpre
-integer           , dimension(      3) :: periods
 character(len=100)                     :: inivel
 !
 real(rp) :: vol_all
 integer  :: my_block,id_first,nblocks,nrank
+integer , dimension(3) :: periods
+real(rp), dimension(3) :: l_periodic
 contains 
   subroutine read_input()
   use mpi
@@ -53,6 +55,8 @@ contains
   logical :: exists
   character(len=100) :: filename
   character(len=  3) :: cblock
+  integer , dimension(3) :: lo_min,hi_max
+  real(rp), dimension(3) :: lmax_periodic,lmin_periodic
     open(newunit=iunit,file='dns.in',status='old',action='read',iostat=ierr)
       if( ierr == 0 ) then
         read(iunit,*) cfl,dtmin
@@ -63,6 +67,7 @@ contains
         read(iunit,*) icheck,iout0d,iout1d,iout2d,iout3d,isave
         read(iunit,*)  bforce(1),bforce(2),bforce(3)
         read(iunit,*) nthreadsmax
+        read(iunit,*) is_periodic(1),is_periodic(2),is_periodic(3)
       else
         if(myid == 0) write(stderr,*) '*** Error reading the input file *** ' 
         if(myid == 0) write(stderr,*) 'Aborting...'
@@ -125,7 +130,6 @@ contains
             read(iunit,*)  bcvel(0,1,2), bcvel(1,1,2), bcvel(0,2,2), bcvel(1,2,2), bcvel(0,3,2), bcvel(1,3,2)
             read(iunit,*)  bcvel(0,1,3), bcvel(1,1,3), bcvel(0,2,3), bcvel(1,2,3), bcvel(0,3,3), bcvel(1,3,3)
             read(iunit,*)  bcpre(0,1  ), bcpre(1,1  ), bcpre(0,2  ), bcpre(1,2  ), bcpre(0,3  ), bcpre(1,3  )
-            read(iunit,*) periods(1),periods(2),periods(3)
             read(iunit,*) inivel
             my_block = iblock
             id_first = sum(nranks(1:iblock-1))
@@ -144,6 +148,20 @@ contains
     !
     vol_all = product(lmax(:)-lmin(:))/product(dims(:))
     call mpi_allreduce(MPI_IN_PLACE,vol_all,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+    !
+    ! determine size and length of the domain in the periodic direction
+    !
+    call MPI_ALLREDUCE(lmin(1),lmin_periodic(1),3,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(lmax(1),lmax_periodic(1),3,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(lo(1)  ,lo_min(1)       ,3,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(hi(1)  ,hi_max(1)       ,3,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,ierr)
+    where(is_periodic(:))
+      l_periodic(:) = lmax_periodic(:)-lmin_periodic(:)
+      periods(:)    = hi_max(:)-lo_min(:)+1
+    elsewhere
+      l_periodic(:) = 0._rp
+      periods(:)    = 0
+    end where
   return
   end subroutine read_input
 end module mod_param

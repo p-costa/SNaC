@@ -13,6 +13,5 @@ N F  F N  N N            ! cbcpre(0:1,1:3  ) [p BC type]
 0. 4.  1. 0.  0. 0.      !  bcvel(0:1,1:3,2) [v BC value]
 0. 4.  1. 0.  0. 0.      !  bcvel(0:1,1:3,3) [w BC value]
 0. 4.  1. 0.  0. 0.      !  bcpre(0:1,1:3  ) [p BC value]
-0 0 0                    ! periods(1:3)
 zer                      ! inivel
 3                        ! id
