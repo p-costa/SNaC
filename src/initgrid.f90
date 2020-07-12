@@ -77,13 +77,13 @@ module mod_initgrid
     grid(lo-1:hi+1) = grid_g(lo-1:hi+1)
     return
   end subroutine distribute_grid
-  subroutine bound_grid(lo_g,hi_g,lo,hi,nb,is_periodic,lo_min,hi_max,grid)
+  subroutine bound_grid(lo_g,hi_g,lo,hi,nb,is_periodic,lo_min,hi_max,grid_f,grid_c)
     implicit none
     integer , intent(in   )                   :: lo_g,hi_g,lo,hi
     integer , intent(in   ), dimension(0:1)   :: nb
     logical , intent(in   )                   :: is_periodic
     integer , intent(in   )                   :: lo_min,hi_max
-    real(rp), intent(inout), dimension(lo-1:) :: grid
+    real(rp), intent(inout), dimension(lo-1:) :: grid_f,grid_c
     integer                                   :: shift
     integer , dimension(4)                    :: requests
     integer                                   :: nrequests
@@ -91,22 +91,24 @@ module mod_initgrid
     shift = 0
     if(lo == lo_g) then
       if(is_periodic.and.lo == lo_min) shift = hi_max-lo_min + 1
-      call MPI_ISEND(grid(lo  ),1,MPI_REAL_RP,nb(0),lo_g+shift, &
+      call MPI_ISEND(grid_f(lo  ),1,MPI_REAL_RP,nb(0),lo_g+shift, &
                      MPI_COMM_WORLD,requests(nrequests+1),ierr)
-      call MPI_IRECV(grid(lo-1),1,MPI_REAL_RP,nb(0),lo_g-1    , &
+      call MPI_IRECV(grid_f(lo-1),1,MPI_REAL_RP,nb(0),lo_g-1    , &
                      MPI_COMM_WORLD,requests(nrequests+2),ierr)
       nrequests = nrequests + 2
     endif
     shift = 0
     if(hi == hi_g) then
       if(is_periodic.and.hi == hi_max) shift = hi_max-lo_min + 1
-      call MPI_ISEND(grid(hi  ),1,MPI_REAL_RP,nb(1),hi_g-shift, &
+      call MPI_ISEND(grid_f(hi  ),1,MPI_REAL_RP,nb(1),hi_g-shift, &
                      MPI_COMM_WORLD,requests(nrequests+1),ierr)
-      call MPI_IRECV(grid(hi+1),1,MPI_REAL_RP,nb(1),hi_g+1    , &
+      call MPI_IRECV(grid_f(hi+1),1,MPI_REAL_RP,nb(1),hi_g+1    , &
                      MPI_COMM_WORLD,requests(nrequests+2),ierr)
       nrequests = nrequests + 2
     endif
     call MPI_WAITALL(nrequests,requests,MPI_STATUSES_IGNORE,ierr)
+    if(lo == lo_g) grid_c(lo-1) = (grid_f(lo  )+grid_f(lo-1))/2._rp
+    if(hi == hi_g) grid_c(hi  ) = (grid_f(hi+1)+grid_f(hi  ))/2._rp
     return
   end subroutine bound_grid
   subroutine save_grid(fname,lo_g,hi_g,rf_g,rc_g,drf_g,drc_g)

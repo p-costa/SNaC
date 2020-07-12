@@ -117,7 +117,7 @@ module mod_debug
       do k=lo(3),hi(3)
         do i=lo(1),hi(1)
           tau%x(idir) = tau%x(idir) + &
-            (u(i,hi(idir),k)-u(i,hi(idir)+1,k))/dyc(hi(idir)+1)*visc*dxc(i)*dzc(k)/(l(1)*l(3))
+            (u(i,hi(idir),k)-u(i,hi(idir)+1,k))/dyc(hi(idir)+0)*visc*dxc(i)*dzc(k)/(l(1)*l(3))
         enddo
       enddo
     endif
@@ -134,7 +134,7 @@ module mod_debug
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           tau%x(idir) = tau%x(idir) + &
-            (u(i,j,hi(idir))-u(i,j,hi(idir)+1))/dzc(hi(idir)+1)*visc*dxc(i)*dyc(j)/(l(1)*l(2))
+            (u(i,j,hi(idir))-u(i,j,hi(idir)+1))/dzc(hi(idir)+0)*visc*dxc(i)*dyc(j)/(l(1)*l(2))
         enddo
       enddo
     endif
@@ -153,7 +153,7 @@ module mod_debug
       do k=lo(3),hi(3)
         do j=lo(2),hi(2)
           tau%y(idir) = tau%y(idir) + &
-            (v(hi(idir),j,k)-v(hi(idir)+1,j,k))/dxc(hi(idir)+1)*visc*dyc(j)*dzc(k)/(l(2)*l(3))
+            (v(hi(idir),j,k)-v(hi(idir)+1,j,k))/dxc(hi(idir)+0)*visc*dyc(j)*dzc(k)/(l(2)*l(3))
         enddo
       enddo
     endif
@@ -170,7 +170,7 @@ module mod_debug
       do i=lo(1),hi(1)
         do j=lo(2),hi(2)
           tau%y(idir) = tau%y(idir) + &
-            (v(i,j,hi(idir))-v(i,j,hi(idir)+1))/dzc(hi(idir)+1)*visc*dyc(j)*dxc(i)/(l(2)*l(1))
+            (v(i,j,hi(idir))-v(i,j,hi(idir)+1))/dzc(hi(idir)+0)*visc*dyc(j)*dxc(i)/(l(2)*l(1))
         enddo
       enddo
     endif
@@ -189,7 +189,7 @@ module mod_debug
       do k=lo(3),hi(3)
         do j=lo(2),hi(2)
           tau%z(idir) = tau%z(idir) + &
-            (w(hi(idir),j,k)-w(hi(idir)+1,j,k))/dxc(hi(idir)+1)*visc*dzc(k)*dyc(j)/(l(3)*l(2))
+            (w(hi(idir),j,k)-w(hi(idir)+1,j,k))/dxc(hi(idir)+0)*visc*dzc(k)*dyc(j)/(l(3)*l(2))
         enddo
       enddo
     endif
@@ -206,7 +206,7 @@ module mod_debug
       do i=lo(1),hi(1)
         do k=lo(3),hi(3)
           tau%z(idir) = tau%z(idir) + &
-            (w(i,hi(idir),k)-w(i,hi(idir)+1,k))/dyc(hi(idir)+1)*visc*dzc(k)*dxc(i)/(l(3)*l(1))
+            (w(i,hi(idir),k)-w(i,hi(idir)+1,k))/dyc(hi(idir)+0)*visc*dzc(k)*dxc(i)/(l(3)*l(1))
         enddo
       enddo
     endif
