@@ -60,8 +60,8 @@ module mod_initgrid
     !
     ! step 4) compute coordinates of cell centers rc and faces rf
     !
-    rc_g(lo-1)    = -drc_g(lo-1)/2._rp
-    rf_g(lo-1)    = 0._rp
+    rc_g(lo-1)    = lmin - drc_g(lo-1)/2._rp
+    rf_g(lo-1)    = lmin
     do q=lo,hi+1
       rc_g(q) = rc_g(q-1) + drc_g(q-1)
       rf_g(q) = rf_g(q-1) + drf_g(q  )
@@ -109,6 +109,7 @@ module mod_initgrid
     call MPI_WAITALL(nrequests,requests,MPI_STATUSES_IGNORE,ierr)
     if(lo == lo_g) grid_c(lo-1) = (grid_f(lo  )+grid_f(lo-1))/2._rp
     if(hi == hi_g) grid_c(hi  ) = (grid_f(hi+1)+grid_f(hi  ))/2._rp
+    if(hi == hi_g) grid_c(hi+1) = grid_c(hi) ! not needed
     return
   end subroutine bound_grid
   subroutine save_grid(fname,lo_g,hi_g,rf_g,rc_g,drf_g,drc_g)
