@@ -78,7 +78,7 @@ module mod_initmpi
     call MPI_ALLGATHER(lo      ,3,MPI_INTEGER,lo_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(hi      ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(lo_g    ,3,MPI_INTEGER,lo_g_all  ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-    call MPI_ALLGATHER(hi_g    ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
+    call MPI_ALLGATHER(hi_g    ,3,MPI_INTEGER,hi_g_all  ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     call MPI_ALLGATHER(my_block,1,MPI_INTEGER,blocks_all,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
     do idir=1,3
       do inb=0,1
