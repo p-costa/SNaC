@@ -108,7 +108,7 @@ module mod_initmpi
               ! inconsistent in inputs
               !
               if(is_nb) then
-                if(      inb == 0 ) then
+                if(      inb == 0 .and. lo(idir) == lo_g(idir)) then
                   if(    lo(idir) == hi_all(idir,irank)+1) then
                     nb(inb,idir) = irank
                   elseif(lo(idir) <  hi_all(idir,irank)+1) then
@@ -122,7 +122,7 @@ module mod_initmpi
                       error stop
                     endif
                   endif
-                elseif ( inb == 1 ) then
+                elseif ( inb == 1 .and. hi(idir) == hi_g(idir)) then
                   if(    hi(idir) == lo_all(idir,irank)-1) then
                     nb(inb,idir) = irank
                   elseif(hi(idir) >  lo_all(idir,irank)-1) then
@@ -136,12 +136,11 @@ module mod_initmpi
                       error stop
                     endif
                   endif
+                else
+                  write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',blocks_all(irank),'not found.'
+                  write(stderr,*) ''
+                  error stop
                 endif
-                !if(nb(inb,idir) == MPI_PROC_NULL) then
-                !  write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',blocks_all(irank),'not found.'
-                !  write(stderr,*) ''
-                !  error stop
-                !endif
               endif
             endif
           enddo
