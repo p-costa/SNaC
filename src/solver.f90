@@ -97,7 +97,7 @@ module mod_solver
     ! create coefficient matrix, and solution & right-hand-side vectors
     !
     call HYPRE_StructMatrixCreate(comm_hypre,grid,stencil,mat,ierr)
-    call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
+    !call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
     call HYPRE_StructMatrixInitialize(mat,ierr)
     call HYPRE_StructVectorCreate(comm_hypre,grid,sol,ierr)
     call HYPRE_StructVectorInitialize(sol,ierr)
