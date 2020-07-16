@@ -115,9 +115,10 @@ module mod_initmpi
                     if(periods(idir) == hi_all(idir,irank)-lo(idir)+1) then
                       nb(inb,idir) = irank
                     elseif(hi_all(idir,irank) == hi_g_all(idir,irank)) then
-                      write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
+                      write(stderr,*) 'ERROR: Inconsistent periodic boundary condition (?).'
                       write(stderr,*) 'Expected: periods(',idir,') = ',hi_all(idir,irank)-lo(idir)+1
                       write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)
+                      write(stderr,*) 'Error when connecting block: ' ,my_block
                       write(stderr,*) ''
                       error stop
                     endif
@@ -129,9 +130,10 @@ module mod_initmpi
                     if(periods(idir) == hi(idir)-lo_all(idir,irank)+1) then
                       nb(inb,idir) = irank
                     elseif(lo_all(idir,irank) == lo_g_all(idir,irank)) then
-                      write(stderr,*) 'ERROR: Inconsistent periodic boundary condition.'
+                      write(stderr,*) 'ERROR: Inconsistent periodic boundary condition (?).'
                       write(stderr,*) 'Expected: periods(',idir,') = ',hi(idir)-lo_all(idir,irank)+1
-                      write(stderr,*) 'Found   : periods(',idir,') =', periods(idir)
+                      write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)
+                      write(stderr,*) 'Error when connecting block: ' ,my_block
                       write(stderr,*) ''
                       error stop
                     endif
@@ -148,8 +150,19 @@ module mod_initmpi
         !
         ! check for all ranks my_block if the expected connectivity was found
         !
-        call MPI_ALLREDUCE(is_nb,found_friend,1,MPI_LOGICAL,MPI_LOR,comm_block,ierr)
-        if(cbc(inb,idir) == 'F'.and.(.not.found_friend)) then
+        !call MPI_ALLREDUCE(is_nb,found_friend,1,MPI_LOGICAL,MPI_LOR,comm_block,ierr)
+        !if(cbc(inb,idir) == 'F'.and.(.not.found_friend)) then
+        !  write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',nint(bc(inb,idir)), ' is not possible.'
+        !  write(stderr,*) 'E.g. Blocks must share the same boundaries.'
+        !  write(stderr,*) ''
+        !  error stop
+        !endif
+      enddo
+    enddo
+    deallocate(lo_all,hi_all,blocks_all)
+    do idir=1,3
+      do inb=0,1
+        if(cbc(inb,idir) == 'F'.and.nb(inb,idir) == MPI_PROC_NULL) then
           write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',nint(bc(inb,idir)), ' is not possible.'
           write(stderr,*) 'E.g. Blocks must share the same boundaries.'
           write(stderr,*) ''
@@ -157,7 +170,6 @@ module mod_initmpi
         endif
       enddo
     enddo
-    deallocate(lo_all,hi_all,blocks_all)
     !
     do idir=1,3
       is_bound(:,idir) = .false.
