@@ -148,6 +148,9 @@ module mod_initmpi
           enddo
         endif
         !
+        ! NB: need to add an extra 'hand-shake test'
+        !
+        !
         ! check for all ranks my_block if the expected connectivity was found
         !
         !call MPI_ALLREDUCE(is_nb,found_friend,1,MPI_LOGICAL,MPI_LOR,comm_block,ierr)

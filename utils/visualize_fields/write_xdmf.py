@@ -4,9 +4,9 @@ import glob
 #
 # define some custom parameters, not defined in the DNS code
 #
-iseek      = 0            # number of bytes to skip relative to the origin of the binary file (0 for CaNS)
-iprecision = 8            # precision of real-valued data
-r0 = np.array([0.,0.,0.]) # domain origin
+iseek      = 0              # number of bytes to skip relative to the origin of the binary file (0 for CaNS)
+iprecision = 8              # precision of real-valued data
+r0_g = np.array([0.,0.,0.]) # domain origin
 non_uniform_grid = True
 #
 # retrieve number of blocks from the number of geo files
@@ -94,9 +94,9 @@ for iblock in range(1,nblocks+1):
         grid_x = np.reshape(grid_x,(ng[0],4),order='F')
         grid_y = np.reshape(grid_y,(ng[1],4),order='F')
         grid_z = np.reshape(grid_z,(ng[2],4),order='F')
-        x = r0[0] + grid_x[:,1]
-        y = r0[1] + grid_y[:,1]
-        z = r0[2] + grid_z[:,1]
+        x = r0_g[0] + grid_x[:,1]
+        y = r0_g[1] + grid_y[:,1]
+        z = r0_g[2] + grid_z[:,1]
     x[nmin[0]-1:nmax[0]:nstep[0]].astype('float64').tofile(xgridfile)
     y[nmin[1]-1:nmax[1]:nstep[1]].astype('float64').tofile(ygridfile)
     z[nmin[2]-1:nmax[2]:nstep[2]].astype('float64').tofile(zgridfile)

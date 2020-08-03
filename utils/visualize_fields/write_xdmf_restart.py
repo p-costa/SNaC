@@ -8,8 +8,8 @@ import struct
 #
 # define some custom parameters, not defined in the DNS code
 #
-iprecision = 8            # precision of the real-valued data
-r0 = np.array([0.,0.,0.]) # domain origin
+iprecision = 8              # precision of the real-valued data
+r0_g = np.array([0.,0.,0.]) # domain origin
 non_uniform_grid = True
 #
 geofiles  = "geometry_b_???.out"
@@ -95,9 +95,9 @@ for iblock in range(1,nblocks+1):
         grid_x = np.reshape(grid_x,(ng[0],4),order='F')
         grid_y = np.reshape(grid_y,(ng[1],4),order='F')
         grid_z = np.reshape(grid_z,(ng[2],4),order='F')
-        x = r0[0] + grid_x[:,1]
-        y = r0[1] + grid_y[:,1]
-        z = r0[2] + grid_z[:,1]
+        x = r0_g[0] + grid_x[:,1]
+        y = r0_g[1] + grid_y[:,1]
+        z = r0_g[2] + grid_z[:,1]
     x[0:n[0]].astype('float64').tofile(xgridfile)
     y[0:n[1]].astype('float64').tofile(ygridfile)
     z[0:n[2]].astype('float64').tofile(zgridfile)
