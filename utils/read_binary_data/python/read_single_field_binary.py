@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-def read_single_field_binary(filenamei,iskip):
+def read_single_field_binary(filenamei,blocknum,iskip):
     import numpy as np
     #
     # setting up some parameters
@@ -9,10 +9,11 @@ def read_single_field_binary(filenamei,iskip):
     non_uniform_grid = True
     precision  = 'float64'
     if(iprecision == 4): precision = 'float32'
+    blockname = "_b_{:3}".format(str(blocknum).zfill(3))
     #
     # read geometry file
     #
-    geofile  = "geometry.out"
+    geofile  = "geometry"+blockname+".out"
     geo = np.loadtxt(geofile, comments = "!", max_rows = 2)
     ng = geo[0,:].astype('int')
     l  = geo[1,:]
@@ -27,13 +28,13 @@ def read_single_field_binary(filenamei,iskip):
     yv = yp + dl[1]/2.                              # staggered y grid
     zw = zp + dl[2]/2.                              # staggered z grid
     if(non_uniform_grid):
-        f   = open('grid_x.bin','rb')
+        f   = open('grid_x'+blockname+'.bin','rb')
         grid_x = np.fromfile(f,dtype=precision)
         f.close()
-        f   = open('grid_y.bin','rb')
+        f   = open('grid_y'+blockname+'.bin','rb')
         grid_y = np.fromfile(f,dtype=precision)
         f.close()
-        f   = open('grid_z.bin','rb')
+        f   = open('grid_z'+blockname+'.bin','rb')
         grid_z = np.fromfile(f,dtype=precision)
         f.close()
         grid_x = np.reshape(grid_x,(ng[0],4),order='F')
@@ -64,9 +65,10 @@ def read_single_field_binary(filenamei,iskip):
     return data,xp,yp,zp,xu,yv,zw
 if __name__ == "__main__":
     import numpy as np
-    filenamei   = input("Name of the binary file written by CaNS (e.g. vex_fld_0000000.bin)]: ")
+    filenamei   = input("Name of the binary file written by CaNS (e.g. vex_fld_0000000.bin): ")
+    blocknum    = input("Number of the block (e.g. 1): ")
     iskipx      = input("Data saved every (ix, iy, iz) points. Value of ix? [1]: ") or "1"
     iskipy      = input("Data saved every (ix, iy, iz) points. Value of iy? [1]: ") or "1"
     iskipz      = input("Data saved every (ix, iy, iz) points. Value of iz? [1]: ") or "1"
     iskip       = np.array([iskipx,iskipy,iskipz]).astype(int)
-    read_single_field_binary(filenamei,iskip)
+    read_single_field_binary(filenamei,blocknum,iskip)
