@@ -136,6 +136,7 @@ contains
             id_first = sum(nranks(1:iblock-1))
             do q=1,3
               is_periodic(q) = is_periodic(q).and.(cbcpre(0,q)//cbcpre(1,q) == 'FF')
+              print*,cbcpre(0,q)//cbcpre(1,q)
             enddo
           endif
         else
@@ -146,6 +147,7 @@ contains
         endif
       close(iunit)
     enddo
+    call mpi_allreduce(MPI_IN_PLACE,is_periodic,3,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
     deallocate(nranks)
     !
     ! compute volume of all blocks (useful to compute bulk averages)
