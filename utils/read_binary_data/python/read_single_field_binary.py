@@ -5,7 +5,7 @@ def read_single_field_binary(filenamei,blocknum,iskip):
     # setting up some parameters
     #
     iprecision = 8            # precision of the real-valued data
-    r0 = np.array([0.,0.,0.]) # domain origin
+    r0_g = np.array([0.,0.,0.]) # domain origin
     non_uniform_grid = True
     precision  = 'float64'
     if(iprecision == 4): precision = 'float32'
@@ -14,10 +14,11 @@ def read_single_field_binary(filenamei,blocknum,iskip):
     # read geometry file
     #
     geofile  = "geometry"+blockname+".out"
-    geo = np.loadtxt(geofile, comments = "!", max_rows = 2)
-    ng = geo[0,:].astype('int')
-    l  = geo[1,:]
+    data = np.loadtxt(geofile, comments = "!", max_rows = 4)
+    ng = (data[1,:]-data[0,:]+1).astype('int')
+    l  = data[3,:]-data[2,:]
     dl = l/(1.*ng)
+    r0 = data[2,:]
     #
     # read and generate grid
     #
@@ -40,15 +41,14 @@ def read_single_field_binary(filenamei,blocknum,iskip):
         grid_x = np.reshape(grid_x,(ng[0],4),order='F')
         grid_y = np.reshape(grid_y,(ng[1],4),order='F')
         grid_z = np.reshape(grid_z,(ng[2],4),order='F')
-        xp = r0[0] + np.transpose(grid_x[:,1]) # centered  z grid
-        xu = r0[0] + np.transpose(grid_x[:,0]) # staggered z grid
-        yp = r0[1] + np.transpose(grid_y[:,1]) # centered  z grid
-        yv = r0[1] + np.transpose(grid_y[:,0]) # staggered z grid
-        zp = r0[2] + np.transpose(grid_z[:,1]) # centered  z grid
-        zw = r0[2] + np.transpose(grid_z[:,0]) # staggered z grid
+        xp = r0_g[0] + np.transpose(grid_x[:,1]) # centered  z grid
+        xu = r0_g[0] + np.transpose(grid_x[:,0]) # staggered z grid
+        yp = r0_g[1] + np.transpose(grid_y[:,1]) # centered  z grid
+        yv = r0_g[1] + np.transpose(grid_y[:,0]) # staggered z grid
+        zp = r0_g[2] + np.transpose(grid_z[:,1]) # centered  z grid
+        zw = r0_g[2] + np.transpose(grid_z[:,0]) # staggered z grid
     #
     # read binary file
-    #
     n           = (ng[:]/iskip[:]).astype(int)
     data        = np.zeros([n[0],n[1],n[2]])
     fld         = np.fromfile(filenamei,dtype=precision)

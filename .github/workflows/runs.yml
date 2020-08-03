@@ -1,0 +1,27 @@
+name: test against benchmark data
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: install software to compile SNaC
+      run: |
+        sudo apt-get update; sudo apt-get install gfortran libopenmpi-dev git
+        git clone https://github.com/hypre-space/hypre $HOME/hypre_repo && cd $HOME/hypre_repo/src && ./configure --prefix=$HOME/hypre && make && make install && cd -
+    - name: install python dependencies for performing the tests
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+    - name: install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy flake8 pytest
+    - name: run all tests
+      run: |
+        cd tests/
+        for i in */; do cd $i && sh testit.sh && cd -; done
