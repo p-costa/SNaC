@@ -2,9 +2,9 @@
 FC   = mpifort
 # flags
 BIG :=
-DBG := -O0 -g -fbacktrace -Wall -Wextra -pedantic -fcheck=all -finit-real=snan -ffpe-trap=invalid -std=f2018
+DBG := #-O0 -g -fbacktrace -Wall -Wextra -pedantic -fcheck=all -finit-real=snan -ffpe-trap=invalid -std=f2018
 OMP :=
-OPT := #-O3
+OPT := -O3
 OTH := 
 PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
@@ -28,8 +28,7 @@ run: $(TARGET)
 	@mkdir -p $(RUNDIR) $(DATDIR)
 	@cp $(TARGET) $(RUNDIR)
 	@cp dns.in $(RUNDIR)
-	@cp -r geo $(RUNDIR)
-	@printf "\nExecutable file $(TARGET), input file dns.in and geo folder copied to run folder $(RUNDIR)\n"
+	@printf "\nExecutable file $(TARGET), input file dns.in copied to run folder $(RUNDIR)\n"
 #
 .PHONY: clean
 clean:
