@@ -134,7 +134,6 @@ module mod_rk
     enddo
     !$OMP END PARALLEL DO
 #endif
-    return
   end subroutine rk_mom
   subroutine rk_scal(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,alpha,u,v,w,dsdtrko,s)
     use mod_scal, only: scal_a,scal_d
@@ -173,6 +172,5 @@ module mod_rk
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine rk_scal
 end module mod_rk

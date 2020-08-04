@@ -58,7 +58,6 @@ module mod_initmpi
       where(nb(0:1,idir) == MPI_PROC_NULL) is_bound(0:1,idir) = .true.
       call makehalo(idir,1,n,halos(idir))
     enddo
-    return
   end subroutine initmpi
   subroutine makehalo(idir,nh,n,halo)
     implicit none
@@ -76,6 +75,5 @@ module mod_initmpi
       call MPI_TYPE_VECTOR(          1,nh*nn(1)*nn(2),nn(1)*nn(2)*nn(3),MPI_REAL_RP,halo,ierr)
     end select
     call MPI_TYPE_COMMIT(halo,ierr)
-    return
   end subroutine makehalo
 end module mod_initmpi

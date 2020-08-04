@@ -176,7 +176,6 @@ module mod_solver
     asolver%rhs        = rhs
     asolver%sol        = sol
     asolver%comm_hypre = comm_hypre
-    return
   end subroutine init_matrix
   subroutine create_solver(maxiter,maxerror,stype,asolver)
     implicit none
@@ -243,7 +242,6 @@ module mod_solver
     asolver%precond = precond
     asolver%solver  = solver
     asolver%stype   = stype
-    return
   end subroutine create_solver
   subroutine setup_solver(asolver)
     implicit none
@@ -275,7 +273,6 @@ module mod_solver
         call HYPRE_StructBiCGSTABSetup(solver,mat,rhs,sol,ierr)
       endif
     endif
-    return
   end subroutine setup_solver
   !
   subroutine add_to_diagonal(lo,hi,alpha,mat)
@@ -295,7 +292,6 @@ module mod_solver
       enddo
     enddo
     call HYPRE_StructMatrixAddToBoxValues(mat,lo,hi,1,[0],matvalues,ierr)
-    return
   end subroutine add_to_diagonal
   subroutine solve_helmholtz(asolver,lo,hi,p,po)
     implicit none
@@ -368,7 +364,6 @@ module mod_solver
         enddo
       enddo
     enddo
-    return
   end subroutine solve_helmholtz
   !
   subroutine finalize_solver(asolver)
@@ -397,7 +392,6 @@ module mod_solver
       call HYPRE_StructPFMGDestroy(precond,ierr)
     endif
     !
-    return 
   end subroutine finalize_solver
   subroutine finalize_matrix(asolver)
     implicit none
@@ -416,6 +410,5 @@ module mod_solver
     call HYPRE_StructVectorDestroy(rhs,ierr)
     call HYPRE_StructVectorDestroy(sol,ierr)
     !
-    return 
   end subroutine finalize_matrix
 end module mod_solver

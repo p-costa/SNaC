@@ -23,7 +23,6 @@ module mod_sanity
     call chk_stop_type(stop_type,passed);        if(.not.passed) call abortit
     call chk_bc(cbcvel,cbcpre,passed);           if(.not.passed) call abortit
     call chk_forcing(cbcpre,is_forced,passed);   if(.not.passed) call abortit 
-    return
   end subroutine test_sanity
   !
   subroutine chk_stop_type(stop_type,passed)
@@ -36,7 +35,6 @@ module mod_sanity
     if(.not.passed_loc) &
       call write_error('stopping criterion not chosen.')
     passed = passed.and.passed_loc
-    return 
   end subroutine chk_stop_type
   !
   subroutine chk_grid(gr,passed)
@@ -49,7 +47,6 @@ module mod_sanity
     if(.not.passed_loc) & 
       call write_error('grid growth parameter must be positive.')
     passed = passed.and.passed_loc
-    return 
   end subroutine chk_grid
   !
   subroutine chk_bc(cbcvel,cbcpre,passed)
@@ -97,7 +94,6 @@ module mod_sanity
     if(.not.passed_loc) call write_error('velocity and pressure BCs not compatible.')
     passed = passed.and.passed_loc
     !
-    return 
   end subroutine chk_bc
   !
   subroutine chk_forcing(cbcpre,is_forced,passed)
@@ -117,7 +113,6 @@ module mod_sanity
     enddo
     if(.not.passed) &
       call write_error('Flow cannot be forced in a non-periodic direction; check the BCs and is_forced in dns.in.')
-    return 
   end subroutine chk_forcing
   !
   subroutine abortit
@@ -127,11 +122,9 @@ module mod_sanity
     if(myid == 0) write(stderr,*) '    check dns.in'
     call MPI_FINALIZE(ierr)
     error stop
-    return
   end subroutine abortit
   subroutine write_error(message)
     character(len=*), intent(in) :: message
     if(myid == 0) write(stderr,*) 'ERROR: '//message
-    return
   end subroutine write_error
 end module mod_sanity

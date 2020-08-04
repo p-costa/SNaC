@@ -48,6 +48,5 @@ module mod_updt_pressure
     enddo
     !$OMP END PARALLEL DO
 #endif
-    return
   end subroutine updt_pressure
 end module mod_updt_pressure

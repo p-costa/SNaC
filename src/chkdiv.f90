@@ -42,6 +42,5 @@ module mod_chkdiv
     !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,divtot,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
     call mpi_allreduce(MPI_IN_PLACE,divmax,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
-    return
   end subroutine chkdiv
 end module mod_chkdiv

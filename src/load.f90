@@ -73,7 +73,6 @@ module mod_load
       call MPI_FILE_WRITE(fh,fldinfo,nreals_myid,MPI_REAL_RP,MPI_STATUS_IGNORE,ierr)
       call MPI_FILE_CLOSE(fh,ierr)
     end select
-    return
   end subroutine load
   subroutine io_field(io,fh,ng,nh,lo,hi,disp,var)
     implicit none
@@ -107,6 +106,5 @@ module mod_load
       disp = disp+product(ng)*storage_size(1._rp)/8
       call MPI_TYPE_FREE(type_glob,ierr)
       call MPI_TYPE_FREE(type_loc ,ierr)
-    return
   end subroutine io_field
 end module mod_load

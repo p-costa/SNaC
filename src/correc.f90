@@ -51,6 +51,5 @@ module mod_correc
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine correc
 end module mod_correc

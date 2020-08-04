@@ -29,7 +29,6 @@ module mod_output
       write(iunit,trim(cfmt)) (var(i),i=1,n) 
       close(iunit)
     endif
-    return
   end subroutine out0d
   !
   subroutine out1d(fname,lo,hi,ng,idir,l,dx,dy,dz,x,y,z,x_g,y_g,z_g,p)
@@ -120,7 +119,6 @@ module mod_output
       endif
     end select
     deallocate(p1d)
-    return
   end subroutine out1d
   !
   subroutine out3d(fname,lo,hi,ng,nskip,p)
@@ -152,7 +150,6 @@ module mod_output
     disp = 0_MPI_OFFSET_KIND
     call io_field('w',fh,ng,[1,1,1],lo,hi,disp,p)
     call MPI_FILE_CLOSE(fh,ierr)
-    return
   end subroutine out3d
   !
   subroutine write_log_output(fname,fname_fld,varname,nmin,nmax,nskip,time,istep)
@@ -184,7 +181,6 @@ module mod_output
       write(iunit,trim(cfmt)) trim(fname_fld),' ',trim(varname),nmin,nmax,nskip,time,istep
       close(iunit)
     endif
-    return
   end subroutine write_log_output
   !
   subroutine write_visu_3d(datadir,fname_bin,fname_log,varname,lo,hi,ng,nmin,nmax,nskip,time,istep,p)
@@ -200,6 +196,5 @@ module mod_output
     !
     call out3d(trim(datadir)//trim(fname_bin),lo,hi,ng,nskip,p)
     call write_log_output(trim(datadir)//trim(fname_log),trim(fname_bin),trim(varname),nmin,nmax,nskip,time,istep)
-    return
   end subroutine write_visu_3d
 end module mod_output

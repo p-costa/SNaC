@@ -92,6 +92,5 @@ contains
     dl(:)  = l(:)/(1._rp*ng(:))
     dli(:) = dl(:)**(-1)
     visc = uref*lref/rey
-    return
   end subroutine read_input
 end module mod_param

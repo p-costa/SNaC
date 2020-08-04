@@ -40,7 +40,6 @@ module mod_mom
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine momx_a
   !
   subroutine momy_a(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdt)
@@ -78,7 +77,6 @@ module mod_mom
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine momy_a
   !
   subroutine momz_a(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdt)
@@ -116,7 +114,6 @@ module mod_mom
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine momz_a
   !
   subroutine momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudt)
@@ -155,7 +152,6 @@ module mod_mom
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine momx_d
   !
   subroutine momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdt)
@@ -194,7 +190,6 @@ module mod_mom
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine momy_d
   !
   subroutine momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdt)
@@ -233,7 +228,6 @@ module mod_mom
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine momz_d
   subroutine momx_p(lo,hi,dxc,bforce,p,dudt)
     implicit none
@@ -255,7 +249,6 @@ module mod_mom
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine momx_p
   !
   subroutine momy_p(lo,hi,dyc,bforce,p,dvdt)
@@ -278,7 +271,6 @@ module mod_mom
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine momy_p
   !
   subroutine momz_p(lo,hi,dzc,bforce,p,dwdt)
@@ -301,6 +293,5 @@ module mod_mom
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine momz_p
 end module mod_mom
