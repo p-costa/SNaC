@@ -167,6 +167,5 @@ contains
       l_periodic(:) = 0._rp
       periods(:)    = 0
     end where
-  return
   end subroutine read_input
 end module mod_param

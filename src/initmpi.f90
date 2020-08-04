@@ -182,7 +182,6 @@ module mod_initmpi
                                             ntot_min, &
                                             (1.*ntot_sum)/(1._rp*nrank), &
                                             (1._rp*ntot*nrank)/(1._rp*ntot_sum)
-    return
   end subroutine initmpi
   subroutine makehalo(idir,nh,n,halo)
     implicit none
@@ -200,6 +199,5 @@ module mod_initmpi
       call MPI_TYPE_VECTOR(          1,nh*nn(1)*nn(2),nn(1)*nn(2)*nn(3),MPI_REAL_RP,halo,ierr)
     end select
     call MPI_TYPE_COMMIT(halo,ierr)
-    return
   end subroutine makehalo
 end module mod_initmpi

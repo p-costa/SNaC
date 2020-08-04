@@ -63,7 +63,6 @@ module mod_bound
                          call set_bc(cbc(1,3,2),1,lo,hi,3,.true. ,bc(1,3,2),dzc(hi(3)  ),v)
       if(.not.is_correc) call set_bc(cbc(1,3,3),1,lo,hi,3,.false.,bc(1,3,3),dzf(hi(3)  ),w)
     endif
-    return
   end subroutine bounduvw
   !
   subroutine boundp(cbc,lo,hi,bc,halos,is_bound,nb,dxc,dyc,dzc,p)
@@ -104,7 +103,6 @@ module mod_bound
     if(is_bound(1,3)) then      
       call set_bc(cbc(1,3),1,lo,hi,3,.true.,bc(1,3),dzc(hi(3)  ),p)
     endif
-    return
   end subroutine boundp
   !
   subroutine set_bc(ctype,ibound,lo,hi,idir,centered,rvalue,dr,p)
@@ -265,7 +263,6 @@ module mod_bound
         end select
       endif
     end select
-    return
   end subroutine set_bc
   !
   subroutine inflow(lo,hi,idir,vel2d,u,v,w)
@@ -300,7 +297,6 @@ module mod_bound
           enddo
         enddo 
     end select
-    return
   end subroutine inflow
   !
   subroutine updt_rhs(lo,hi,is_bound,rhsbx,rhsby,rhsbz,p)
@@ -345,7 +341,6 @@ module mod_bound
       p(lo(1):hi(1),lo(2):hi(2),hi(3)) = p(lo(1):hi(1),lo(2):hi(2),hi(3)) + rhsbz(lo(1):hi(1),lo(2):hi(2),1)
       !$OMP END WORKSHARE
     endif
-    return
   end subroutine updt_rhs
   !
   subroutine updthalo(lo,hi,nh,halo,nb,idir,p)
@@ -411,6 +406,5 @@ module mod_bound
       !               MPI_COMM_WORLD,requests(4),error)
       !call MPI_WAITALL(4, requests, statuses, error)
     end select
-    return
   end subroutine updthalo
 end module mod_bound

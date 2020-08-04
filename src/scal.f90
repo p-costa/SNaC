@@ -38,7 +38,6 @@ module mod_scal
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine scal_d
   subroutine scal_a(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdt)
     implicit none
@@ -73,6 +72,5 @@ module mod_scal
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine scal_a
 end module mod_scal

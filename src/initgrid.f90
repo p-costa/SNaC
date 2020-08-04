@@ -67,7 +67,6 @@ module mod_initgrid
       rf_g(q) = rf_g(q-1) + drf_g(q  )
     enddo
     !
-    return
   end subroutine initgrid
   subroutine distribute_grid(lo_g,lo,hi,grid_g,grid)
     implicit none
@@ -75,7 +74,6 @@ module mod_initgrid
     real(rp), intent(in ), dimension(lo_g-1:) :: grid_g
     real(rp), intent(out), dimension(lo  -1:) :: grid
     grid(lo-1:hi+1) = grid_g(lo-1:hi+1)
-    return
   end subroutine distribute_grid
   subroutine bound_grid(lo_g,hi_g,lo,hi,nb,is_periodic,lo_min,hi_max,grid_f,grid_c)
     implicit none
@@ -110,7 +108,6 @@ module mod_initgrid
     if(lo == lo_g) grid_c(lo-1) = (grid_f(lo  )+grid_f(lo-1))/2._rp
     if(hi == hi_g) grid_c(hi  ) = (grid_f(hi+1)+grid_f(hi  ))/2._rp
     if(hi == hi_g) grid_c(hi+1) = grid_c(hi) ! not needed
-    return
   end subroutine bound_grid
   subroutine save_grid(fname,lo_g,hi_g,rf_g,rc_g,drf_g,drc_g)
     implicit none
@@ -127,7 +124,6 @@ module mod_initgrid
       write(iunit,'(5E15.7)') 0._rp,rf_g(q),rc_g(q),drf_g(q),drc_g(q)
     enddo
     close(iunit)
-    return
   end subroutine save_grid
   !
   ! grid stretching functions 
@@ -147,7 +143,6 @@ module mod_initgrid
     else
       r = r0
     endif
-    return
   end subroutine gridpoint_cluster_two_end
   subroutine gridpoint_cluster_one_end(alpha,r0,r)
     !
@@ -162,7 +157,6 @@ module mod_initgrid
     else
       r = r0
     endif
-    return
   end subroutine gridpoint_cluster_one_end
   subroutine gridpoint_cluster_middle(alpha,r0,r)
     !
@@ -182,6 +176,5 @@ module mod_initgrid
     else
       r = r0
     endif
-    return
   end subroutine gridpoint_cluster_middle
 end module mod_initgrid

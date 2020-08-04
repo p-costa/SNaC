@@ -35,7 +35,6 @@ module mod_debug
     enddo
     !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,mean,1,MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
-    return
   end subroutine chkmean
   subroutine chk_helmholtz(lo,hi,is_centered,dx1,dx2,dy1,dy2,dz1,dz2,alpha,fpp,fp,diffmax)
     !
@@ -73,7 +72,6 @@ module mod_debug
       enddo
     enddo
     call mpi_allreduce(MPI_IN_PLACE,diffmax,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
-    return
   end subroutine chk_helmholtz
   subroutine mean_boundary_force(dt,factor,l,tau,tauo,f)
     implicit none
@@ -88,7 +86,6 @@ module mod_debug
     f(2) = f(2) + dt*(factor(1)*sum(tau%y(:)/l(:)) + factor(2)*sum(tauo%y(:)/l(:)))
     f(3) = f(3) + dt*(factor(1)*sum(tau%z(:)/l(:)) + factor(2)*sum(tauo%z(:)/l(:)))
     tauo = tau
-    return
   end subroutine mean_boundary_force
   subroutine compute_mean_wall_shear(is_bound,lo,hi,dxc,dyc,dzc,u,v,w,l,visc,tau)
     type wallshear
@@ -211,6 +208,5 @@ module mod_debug
       enddo
     endif
     call mpi_allreduce(MPI_IN_PLACE,tau%z(1),3,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
-    return
   end subroutine compute_mean_wall_shear
 end module mod_debug

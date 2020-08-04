@@ -39,6 +39,5 @@ module mod_fillps
       enddo
     enddo
     !$OMP END PARALLEL DO
-    return
   end subroutine fillps
 end module mod_fillps
