@@ -228,7 +228,7 @@ program snac
                   xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
     if(myid == 0) write(stdout,*) '*** Initial condition succesfully set ***'
   else
-    call load('r',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
+    call load('r',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep,po)
     if(myid == 0) write(stdout,*) '*** Checkpoint loaded at time = ', time, 'time step = ', istep, '. ***'
   endif
   call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
@@ -460,7 +460,7 @@ program snac
       else
         filename = 'fld_'//fldnum//'.bin'
       endif
-      call load('w',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep)
+      call load('w',trim(datadir)//'fld.bin',ng,[1,1,1],lo,hi,u,v,w,p,time,istep,po)
       if(.not.is_overwrite_save) then
         !
         ! fld.bin -> last checkpoint file (symbolic link)
