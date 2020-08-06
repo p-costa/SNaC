@@ -6,7 +6,7 @@ module mod_load
   private
   public load,io_field
   contains
-  subroutine load(io,filename,comm,ng,nh,lo,hi,u,v,w,p,time,istep)
+  subroutine load(io,filename,comm,ng,nh,lo,hi,u,v,w,p,po,time,istep)
     !
     ! reads/writes a restart file
     !
@@ -15,9 +15,10 @@ module mod_load
     character(len=*), intent(in) :: filename
     integer , intent(in)         :: comm
     integer , intent(in), dimension(3) :: ng,nh,lo,hi
-    real(rp), intent(inout), dimension(lo(1)-nh(1):,lo(2)-nh(2):,lo(3)-nh(3):) :: u,v,w,p
+    real(rp), intent(inout), dimension(lo(1)-nh(1):,lo(2)-nh(2):,lo(3)-nh(3):)           :: u,v,w,p
     real(rp), intent(inout) :: time
     integer , intent(inout) :: istep
+    real(rp), intent(inout), dimension(lo(1)-nh(1):,lo(2)-nh(2):,lo(3)-nh(3):), optional :: po
     real(rp), dimension(2) :: fldinfo
     integer :: fh,nreals_myid
     integer(kind=MPI_OFFSET_KIND) :: filesize,disp,good
@@ -45,6 +46,7 @@ module mod_load
       call io_field('r',fh,ng,nh,lo,hi,disp,v)
       call io_field('r',fh,ng,nh,lo,hi,disp,w)
       call io_field('r',fh,ng,nh,lo,hi,disp,p)
+      if(present(po)) call io_field('r',fh,ng,nh,lo,hi,disp,po)
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       nreals_myid = 0
       if(myid_block == 0) nreals_myid = 2
@@ -66,6 +68,7 @@ module mod_load
       call io_field('w',fh,ng,nh,lo,hi,disp,v)
       call io_field('w',fh,ng,nh,lo,hi,disp,w)
       call io_field('w',fh,ng,nh,lo,hi,disp,p)
+      if(present(po)) call io_field('w',fh,ng,nh,lo,hi,disp,po)
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,MPI_REAL_RP,'native',MPI_INFO_NULL,ierr)
       fldinfo = [time,1._rp*istep]
       nreals_myid = 0
