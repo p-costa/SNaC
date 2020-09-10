@@ -188,7 +188,7 @@ module mod_bound
         case(1)
           if    (ibound == 0) then
             !$OMP WORKSHARE
-            p(lo(idir)-1,:,:) = factor 
+            p(lo(idir)-1,:,:) = factor
             !$OMP END WORKSHARE
           elseif(ibound == 1) then
             !$OMP WORKSHARE
@@ -199,7 +199,7 @@ module mod_bound
         case(2)
           if    (ibound == 0) then
             !$OMP WORKSHARE
-            p(:,lo(idir)-1,:) = factor 
+            p(:,lo(idir)-1,:) = factor
             !$OMP END WORKSHARE
           elseif(ibound == 1) then
             !$OMP WORKSHARE
@@ -210,7 +210,7 @@ module mod_bound
         case(3)
           if    (ibound == 0) then
             !$OMP WORKSHARE
-            p(:,:,lo(idir)-1) = factor 
+            p(:,:,lo(idir)-1) = factor
             !$OMP END WORKSHARE
           elseif(ibound == 1) then
             !$OMP WORKSHARE
