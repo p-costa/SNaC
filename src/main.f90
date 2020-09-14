@@ -359,7 +359,7 @@ program snac
 #endif
       call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,up,vp,wp)
-#if defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
+#if !defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
       dtrk  = dt
       if(irk < 3) then ! pressure correction only at the last RK step
         !$OMP WORKSHARE
