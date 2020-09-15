@@ -17,7 +17,7 @@ module mod_sanity
     character(len=1), intent(in), dimension(0:1,3  ) :: cbcpre
     logical :: passed
     !
-    call chk_grid(gr,passed)
+    call chk_grid(gr,passed);                    if(.not.passed) call abortit
     call chk_stop_type(stop_type,passed);        if(.not.passed) call abortit
     call chk_bc(cbcvel,cbcpre,passed);           if(.not.passed) call abortit
   end subroutine test_sanity
@@ -45,6 +45,45 @@ module mod_sanity
       call write_error('grid growth parameter must be positive.')
     passed = passed.and.passed_loc
   end subroutine chk_grid
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+  subroutine chk_grid_fft(idir,dims,lo,hi,lmin,lmax,gr,passed)
+    implicit none
+    integer , intent(in ) :: idir
+    integer , intent(in ) :: dims,lo,hi
+    real(rp), intent(in ) :: lmin,lmax,gr
+    logical , intent(out) :: passed
+    logical :: passed_loc
+    real(rp) :: lo_min  ,lo_max  ,hi_min  ,hi_max
+    real(rp) :: lmin_min,lmin_max,lmax_min,lmax_max
+    passed_loc = dims == 1
+    call MPI_ALLREDUCE(MPI_IN_PLACE,passed_loc,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
+    if(.not.passed_loc) &
+      call write_error('no domain decomposition allowed in the uniform (FFT) direction')
+    passed = passed.and.passed_loc
+    !
+    call MPI_ALLREDUCE(lo  ,lo_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD,ierr) 
+    call MPI_ALLREDUCE(lo  ,lo_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,ierr) 
+    call MPI_ALLREDUCE(hi  ,hi_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD,ierr) 
+    call MPI_ALLREDUCE(hi  ,hi_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,ierr) 
+    call MPI_ALLREDUCE(lmin,lmin_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr) 
+    call MPI_ALLREDUCE(lmin,lmin_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr) 
+    call MPI_ALLREDUCE(lmax,lmax_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr) 
+    call MPI_ALLREDUCE(lmax,lmax_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr) 
+    passed_loc = (lo_min == lo).and.(lo_max == lo).and. &
+                 (hi_min == hi).and.(hi_max == hi)
+    passed_loc = passed_loc.and. &
+                 (lmin_min == lmin).and.(lmin_max == lmin).and. &
+                 (lmax_min == lmax).and.(lmax_max == lmax)
+    if(.not.passed_loc) &
+      call write_error('domain size and number of points cannot vary among blocks in the FFT direction')
+    passed = passed.and.passed_loc
+    !
+    passed_loc = gr == 0._rp
+    if(.not.passed_loc) &
+      call write_error('grid growth parameter in the FFT direction must be zero.')
+    passed = passed.and.passed_loc
+  end subroutine chk_grid_fft
+#endif
   !
   subroutine chk_bc(cbcvel,cbcpre,passed)
     implicit none
