@@ -77,7 +77,7 @@ scal.o: scal.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 sanity.o: sanity.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
-solver.o: solver.f90 common_mpi.o types.o
+solver.o: solver.f90 common_mpi.o fft.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 types.o: types.f90
 	$(FC) $(FFLAGS) -cpp -c  $<
