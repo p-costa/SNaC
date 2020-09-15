@@ -8,7 +8,8 @@ EXEC=snac
 rm -rf $RUNDIR
 echo "Compiling ..."
 sleep 2
-cp $TESTDIR/Makefile $SRCDIR && cd $SRCDIR && make clean && make -j run
+for FLAGS in ' ' '-D_FFT_X'; do
+cp $TESTDIR/Makefile $SRCDIR && cd $SRCDIR && make clean && make OTH=$FLAGS -j run
 cp $TESTDIR/dns.in $RUNDIR && cd $RUNDIR
 rm -rf $RUNDIR/geo && cp -r $TESTDIR/geo $RUNDIR/geo
 echo "Running SNaC..."
@@ -18,4 +19,5 @@ cp $TESTDIR/*.* data/ && cp $UTILSDIR/read_binary_data/python/read_single_field_
 echo "Running test..."
 sleep 2
 pytest test.py
-#rm -rf $RUNDIR
+rm -rf $RUNDIR
+done
