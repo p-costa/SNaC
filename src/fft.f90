@@ -29,7 +29,7 @@ module mod_fft
     !$ call dfftw_plan_with_nthreads(omp_get_max_threads())
 #endif
     q = 0
-    if(bc(0)//bc(1).ne.'FF'.and.(.not.is_centered)) q = 1
+    if(bc(0)//bc(1) /= 'FF'.and.(.not.is_centered)) q = 1
     select case(idir)
     case(1)
       iodim(1)%n  = n(idir)-q

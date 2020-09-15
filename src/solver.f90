@@ -724,7 +724,7 @@ module mod_solver
   end subroutine solve_n_helmholtz_2d
 #endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  subroutine init_fft_reduction(idir,n,bc,is_centered,arrplan,normfft,lambda,dl)
+  subroutine init_fft_reduction(idir,n,bc,is_centered,dl,arrplan,normfft,lambda)
     use iso_c_binding , only: C_PTR
     use mod_fft       , only: fftini,eigenvalues
     implicit none

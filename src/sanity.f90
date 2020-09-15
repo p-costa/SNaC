@@ -4,7 +4,10 @@ module mod_sanity
   use mod_types
   implicit none
   private
-  public test_sanity,test_sanity_fft
+  public test_sanity
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+  public test_sanity_fft
+#endif
   contains
   subroutine test_sanity(gr,stop_type,cbcvel,cbcpre)
     !
