@@ -17,7 +17,7 @@ module mod_sanity
     character(len=1), intent(in), dimension(0:1,3  ) :: cbcpre
     logical :: passed
     !
-    call chk_grid(gr,passed)
+    call chk_grid(gr,passed);                    if(.not.passed) call abortit
     call chk_stop_type(stop_type,passed);        if(.not.passed) call abortit
     call chk_bc(cbcvel,cbcpre,passed);           if(.not.passed) call abortit
   end subroutine test_sanity
