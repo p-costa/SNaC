@@ -19,7 +19,7 @@ module mod_sanity
     logical         , intent(in), dimension(3      ) :: is_forced
     logical :: passed
     !
-    call chk_grid(gr,passed)
+    call chk_grid(gr,passed);                    if(.not.passed) call abortit
     call chk_stop_type(stop_type,passed);        if(.not.passed) call abortit
     call chk_bc(cbcvel,cbcpre,passed);           if(.not.passed) call abortit
     call chk_forcing(cbcpre,is_forced,passed);   if(.not.passed) call abortit 
