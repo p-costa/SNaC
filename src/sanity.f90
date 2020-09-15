@@ -82,7 +82,6 @@ module mod_sanity
     call MPI_ALLREDUCE(lmax,lmax_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr) 
     passed_loc = (lo_min == lo).and.(lo_max == lo).and. &
                  (hi_min == hi).and.(hi_max == hi)
-             print*,lo_min,lo,lo_max,lo,hi_min,hi
     passed_loc = passed_loc.and. &
                  (lmin_min == lmin).and.(lmin_max == lmin).and. &
                  (lmax_min == lmax).and.(lmax_max == lmax)

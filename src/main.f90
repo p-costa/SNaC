@@ -120,7 +120,6 @@ program snac
   real(rp)                            :: alpha_lambda_u, &
                                          alpha_lambda_v, &
                                          alpha_lambda_w
-  logical, dimension(3,3)             :: eye_l
 #endif
 #endif
   !
@@ -319,12 +318,6 @@ program snac
   ! initialize Poisson solver
   !
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-#ifdef _IMPDIFF
-  eye_l(:,:) = .false.
-  do idir=1,3
-    eye_l(idir,idir) = .true.
-  enddo
-#endif
 #ifdef _FFT_X
   idir = 1
   il = 2;iu = 3;iskip = 1
@@ -383,8 +376,8 @@ program snac
   call init_bc_rhs(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,is_centered,lo,hiu,periods, &
                    dxf,dxc,dyc,dyf,dzc,dzf,rhsu%x,rhsu%y,rhsu%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  allocate(lambda_u(hi(idir)-lo(idir)+1)) ! in case of _FFT_Y the last point in lambda_v is not needed
-  call init_fft_reduction(idir,hiu(:)-lo(:)+1,cbcvel(:,1,idir),eye_l(idir,1),dl(0,idir),arrplan_u,normfft_u,lambda_u)
+  allocate(lambda_u(hi(idir)-lo(idir)+1))
+  call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,1),is_centered(idir),dl(0,idir),arrplan_u,normfft_u,lambda_u)
   alpha_lambda_u = 0._rp
   call init_matrix_2d(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dl(:,il:iu:iskip), &
                       is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
@@ -402,8 +395,8 @@ program snac
   call init_bc_rhs(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,is_centered,lo,hiv,periods, &
                    dxc,dxf,dyf,dyc,dzc,dzf,rhsv%x,rhsv%y,rhsv%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  allocate(lambda_v(hi(idir)-lo(idir)+1)) ! in case of _FFT_Y the last point in lambda_v is not needed
-  call init_fft_reduction(idir,hiv(:)-lo(:)+1,cbcvel(:,2,idir),eye_l(idir,2),dl(0,idir),arrplan_v,normfft_v,lambda_v)
+  allocate(lambda_v(hi(idir)-lo(idir)+1))
+  call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,2),is_centered(idir),dl(0,idir),arrplan_v,normfft_v,lambda_v)
   alpha_lambda_v = 0._rp
   call init_matrix_2d(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dl(:,il:iu:iskip), &
                       is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
@@ -421,9 +414,9 @@ program snac
   call init_bc_rhs(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,is_centered,lo,hiw,periods, &
                    dxc,dxf,dyc,dyf,dzf,dzc,rhsw%x,rhsw%y,rhsw%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  allocate(lambda_w(hi(idir)-lo(idir)+1)) ! in case of _FFT_Z the last point in lambda_w is not needed
-  call init_fft_reduction(idir,hiw(:)-lo(:)+1,cbcvel(:,3,idir),eye_l(idir,3),dl(0,idir),arrplan_w,normfft_w,lambda_w)
-  alpha_lambda_v = 0._rp
+  allocate(lambda_w(hi(idir)-lo(idir)+1))
+  call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,3),is_centered(idir),dl(0,idir),arrplan_w,normfft_w,lambda_w)
+  alpha_lambda_w = 0._rp
   call init_matrix_2d(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dl(:,il:iu:iskip), &
                       is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
                       lo(il:iu:iskip),hiw(il:iu:iskip),periods(il:iu:iskip),dlw1_1,dlw1_2,dlw2_1,dlw2_2,wsolver)
@@ -505,9 +498,9 @@ program snac
 #else
       call solve_helmholtz(wsolver,lo,hiw,wp,wo)
       call finalize_solver(wsolver)
+#endif
       !
       alphaoi = alphai
-#endif
 #endif
       call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,up,vp,wp)
