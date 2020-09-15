@@ -4,10 +4,13 @@ module mod_solver
   use mod_types
   implicit none
   private
-  public init_matrix,create_solver,setup_solver,add_to_diagonal, &
-         solve_helmholtz,finalize_matrix,finalize_solver, &
+  public init_rhs_bc,init_matrix_3d,create_solver,setup_solver, &
+         add_constant_to_diagonal,solve_helmholtz,finalize_matrix,finalize_solver, &
          hypre_solver, &
          HYPRESolverSMG,HYPRESolverPFMG,HYPRESolverGMRES,HYPRESolverBiCGSTAB
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+  public init_fft_reduction
+#endif
   integer, parameter :: HYPRESolverSMG      = 1, &
                         HYPRESolverPFMG     = 2, &
                         HYPRESolverGMRES    = 3, &
@@ -17,8 +20,100 @@ module mod_solver
     integer    :: stype,comm_hypre
   end type hypre_solver 
   contains
-  subroutine init_matrix(cbc,bc,dl,is_bound,is_centered,lo,hi,periods, &
-                         dx1,dx2,dy1,dy2,dz1,dz2,rhsx,rhsy,rhsz,asolver)
+  subroutine init_rhs_bc(cbc,bc,dl,is_bound,is_centered,lo,hi,periods, &
+                         dx1,dx2,dy1,dy2,dz1,dz2,rhsx,rhsy,rhsz)
+    !
+    ! description
+    !
+    implicit none
+    character(len=1)  , intent(in ), dimension(0:1,3) :: cbc
+    real(rp)          , intent(in ), dimension(0:1,3) ::  bc
+    real(rp)          , intent(in ), dimension(0:1,3) ::  dl
+    logical           , intent(in ), dimension(0:1,3) ::  is_bound
+    logical           , intent(in ), dimension(    3) ::  is_centered
+    integer           , intent(in ), dimension(    3) :: lo,hi,periods
+    real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dx1,dx2
+    real(rp)          , intent(in ), target, dimension(lo(2)-1:) :: dy1,dy2
+    real(rp)          , intent(in ), target, dimension(lo(3)-1:) :: dz1,dz2
+    real(rp)          , intent(out), dimension(lo(2):,lo(3):,0:)    :: rhsx
+    real(rp)          , intent(out), dimension(lo(1):,lo(3):,0:)    :: rhsy
+    real(rp)          , intent(out), dimension(lo(1):,lo(2):,0:)    :: rhsz
+    integer, dimension(3) :: qqq
+    real(rp), dimension(0:1,3) :: factor,sgn
+    integer :: i,j,k,q,qq,idir,ib
+    integer, dimension(3,3) :: eye
+    !
+    qqq(:) = 0
+    where(.not.is_centered(:)) qqq(:) = 1
+    factor(:,:) = 0._rp
+    sgn(   :,:) = 0._rp
+    do q=1,3
+      do qq=0,1
+        if(is_bound(qq,q)) then
+          select case(cbc(qq,q))
+          case('N')
+            factor(qq,q) = 1._rp*dl(qq,q)*bc(qq,q)
+            if(qq == 1) factor(qq,q) = -factor(qq,q)
+            sgn(   qq,q) = 1._rp
+          case('D')
+            if(is_centered(q)) then
+              factor(qq,q) = -2._rp*bc(qq,q)
+              sgn(   qq,q) = -1._rp
+            else
+              factor(qq,q) = -1._rp*bc(qq,q)
+              sgn(   qq,q) =  0._rp
+            endif
+          end select
+        endif
+      enddo
+    enddo
+    !
+    eye(:,:) = 0
+    do idir=1,3
+      eye(idir,idir) = 1
+    enddo
+    rhsx(:,:,:) = 0._rp
+    rhsy(:,:,:) = 0._rp
+    rhsz(:,:,:) = 0._rp
+    do idir=1,3
+      do k=lo(3),hi(3),max((hi(3)-lo(3))*eye(idir,3),1)
+        do j=lo(2),hi(2),max((hi(2)-lo(1))*eye(idir,2),1)
+          do i=lo(1),hi(1),max((hi(1)-lo(1))*eye(idir,1),1)
+            if(periods(idir) == 0) then
+              select case(idir)
+              case(1)
+                if(    i == lo(idir)) then
+                  ib = 0
+                elseif(i == hi(idir)) then
+                  ib = 1
+                endif
+                  if(is_bound(ib,idir)) &
+                  rhsx(j,k,ib) = rhsx(j,k,ib) + factor(ib,idir)/(dx1(i-(1-ib)+qqq(idir))*dx2(i))
+              case(2)
+                if(    j == lo(idir)) then
+                  ib = 0
+                elseif(j == hi(idir)) then
+                  ib = 1
+                endif
+                  if(is_bound(ib,idir)) &
+                  rhsy(i,k,ib) = rhsy(i,k,ib) + factor(ib,idir)/(dy1(j-(1-ib)+qqq(idir))*dy2(j))
+              case(3)
+                if(    k == lo(idir)) then
+                  ib = 0
+                elseif(k == hi(idir)) then
+                  ib = 1
+                endif
+                  if(is_bound(ib,idir)) &
+                  rhsz(i,j,ib) = rhsz(i,j,ib) + factor(ib,idir)/(dz1(k-(1-ib)+qqq(idir))*dz2(k))
+              end select
+            endif
+          enddo
+        enddo
+      enddo
+    enddo
+  end subroutine init_rhs_bc
+  subroutine init_matrix_3d(cbc,bc,dl,is_bound,is_centered,lo,hi,periods, &
+                            dx1,dx2,dy1,dy2,dz1,dz2,asolver)
     !
     ! description
     !
@@ -29,14 +124,11 @@ module mod_solver
     real(rp)          , intent(in ), dimension(0:1,3) ::  dl
     logical           , intent(in ), dimension(0:1,3) ::  is_bound
     logical           , intent(in ), dimension(    3) ::  is_centered
-    integer           , intent(in ), dimension(3    ) :: lo,hi,periods
+    integer           , intent(in ), dimension(    3) :: lo,hi,periods
     real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dx1,dx2
     real(rp)          , intent(in ), target, dimension(lo(2)-1:) :: dy1,dy2
     real(rp)          , intent(in ), target, dimension(lo(3)-1:) :: dz1,dz2
     type(hypre_solver), intent(out)                              :: asolver
-    real(rp)          , intent(out), dimension(lo(2):,lo(3):,0:)    :: rhsx
-    real(rp)          , intent(out), dimension(lo(1):,lo(3):,0:)    :: rhsy
-    real(rp)          , intent(out), dimension(lo(1):,lo(2):,0:)    :: rhsz
     integer, dimension(3         ) :: qqq
     integer, dimension(3,nstencil) :: offsets
     real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
@@ -104,9 +196,6 @@ module mod_solver
     call HYPRE_StructVectorCreate(comm_hypre,grid,rhs,ierr)
     call HYPRE_StructVectorInitialize(rhs,ierr)
     q = 0
-    rhsx(:,:,:) = 0._rp
-    rhsy(:,:,:) = 0._rp
-    rhsz(:,:,:) = 0._rp
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -120,36 +209,30 @@ module mod_solver
           cc  = -(cxm+cxp+cym+cyp+czm+czp)
           if(periods(1) == 0) then
             if(is_bound(0,1).and.i == lo(1)) then
-              rhsx(j,k,0) = rhsx(j,k,0) + cxm*factor(0,1)
               cc = cc + sgn(0,1)*cxm
               cxm = 0._rp
             endif
             if(is_bound(1,1).and.i == hi(1)) then
-              rhsx(j,k,1) = rhsx(j,k,1) + cxp*factor(1,1)
               cc = cc + sgn(1,1)*cxp
               cxp = 0._rp
             endif
           endif
           if(periods(2) == 0) then
             if(is_bound(0,2).and.j == lo(2)) then
-              rhsy(i,k,0) = rhsy(i,k,0) + cym*factor(0,2)
               cc = cc + sgn(0,2)*cym
               cym = 0._rp
             endif
             if(is_bound(1,2).and.j == hi(2)) then
-              rhsy(i,k,1) = rhsy(i,k,1) + cyp*factor(1,2)
               cc = cc + sgn(1,2)*cyp
               cyp = 0._rp
             endif
           endif
           if(periods(3) == 0) then
             if(is_bound(0,3).and.k == lo(3)) then
-              rhsz(i,j,0) = rhsz(i,j,0) + czm*factor(0,2)
               cc = cc + sgn(0,3)*czm
               czm = 0._rp
             endif
             if(is_bound(1,3).and.k == hi(3)) then
-              rhsz(i,j,1) = rhsz(i,j,1) + czp*factor(1,3)
               cc = cc + sgn(1,3)*czp
               czp = 0._rp
             endif
@@ -162,7 +245,6 @@ module mod_solver
           matvalues(qq+5) = cyp
           matvalues(qq+6) = czm
           matvalues(qq+7) = czp
-          !
         enddo
       enddo
     enddo
@@ -175,7 +257,7 @@ module mod_solver
     asolver%rhs        = rhs
     asolver%sol        = sol
     asolver%comm_hypre = comm_hypre
-  end subroutine init_matrix
+  end subroutine init_matrix_3d
   subroutine create_solver(maxiter,maxerror,stype,asolver)
     implicit none
     integer           ,         intent(   in) :: maxiter
@@ -273,8 +355,7 @@ module mod_solver
       endif
     endif
   end subroutine setup_solver
-  !
-  subroutine add_to_diagonal(lo,hi,alpha,mat)
+  subroutine add_constant_to_diagonal(lo,hi,alpha,mat)
     implicit none
     integer   , intent(in   ), dimension(3) :: lo,hi
     real(rp)  , intent(in   ) :: alpha
@@ -291,7 +372,7 @@ module mod_solver
       enddo
     enddo
     call HYPRE_StructMatrixAddToBoxValues(mat,lo,hi,1,[0],matvalues,ierr)
-  end subroutine add_to_diagonal
+  end subroutine add_constant_to_diagonal
   subroutine solve_helmholtz(asolver,lo,hi,p,po)
     implicit none
     type(hypre_solver), target, intent(in   )               :: asolver
@@ -363,7 +444,6 @@ module mod_solver
       enddo
     enddo
   end subroutine solve_helmholtz
-  !
   subroutine finalize_solver(asolver)
     implicit none
     type(hypre_solver), target, intent(in) :: asolver
@@ -389,7 +469,6 @@ module mod_solver
       call HYPRE_StructBiCGSTABDestroy(solver,ierr)
       call HYPRE_StructPFMGDestroy(precond,ierr)
     endif
-    !
   end subroutine finalize_solver
   subroutine finalize_matrix(asolver)
     implicit none
@@ -407,6 +486,21 @@ module mod_solver
     call HYPRE_StructMatrixDestroy(mat,ierr)
     call HYPRE_StructVectorDestroy(rhs,ierr)
     call HYPRE_StructVectorDestroy(sol,ierr)
-    !
   end subroutine finalize_matrix
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+  subroutine init_fft_reduction(idir,n,bc,is_centered,arrplan,normfft,lambda)
+    use iso_c_binding , only: C_PTR
+    use mod_fft       , only: fftini,eigenvalues
+    implicit none
+    integer         , intent(in )                 :: idir
+    integer         , intent(in ), dimension(3  ) :: n
+    character(len=1), intent(in ), dimension(0:1) :: bc
+    logical         , intent(in )                 :: is_centered
+    type(C_PTR)     , intent(out), dimension(2  ) :: arrplan
+    real(rp)        , intent(out)                 :: normfft
+    real(rp)        , intent(out), dimension(:  ) :: lambda
+    call fftini(idir,n,bc,is_centered,arrplan,normfft)
+    call eigenvalues(n(idir),bc,is_centered,lambda)
+  end subroutine init_fft_reduction
+#endif
 end module mod_solver
