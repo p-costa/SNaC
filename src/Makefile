@@ -5,14 +5,14 @@ BIG :=
 DBG := -O0 -g -fbacktrace -Wall -Wextra #-pedantic -fcheck=all -finit-real=snan -ffpe-trap=invalid -std=f2018
 OMP :=
 OPT := #-O3
-OTH := #-D_FFT_Z
+OTH := -D_FFT_Z
 PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
 TARGET = snac
 #
 OBJ = bound.o debug.o initflow.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fftw.o fft.o fillps.o initmpi.o load.o main.o mom.o output.o param.o updt_pressure.o rk.o scal.o sanity.o solver.o types.o
 #
-HYPRE_LIB_DIR=$(HOME)/software/hypre/lib
+HYPRE_LIB_DIR=$(HOME)/hypre/lib
 LIBS = -L$(HYPRE_LIB_DIR) -lHYPRE -lfftw3
 #
 all: $(TARGET)
