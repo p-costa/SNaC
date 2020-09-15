@@ -4,7 +4,7 @@ module mod_sanity
   use mod_types
   implicit none
   private
-  public test_sanity
+  public test_sanity,test_sanity_fft
   contains
   subroutine test_sanity(gr,stop_type,cbcvel,cbcpre)
     !
@@ -21,6 +21,14 @@ module mod_sanity
     call chk_stop_type(stop_type,passed);        if(.not.passed) call abortit
     call chk_bc(cbcvel,cbcpre,passed);           if(.not.passed) call abortit
   end subroutine test_sanity
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+  subroutine test_sanity_fft(dims,lo,hi,lmin,lmax,gr)
+    integer , intent(in ) :: dims,lo,hi
+    real(rp), intent(in ) :: lmin,lmax,gr
+    logical :: passed
+    call chk_grid_fft(dims,lo,hi,lmin,lmax,gr,passed); if(.not.passed) call abortit
+  end subroutine test_sanity_fft
+#endif
   !
   subroutine chk_stop_type(stop_type,passed)
     implicit none
@@ -46,15 +54,15 @@ module mod_sanity
     passed = passed.and.passed_loc
   end subroutine chk_grid
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  subroutine chk_grid_fft(idir,dims,lo,hi,lmin,lmax,gr,passed)
+  subroutine chk_grid_fft(dims,lo,hi,lmin,lmax,gr,passed)
     implicit none
-    integer , intent(in ) :: idir
     integer , intent(in ) :: dims,lo,hi
     real(rp), intent(in ) :: lmin,lmax,gr
     logical , intent(out) :: passed
     logical :: passed_loc
-    real(rp) :: lo_min  ,lo_max  ,hi_min  ,hi_max
+    integer  :: lo_min  ,lo_max  ,hi_min  ,hi_max
     real(rp) :: lmin_min,lmin_max,lmax_min,lmax_max
+    passed = .true.
     passed_loc = dims == 1
     call MPI_ALLREDUCE(MPI_IN_PLACE,passed_loc,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
     if(.not.passed_loc) &
@@ -71,6 +79,7 @@ module mod_sanity
     call MPI_ALLREDUCE(lmax,lmax_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr) 
     passed_loc = (lo_min == lo).and.(lo_max == lo).and. &
                  (hi_min == hi).and.(hi_max == hi)
+             print*,lo_min,lo,lo_max,lo,hi_min,hi
     passed_loc = passed_loc.and. &
                  (lmin_min == lmin).and.(lmin_max == lmin).and. &
                  (lmax_min == lmax).and.(lmax_max == lmax)

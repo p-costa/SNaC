@@ -58,6 +58,7 @@ program snac
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   use mod_solver         , only: init_fft_reduction,init_matrix_2d,solve_n_helmholtz_2d
   use mod_fft            , only: fft,fftend
+  use mod_sanity         , only: test_sanity_fft
 #endif
   use mod_types
   !$ use omp_lib
@@ -148,6 +149,21 @@ program snac
   ! check sanity of input file
   !
   call test_sanity(gr,stop_type,cbcvel,cbcpre)
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+#if   defined(_FFT_X) && !(defined(_FFT_Y) || defined(_FFT_Z))
+  idir = 1
+#elif defined(_FFT_Y) && !(defined(_FFT_X) || defined(_FFT_Z))
+  idir = 2
+#elif defined(_FFT_Z) && !(defined(_FFT_X) || defined(_FFT_Y))
+  idir = 3
+#else
+  if(myid == 0) write(stderr,*) 'ERROR: there can be only one FFT direction; check the pre-processor flags.'
+  if(myid == 0) write(stderr,*) 'Aborting...'
+  call MPI_FINALIZE(ierr)
+  error stop
+#endif
+  call test_sanity_fft(dims(idir),lo(idir),hi(idir),lmin(idir),lmax(idir),gr(idir))
+#endif
   !
   ! initialize MPI/OpenMP
   !
