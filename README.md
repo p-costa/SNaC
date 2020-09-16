@@ -4,7 +4,7 @@
 
 ## News
 
-A block-structured implementation of *SNaC* has been developed in branch `multi_block` (and more recently `multi_block_fft`) which is being currently tested.
+A **multi-block** implementation of *SNaC* has been developed in branch `multi_block` (and more recently `multi_block_fft`).
 
 ## Features
 
