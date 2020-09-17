@@ -94,6 +94,7 @@ program snac
                                          dxc_g,dxf_g,xc_g,xf_g, &
                                          dyc_g,dyf_g,yc_g,yf_g, &
                                          dzc_g,dzf_g,zc_g,zf_g
+  logical                             :: is_uniform_grid
   !
   real(rp), dimension(100) :: var
   character(len=3  ) :: cblock
@@ -225,6 +226,11 @@ program snac
   call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),is_periodic(1),lo_min(1),hi_max(1),dxf,dxc)
   call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),is_periodic(2),lo_min(2),hi_max(2),dyf,dyc)
   call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),is_periodic(3),lo_min(3),hi_max(3),dzf,dzc)
+  is_uniform_grid = all(dzf(:) == dzf(lo(3))) .and. &
+                    all(dyf(:) == dyf(lo(2))) .and. &
+                    all(dxf(:) == dxf(lo(1))) .and. &
+                    dxf(lo(1)) == dyf(lo(2)) .and. dyf(lo(2)) == dzf(lo(3))
+  call mpi_allreduce(MPI_IN_PLACE,is_uniform_grid,3,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
   !
   ! initialization of the flow fields
   !
@@ -277,7 +283,7 @@ program snac
   dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
                 dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
                 dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
-  call init_matrix(cbcpre,bcpre,dl,is_bound,[.true.,.true.,.true.],lo,hi,periods, &
+  call init_matrix(cbcpre,bcpre,dl,is_uniform_grid,is_bound,[.true.,.true.,.true.],lo,hi,periods, &
                    dxc,dxf,dyc,dyf,dzc,dzf,rhsp%x,rhsp%y,rhsp%z,psolver)
   call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver)
   call setup_solver(psolver)
@@ -287,21 +293,21 @@ program snac
                 dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
   hiu(:) = hi(:)
   if(is_bound(1,1)) hiu(:) = hiu(:)-[1,0,0]
-  call init_matrix(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,[.false.,.true.,.true.],lo,hiu,periods, &
+  call init_matrix(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,[.false.,.true.,.true.],lo,hiu,periods, &
                    dxf,dxc,dyc,dyf,dzc,dzf,rhsu%x,rhsu%y,rhsu%z,usolver)
   dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
                 dyf_g(lo_g(2)-0),dyf_g(hi_g(2)), &
                 dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
   hiv(:) = hi(:)
   if(is_bound(1,2)) hiv(:) = hiv(:)-[0,1,0]
-  call init_matrix(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,[.true.,.false.,.true.],lo,hiv,periods, &
+  call init_matrix(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,[.true.,.false.,.true.],lo,hiv,periods, &
                    dxc,dxf,dyf,dyc,dzc,dzf,rhsv%x,rhsv%y,rhsv%z,vsolver)
   dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
                 dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
                 dzf_g(lo_g(3)-0),dzf_g(hi_g(3))],shape(dl))
   hiw(:) = hi(:)
   if(is_bound(1,3)) hiw(:) = hiw(:)-[0,0,1]
-  call init_matrix(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,[.true.,.true.,.false.],lo,hiw,periods, &
+  call init_matrix(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,[.true.,.true.,.false.],lo,hiw,periods, &
                    dxc,dxf,dyc,dyf,dzf,dzc,rhsw%x,rhsw%y,rhsw%z,wsolver)
 #endif
   !
