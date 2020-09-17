@@ -90,6 +90,7 @@ program snac
                                          dxc_g,dxf_g,xc_g,xf_g, &
                                          dyc_g,dyf_g,yc_g,yf_g, &
                                          dzc_g,dzf_g,zc_g,zf_g
+  logical                             :: is_uniform_grid
   real(rp), dimension(3) :: f,dpdl,meanvel
   !
   real(rp), dimension(100) :: var
@@ -214,6 +215,11 @@ program snac
   call distribute_grid(lo(3),hi(3),dzf_g,dzf)
   call distribute_grid(lo(3),hi(3), zc_g, zc)
   call distribute_grid(lo(3),hi(3), zf_g, zf)
+  is_uniform_grid = all(dzf(:) == dzf(lo(3))) .and. &
+                    all(dyf(:) == dyf(lo(2))) .and. &
+                    all(dxf(:) == dxf(lo(1))) .and. &
+                    dxf(lo(1)) == dyf(lo(2)) .and. dyf(lo(2)) == dzf(lo(3))
+  call mpi_allreduce(MPI_IN_PLACE,is_uniform_grid,3,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
   !
   ! initialization of the flow fields
   !
@@ -266,7 +272,7 @@ program snac
   dl = reshape([dxc_g(1-1),dxc_g(ng(1)), &
                 dyc_g(1-1),dyc_g(ng(2)), &
                 dzc_g(1-1),dzc_g(ng(3))],shape(dl))
-  call init_matrix(cbcpre,bcpre,dl,is_bound,[.true.,.true.,.true.],lo,hi,ng, &
+  call init_matrix(cbcpre,bcpre,dl,is_uniform_grid,is_bound,[.true.,.true.,.true.],lo,hi,ng, &
                    dxc,dxf,dyc,dyf,dzc,dzf,rhsp%x,rhsp%y,rhsp%z,psolver)
   call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver)
   call setup_solver(psolver)
@@ -279,7 +285,7 @@ program snac
   hiu(:) = hi(:)
   if(is_bound(1,1)) hiu(:) = hiu(:)-q(:)
   ngu(:) = ng(:) - q
-  call init_matrix(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,[.false.,.true.,.true.],lo,hiu,ngu, &
+  call init_matrix(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,[.false.,.true.,.true.],lo,hiu,ngu, &
                    dxf,dxc,dyc,dyf,dzc,dzf,rhsu%x,rhsu%y,rhsu%z,usolver)
   q  = [0,1,0]
   if(cbcpre(0,2)//cbcpre(0,2) == 'PP') q(:) = 0
@@ -289,7 +295,7 @@ program snac
   hiv(:) = hi(:)
   if(is_bound(1,2)) hiv(:) = hiv(:)-q(:)
   ngv(:) = ng(:) - q(:)
-  call init_matrix(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,[.true.,.false.,.true.],lo,hiv,ngv, &
+  call init_matrix(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,[.true.,.false.,.true.],lo,hiv,ngv, &
                    dxc,dxf,dyf,dyc,dzc,dzf,rhsv%x,rhsv%y,rhsv%z,vsolver)
   q  = [0,0,1]
   if(cbcpre(0,3)//cbcpre(0,3) == 'PP') q(:) = 0
@@ -299,7 +305,7 @@ program snac
   hiw(:) = hi(:)
   if(is_bound(1,3)) hiw(:) = hiw(:)-q(:)
   ngw(:) = ng(:) - q(:)
-  call init_matrix(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,[.true.,.true.,.false.],lo,hiw,ngw, &
+  call init_matrix(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,[.true.,.true.,.false.],lo,hiw,ngw, &
                    dxc,dxf,dyc,dyf,dzf,dzc,rhsw%x,rhsw%y,rhsw%z,wsolver)
 #endif
   !

@@ -17,7 +17,7 @@ module mod_solver
     integer    :: stype,comm_hypre
   end type hypre_solver 
   contains
-  subroutine init_matrix(cbc,bc,dl,is_bound,is_centered,lo,hi,ng, &
+  subroutine init_matrix(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,ng, &
                          dx1,dx2,dy1,dy2,dz1,dz2,rhsx,rhsy,rhsz,asolver)
     !
     ! description
@@ -28,6 +28,7 @@ module mod_solver
     real(rp)          , intent(in ), dimension(0:1,3) ::  bc
     real(rp)          , intent(in ), dimension(0:1,3) ::  dl
     logical           , intent(in ), dimension(0:1,3) ::  is_bound
+    logical           , intent(in )                   ::  is_uniform_grid
     logical           , intent(in ), dimension(    3) ::  is_centered
     integer           , intent(in ), dimension(    3) :: lo,hi,ng
     real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dx1,dx2
@@ -98,7 +99,7 @@ module mod_solver
     ! create coefficient matrix, and solution & right-hand-side vectors
     !
     call HYPRE_StructMatrixCreate(comm_hypre,grid,stencil,mat,ierr)
-    !call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
+    if(is_uniform_grid) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
     call HYPRE_StructMatrixInitialize(mat,ierr)
     call HYPRE_StructVectorCreate(comm_hypre,grid,sol,ierr)
     call HYPRE_StructVectorInitialize(sol,ierr)
