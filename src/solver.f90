@@ -145,7 +145,7 @@ module mod_solver
           endif
           if(periods(3) == 0) then
             if(is_bound(0,3).and.k == lo(3)) then
-              rhsz(i,j,0) = rhsz(i,j,0) + czm*factor(0,2)
+              rhsz(i,j,0) = rhsz(i,j,0) + czm*factor(0,3)
               cc = cc + sgn(0,3)*czm
               czm = 0._rp
             endif
