@@ -4,7 +4,7 @@
 
 ## News
 
-A **multi-block** implementation of *SNaC* has been developed in branch `multi_block` (and more recently `multi_block_fft`).
+A **multi-block** implementation of *SNaC* has been developed in branch [`multi_block`](https://github.com/p-costa/SNaC/tree/multi_block) (and more recently [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block)).
 
 ## Features
 
