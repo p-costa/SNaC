@@ -1,57 +1,27 @@
-# about `dns.in`
+# about `dns.in` and `geo/block.???` files
 
-Consider the following input file as example (corresponds to a turbulent plane channel flow):
+Setting up a multi-block simulation involves two input files:
 
-~~~
-512 256 144              ! itot, jtot, ktot
-6. 3. 1.                 ! lx, ly, lz
-0 0 0                    ! gt(1:3)
-0. 0. 0.                 ! gr(1:3)
-.95 1.0e5                ! cfl, dtmin
-1. 1. 5640.              ! uref, lref, rey
-poi                      ! inivel
-T                        ! is_wallturb
-100000 100. 0.1          ! nstep, time_max, tw_max
-T F F                    ! stop_type(1:3)
-F T                      ! restart,is_overwrite_input
-10 10 100 500 10000 5000 ! icheck, iout0d, iout1d, iout2d, iout3d, isave
-P P  P P  D D            ! cbcvel(0:1,1:3,1) [u BC type]
-P P  P P  D D            ! cbcvel(0:1,1:3,2) [v BC type]
-P P  P P  D D            ! cbcvel(0:1,1:3,3) [w BC type]
-P P  P P  N N            ! cbcpre(0:1,1:3  ) [p BC type]
-0. 0.  0. 0.  0. 0.      !  bcvel(0:1,1:3,1) [u BC value]
-0. 0.  0. 0.  0. 0.      !  bcvel(0:1,1:3,2) [v BC value]
-0. 0.  0. 0.  0. 0.      !  bcvel(0:1,1:3,3) [w BC value]
-0. 0.  0. 0.  0. 0.      !  bcpre(0:1,1:3  ) [p BC value]
-0. 0. 0.                 ! bforce(1:3)
-T F F                    ! is_forced(1:3)
-1. 0. 0.                 ! velf(1:3)
-2 2 2                    ! dims(1:3)
-4                        ! nthreadsmax
-~~~
+1. `dns.in`    which sets up the governing parameters that are common to all blocks, *block-independent parameters*.
+2. `block.???` files located in the `geo/` folder, which set up *block-dependent parameters*.
 
 ---
 ---
 
+Let us start with block-independent parameters in `dns.in`. Consider the following input file `dns.in` as example:
+
 ~~~
-512 256 144              ! itot, jtot, ktot
-6. 3. 1.                 ! lx, ly, lz
-0 0 0                    ! gt(1:3)
-0. 0. 0.                 ! gr(1:3)
+ .95 1.0e5                   ! cfl, dtmin
+ 1. 1. 100.                  ! uref, lref, rey
+ 100    100. 0.1             ! nstep,time_max,tw_max
+ T F F                       ! stop_type(1:3)
+ F T                         ! restart,is_overwrite_save
+10 10 20 5000 10000 2000     ! icheck, iout0d, iout1d, iout2d, iout3d, isave
+ 0. 0. 0.                    ! bforce(1:3)
+ 4                           ! nthreadsmax
 ~~~
 
-These lines set the computational grid.
-
-`itot, jtot, ktot ` and `lx, ly, lz` are the **number of points**  and **domain length** in each direction.
-
-`gt` sets the **type of grid stretching** in each direction; it can take three values:
-
-* `0` grid cells clustered in both ends of the domain (default for any value different than `1` and `2`)
-* `1` grid cells clustered in the middle of the domain
-* `2` grid cells clustered in the upper end of the domain
-
-`gr` is the **grid stretching parameter** that tweaks the non-uniform grid in the third direction; zero `gr` implies an uniform grid. See `initgrid.f90` for more details.
-
+---
 ---
 
 ~~~
@@ -66,42 +36,17 @@ The time step is set to be equal to `min(cfl*dtmax,dtmin)`, i.e. the minimum val
 ---
 
 ~~~
-1. 1. 5640.              ! uref, lref, rey
+1. 1. 100.              ! uref, lref, rey
 ~~~
 
 This line defines the flow governing parameters.
 
 `uref`, `lref` and `rey` are a reference **velocity scale**, **length scale**, and **Reynolds number** defining the problem. The fluid kinematic viscosity is computed form these quantities.
 
----
-
-~~~
-poi                      ! inivel
-T                        ! is_wallturb
-~~~
-
-These lines set the initial velocity field.
-
-`initvel` **chooses the initial velocity field**. The following options are available:
-
-* `zer`: zero velocity field
-* `cou`: plane Couette flow profile with symmetric wall velocities equal to `uref/2`; streamwise direction in `x`
-* `poi`: plane Poiseuille flow profile with mean velocity `uref`                    ; streamwise direction in `x`
-* `log`: logarithmic profile with mean velocity `uref`                              ; streamwise direction in `x`
-* `hcp`: half channel with plane Poiseuille profile and mean velocity `uref`        ; streamwise direction in `x`
-* `hcl`: half channel with logarithmic profile and mean velocity `uref`             ; streamwise direction in `x`
-* `tgv`: Taylor-Green vortex
-
-`is_wallturb`, if true, **superimposes a high amplitude disturbance on the initial velocity field** that effectively triggers transition to turbulence in a wall-bounded shear flow.
-
-See `initflow.f90` for more details.
-
----
-
 ~~~
 100000 100. 0.1          ! nstep, time_max, tw_max
 T F F                    ! stop_type(1:3)
-F T                      ! restart,is_overwrite_input
+F T                      ! restart,is_overwrite_save
 ~~~
 
 These lines set the simulation termination criteria and whether the simulation should be restarted from a checkpoint file.
@@ -120,9 +65,9 @@ These lines set the simulation termination criteria and whether the simulation s
 
 a checkpoint file `fld.bin` will be saved before the simulation is terminated.
 
-`restart`, if true, **restarts the simulation** from a previously saved checkpoint file, named `fld.bin`. 
+`restart`, if true, **restarts the simulation** from a previously saved checkpoint file, named `fld.bin`.
 
-`is_overwrite_input`, if true, overwrites the checkpoint file `fld.bin` at every save; if false, a symbolic link is created which makes `fld.bin` point to the last checkpoint file with name `fld_???????.bin`. In the latter case case, to restart a run from a different checkpoint one just has to point the file `fld.bin` to the right file, e.g.: ` ln -sf fld_0000100.bin fld.bin`.
+`is_overwrite_save`, if true, overwrites the checkpoint file `fld.bin` at every save; if false, a symbolic link is created which makes `fld.bin` point to the last checkpoint file with name `fld_???????.bin`. In the latter case, to restart a run from a different checkpoint one just has to point the file `fld.bin` to the right file, e.g.: ` ln -sf fld_0000100.bin fld.bin`.
 
 ---
 
@@ -144,19 +89,132 @@ These lines set the frequency of time step checking and output:
 ---
 
 ~~~
-P P  P P  D D          ! cbcvel(0:1,1:3,1) [u BC type]
-P P  P P  D D          ! cbcvel(0:1,1:3,2) [v BC type]
-P P  P P  D D          ! cbcvel(0:1,1:3,3) [w BC type]
-P P  P P  N N          ! cbcpre(0:1,1:3  ) [p BC type]
-0. 0.  0. 0.  0. 0.    !  bcvel(0:1,1:3,1) [u BC value]
-0. 0.  0. 0.  0. 0.    !  bcvel(0:1,1:3,2) [v BC value]
-0. 0.  0. 0.  0. 0.    !  bcvel(0:1,1:3,3) [w BC value]
-0. 0.  0. 0.  0. 0.    !  bcpre(0:1,1:3  ) [p BC value]
+0. 0. 0.                 ! bforce(1:3)
 ~~~
 
-These lines set the boundary conditions (BC).
+`bforce`, is a constant **body force density term** in the direction in question (e.g. the negative of a constant pressure gradient) that can be added to the right-hand-side of the momentum equation. The three values correspond to three domain directions. NOTE: in a pressure-driven wall-bounded flow, only one type of flow forcing should be selected (bulk velocity or pressure gradient). If the streamwise bulk velocity is forced (by setting the is_forced parameter below `T`), bforce should be zero, and vice-versa.
 
-The **type** (BC) for each field variable are set by a row of six characters, `X0 X1  Y0 Y1  Z0 Z1` where,
+---
+
+~~~
+4                        ! nthreadsmax
+~~~
+
+These lines set the grid of computational subdomains and maximum number of threads.
+
+`nthreadsmax ` is the **maximum number OpenMP threads**.
+
+---
+---
+
+The geometry, boundary and initial conditions, domain decompositions is set in a series of block files located in the `geo/` folder. Listed below for the case of a L channel:
+
+`geo/block.001`:
+~~~
+1 1 1                    ! dims(1:3)
+1  1  1                  ! lo(1:3)
+32 32 64                 ! hi(1:3)
+0. 0. 0.                 ! lmin(1:3)
+.5 .5 1.                 ! lmax(1:3)
+0 0 0                    ! gt(1:3)
+0. 0. 0.                 ! gr(1:3)
+D D  D F  D D            ! cbcvel(0:1,1:3,1) [u BC type]
+D D  D F  D D            ! cbcvel(0:1,1:3,2) [v BC type]
+D D  D F  D D            ! cbcvel(0:1,1:3,3) [w BC type]
+N N  N F  N N            ! cbcpre(0:1,1:3  ) [p BC type]
+0. 0.  0. 2.  0. 0.      !  bcvel(0:1,1:3,1) [u BC value]
+0. 0.  1. 2.  0. 0.      !  bcvel(0:1,1:3,2) [v BC value]
+0. 0.  0. 2.  0. 0.      !  bcvel(0:1,1:3,3) [w BC value]
+0. 0.  0. 2.  0. 0.      !  bcpre(0:1,1:3  ) [p BC value]
+zer                      ! inivel
+1                        ! id
+~~~
+`geo/block.002`:
+~~~
+1 1 1                    ! dims(1:3)
+1  33 1                  ! lo(1:3)
+32 64 64                 ! hi(1:3)
+0. .5 0.                 ! lmin(1:3)
+.5 1. 1.                 ! lmax(1:3)
+0 0 0                    ! gt(1:3)
+0. 0. 0.                 ! gr(1:3)
+D F  F D  D D            ! cbcvel(0:1,1:3,1) [u BC type]
+D F  F D  D D            ! cbcvel(0:1,1:3,2) [v BC type]
+D F  F D  D D            ! cbcvel(0:1,1:3,3) [w BC type]
+N F  F N  N N            ! cbcpre(0:1,1:3  ) [p BC type]
+0. 3.  1. 0.  0. 0.      !  bcvel(0:1,1:3,1) [u BC value]
+0. 3.  1. 0.  0. 0.      !  bcvel(0:1,1:3,2) [v BC value]
+0. 3.  1. 0.  0. 0.      !  bcvel(0:1,1:3,3) [w BC value]
+0. 3.  1. 0.  0. 0.      !  bcpre(0:1,1:3  ) [p BC value]
+zer                      ! inivel
+2                        ! id
+~~~
+`geo/block.003`:
+~~~
+2 1 1                    ! dims(1:3)
+33  33 1                 ! lo(1:3)
+128 64 64                ! hi(1:3)
+.5 .5 0.                 ! lmin(1:3)
+2.0 1. 1.                ! lmax(1:3)
+0 0 0                    ! gt(1:3)
+0. 0. 0.                 ! gr(1:3)
+F N  D D  D D            ! cbcvel(0:1,1:3,1) [u BC type]
+F N  D D  D D            ! cbcvel(0:1,1:3,2) [v BC type]
+F N  D D  D D            ! cbcvel(0:1,1:3,3) [w BC type]
+F D  N N  N N            ! cbcpre(0:1,1:3  ) [p BC type]
+2. 0.  0. 0.  0. 0.      !  bcvel(0:1,1:3,1) [u BC value]
+2. 0.  0. 0.  0. 0.      !  bcvel(0:1,1:3,2) [v BC value]
+2. 0.  0. 0.  0. 0.      !  bcvel(0:1,1:3,3) [w BC value]
+2. 0.  0. 0.  0. 0.      !  bcpre(0:1,1:3  ) [p BC value]
+zer                      ! inivel
+3                        ! id
+~~~
+
+---
+---
+
+~~~
+1 1 1                    ! dims(1:3)
+1  1  1                  ! lo(1:3)
+32 32 64                 ! hi(1:3)
+0. 0. 0.                 ! lmin(1:3)
+.5 .5 1.                 ! lmax(1:3)
+0 0 0                    ! gt(1:3)
+0. 0. 0.                 ! gr(1:3)
+~~~
+These lines set the domain decomposition and computational grid for each block.
+
+`dims` is the **number of computational** subdomains in each direction.
+
+
+`lo(1:3)` and `hi(1:3)` are the **coordinates of the lower and upper corners** of the block in question, **in index space**.
+
+`lmin(1:3)` and `lmax(1:3)` are the **physical coordinates of the lower and upper corners** of the block in question.
+
+`gt` sets the **type of grid stretching** in each direction for this block; it can take three values:
+
+* `0` grid cells clustered in both ends of the domain (default for any value different than `1` and `2`)
+* `1` grid cells clustered in the middle of the domain
+* `2` grid cells clustered in the upper end of the domain
+
+`gr` is the **grid stretching parameter** that tweaks the non-uniform grid in the third direction; zero `gr` implies a uniform grid. See `initgrid.f90` for more details.
+
+---
+
+~~~
+D D  D F  D D            ! cbcvel(0:1,1:3,1) [u BC type]
+D D  D F  D D            ! cbcvel(0:1,1:3,2) [v BC type]
+D D  D F  D D            ! cbcvel(0:1,1:3,3) [w BC type]
+N N  N F  N N            ! cbcpre(0:1,1:3  ) [p BC type]
+0. 0.  0. 2.  0. 0.      !  bcvel(0:1,1:3,1) [u BC value]
+0. 0.  1. 2.  0. 0.      !  bcvel(0:1,1:3,2) [v BC value]
+0. 0.  0. 2.  0. 0.      !  bcvel(0:1,1:3,3) [w BC value]
+0. 0.  0. 2.  0. 0.      !  bcpre(0:1,1:3  ) [p BC value]
+~~~
+
+These lines set the boundary conditions (BC) for the block in question.
+
+The **type** (BC) for each field variable is set by a row of six characters, `X0 X1  Y0 Y1  Z0 Z1` where,
 
 * `X0` `X1` set the type of BC the field variable for the **lower** and **upper** boundaries in `x`;
 * `Y0` `Y1` set the type of BC the field variable for the **lower** and **upper** boundaries in `y`;
@@ -166,37 +224,40 @@ The four rows correspond to the three velocity components, and pressure, i.e. `u
 
 The following options are available:
 
-* `P` periodic;
+* `F` connectivity BC (*friend* of another block);
 * `D` Dirichlet;
 * `N` Neumann.
 
-The **last four rows** follow the same logic, but now for the BC **values** (dummy for a periodic direction).
+The **last four rows** follow the same logic, but now for the BC **values**. For a `F` BC, the BC value corresponds to the *friend* block this block is connected to, in the direction in question. A periodicity boundary condition is naturally set if the blocks are cyclicly connected with `F` boundary conditions.
 
 ---
 
 ~~~
-0. 0. 0.                 ! bforce(1:3)
-T F F                    ! is_forced(1:3)
-1. 0. 0.                 ! velf(1:3)
+zer                      ! inivel
 ~~~
-These lines set the flow forcing.
 
-`bforce`, is a constant **body force density term** in the direction in question (e.g. the negative of a constant pressure gradient) that can be added to the right-hand-side of the momentum equation. The three values corresponds to three domain directions. NOTE: in a pressure-driven wall-bounded flow, only one type of flow forcing should be selected (bulk velocity or pressure gradient). If the streamwise bulk velocity is forced (by setting the is_forced parameter below `T`), bforce should be zero, and vice-versa.
+This line sets the initial velocity field for the block in question.
 
-`is_forced`, if true in the direction in question, **forces the flow** with a pressure gradient that balances the total wall shear (e.g. for a pressure-driven channel). The three boolean values corresponds to three domain directions.
+`initvel` **chooses the initial velocity field**. The following options are available:
 
-`velf`, is the **target bulk velocity** in the direction in question (where `is_forced` is true). The three values correspond to three domain directions.
+* `zer`: zero velocity field
+* `cou`: plane Couette flow profile with symmetric wall velocities equal to `uref/2`; streamwise direction in `x`
+* `poi`: plane Poiseuille flow profile with mean velocity `uref`                    ; streamwise direction in `x`
+* `log`: logarithmic profile with mean velocity `uref`                              ; streamwise direction in `x`
+* `hcp`: half channel with plane Poiseuille profile and mean velocity `uref`        ; streamwise direction in `x`
+* `hcl`: half channel with logarithmic profile and mean velocity `uref`             ; streamwise direction in `x`
+* `tgv`: Taylor-Green vortex
 
+See `initflow.f90` for more details.
 
 ---
 
 ~~~
-2 2 2                    ! dims(1:3)
-4                        ! nthreadsmax
+1                        ! id
 ~~~
 
-These lines set the grid of computational subdomains and maximum number of threads.
+Finally, this line defines the **ID of the block**. However, the line is currently not used. Instead, the ID of the block is determined from the extension of the block file. For the example shown here, block \#1 is recognized as the block defined in file `geo/block.001`, and dito for blocks \#2 and \#3.
 
-`dims` is the **number of computational** subdomains in each direction; if the number of MPI tasks does not match `dims(1)*dims(2)*dims(3)`, an new array dims is determined in the code and the input is overwritten.
+## A note on the connectivity between blocks
 
-`nthreadsmax ` is the **maximum number OpenMP threads**.
+A requirement of the present implementation is that connected blocks **must share the same boundaries**. This requirement holds not only for the definition of the geometry itself, but also for the domain decomposition: **the computational subdomains must share the same boundaries**, and therefore the value of *dims* must be set with this restriction in mind. If these conditions are not met, the code should return a runtime error.
