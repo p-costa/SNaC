@@ -49,7 +49,7 @@ The Makefile in `src/` should be modified in agreement to the installation paths
  * `-D_TIMING`           : wall-clock time per time step is computed
  * `-D_IMPDIFF`          : diffusion term of the N-S equations is integrated in time with an implicit discretization (thereby improving the stability of the numerical algorithm for viscous-dominated flows)
  * `-D_SINGLE_PRECISION` : calculation will be carried out in single precision (the default precision is double)
- * `-D_FFT_?`, with  `?` being `X`, `Y` or `Z`: will use FFTS to solve the Poisson equation in the direction in question. This option is only valid for the multi-block implementation in branch [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block)).
+ * `-D_FFT_?`, with  `?` being `X`, `Y` or `Z`: will use FFTs to solve the Poisson equation in the direction in question. This option is only valid for the multi-block implementation in branch [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block)).
 
 Typing `make run` will compile the code and copy the executable `cans` and input file `dns.in` to a `run/` folder.
 
