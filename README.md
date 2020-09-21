@@ -31,6 +31,8 @@ The fluid flow is solved with a second-order finite-volume pressure correction s
 
 The input file `dns.in` sets the physical and computational parameters. In the `examples/` folder are examples of input files for several canonical flows. See `src/INFO_INPUT.md` for a detailed description of the input file.
 
+For the *multi-block* implementation in branches [`multi_block`](https://github.com/p-costa/SNaC/tree/multi_block) and [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block), the block files in `geo/block.???` setup the flow geometry.
+
 Files `out1d.h90` and `out3d.h90` in `src/` set which data are written in 1- and 3-dimensional output files, respectively. *The code should be recompiled after editing out?d.h90 files*.
 
 ### Compilation
@@ -40,18 +42,20 @@ The code should be compiled in `src/`. The prerequisites are the following:
  * MPI
  * [HYPRE](https://github.com/hypre-space/hypre)
  * OpenMP (optional)
+ * FFTW (optional, for branch [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block))
 
 The Makefile in `src/` should be modified in agreement to the installation paths of each library. Also, the following preprocessor options are available:
 
  * `-D_TIMING`           : wall-clock time per time step is computed
  * `-D_IMPDIFF`          : diffusion term of the N-S equations is integrated in time with an implicit discretization (thereby improving the stability of the numerical algorithm for viscous-dominated flows)
  * `-D_SINGLE_PRECISION` : calculation will be carried out in single precision (the default precision is double)
+ * `-D_FFT_?`, with  `?` being `X`, `Y` or `Z`: will use FFTS to solve the Poisson equation in the direction in question. This option is only valid for the multi-block implementation in branch [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block)).
 
 Typing `make run` will compile the code and copy the executable `cans` and input file `dns.in` to a `run/` folder.
 
 ### Running the code
 
-Run the executable with `mpirun` with a number of tasks and shared threads complying to what has been set in the input file `dns.bin`. Data will be written by default in a folder named `data/`, which must be located where the executable is run.
+Run the executable with `mpirun` with a number of tasks and shared threads complying to what has been set in the input file `dns.in` (or in the `geo/block.???` files in case of multi-block). Data will be written by default in a folder named `data/`, which must be located where the executable is run.
 
 ### Visualizing field data
 
