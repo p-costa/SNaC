@@ -32,6 +32,7 @@ module mod_load
       !
       call MPI_FILE_GET_SIZE(fh,filesize,ierr)
       good = (product(ng)*4+2)*storage_size(1._rp)/8
+      if(present(po)) good = good + product(ng)*storage_size(1._rp)/8
       if(filesize /= good) then
         if(myid_block == 0) write(stderr,*) ''
         if(myid_block == 0) write(stderr,*) '*** Simulation aborted due a checkpoint file with incorrect size ***'
@@ -106,8 +107,8 @@ module mod_load
       call MPI_FILE_SET_VIEW(fh,disp,MPI_REAL_RP,type_glob,'native',MPI_INFO_NULL,ierr)
       call MPI_FILE_WRITE_ALL(fh,var,1,type_loc,MPI_STATUS_IGNORE,ierr)
     end select
-      disp = disp+product(ng)*storage_size(1._rp)/8
-      call MPI_TYPE_FREE(type_glob,ierr)
-      call MPI_TYPE_FREE(type_loc ,ierr)
+    disp = disp+product(ng)*storage_size(1._rp)/8
+    call MPI_TYPE_FREE(type_glob,ierr)
+    call MPI_TYPE_FREE(type_loc ,ierr)
   end subroutine io_field
 end module mod_load
