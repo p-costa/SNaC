@@ -1,6 +1,6 @@
 name: test against benchmark data
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
   build:
