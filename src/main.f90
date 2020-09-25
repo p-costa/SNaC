@@ -272,7 +272,15 @@ program snac
   is_uniform_grid = all(dzf(:) == dzf(lo(3))) .and. &
                     all(dyf(:) == dyf(lo(2))) .and. &
                     all(dxf(:) == dxf(lo(1))) .and. &
+#ifdef _FFT_X
+                    dyf(lo(2)) == dzf(lo(3))
+#elif  _FFT_Y
+                    dxf(lo(1)) == dzf(lo(3))
+#elif  _FFT_Z
+                    dyf(lo(2)) == dzf(lo(3))
+#else
                     dxf(lo(1)) == dyf(lo(2)) .and. dyf(lo(2)) == dzf(lo(3))
+#endif
   call mpi_allreduce(MPI_IN_PLACE,is_uniform_grid,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
   !
   ! initialization of the flow fields
