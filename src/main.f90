@@ -273,7 +273,7 @@ program snac
                     all(dyf(:) == dyf(lo(2))) .and. &
                     all(dxf(:) == dxf(lo(1))) .and. &
                     dxf(lo(1)) == dyf(lo(2)) .and. dyf(lo(2)) == dzf(lo(3))
-  call mpi_allreduce(MPI_IN_PLACE,is_uniform_grid,3,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
+  call mpi_allreduce(MPI_IN_PLACE,is_uniform_grid,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
   !
   ! initialization of the flow fields
   !
