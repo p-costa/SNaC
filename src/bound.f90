@@ -347,7 +347,7 @@ module mod_bound
     use mod_common_mpi, only: ierr
     implicit none
     integer , dimension(3), intent(in) :: lo,hi
-    integer , intent(in) :: nh,halo ! n -> number of ghost points
+    integer , intent(in) :: nh,halo ! nh -> number of ghost points
     integer , intent(in), dimension(0:1) :: nb
     integer , intent(in) :: idir
     real(rp), dimension(lo(1)-nh:,lo(2)-nh:,lo(3)-nh:), intent(inout) :: p
