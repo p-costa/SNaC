@@ -49,10 +49,10 @@ integer , dimension(3) :: lo_min,hi_max
 real(rp), dimension(3) :: lmin_min,lmax_max
 contains 
   subroutine read_input()
-  use mpi
-  use mod_common_mpi, only:myid,ierr
+  use mpi_f08
+  use mod_common_mpi, only:myid
   implicit none
-  integer :: iunit,iblock
+  integer :: iunit,iblock,ierr
   integer, allocatable, dimension(:) :: nranks
   logical :: exists
   character(len=100) :: filename
@@ -71,7 +71,7 @@ contains
       else
         if(myid == 0) write(stderr,*) '*** Error reading the input file *** ' 
         if(myid == 0) write(stderr,*) 'Aborting...'
-        call MPI_FINALIZE(ierr)
+        call MPI_FINALIZE()
         error stop
       endif
     close(iunit)

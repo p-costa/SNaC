@@ -1,7 +1,7 @@
 module mod_initmpi
-  use mpi
+  use mpi_f08
   use mod_types
-  use mod_common_mpi, only: ierr,myid,myid_block,comm_block
+  use mod_common_mpi, only: myid,myid_block,comm_block
   implicit none
   private
   public initmpi
@@ -17,7 +17,7 @@ module mod_initmpi
     integer         , intent(out  ), dimension(    3) :: ng
     integer         , intent(out  ), dimension(0:1,3) :: nb
     logical         , intent(out  ), dimension(0:1,3) :: is_bound
-    integer         , intent(out  ), dimension(    3) :: halos
+    type(MPI_DATATYPE), intent(out  ), dimension(    3) :: halos
     integer                 :: nrank
     integer         , dimension(0:dims(1)-1,0:dims(2)-1,0:dims(3)-1) :: id_grid
     integer, dimension(  3) :: n,start,coords,lo_g,hi_g
@@ -30,9 +30,9 @@ module mod_initmpi
     logical                 :: is_nb,found_friend
     integer                 :: ntot,ntot_max,ntot_min,ntot_sum
     !
-    call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
-    call MPI_COMM_SPLIT(MPI_COMM_WORLD,my_block,myid,comm_block,ierr)
-    call MPI_COMM_RANK(comm_block, myid_block, ierr)
+    call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank)
+    call MPI_COMM_SPLIT(MPI_COMM_WORLD,my_block,myid,comm_block)
+    call MPI_COMM_RANK(comm_block, myid_block)
     !
     ! generate Cartesian topology
     !
@@ -77,13 +77,13 @@ module mod_initmpi
     !
     allocate(lo_all(3,0:nrank-1),hi_all(3,0:nrank-1),lo_g_all(3,0:nrank-1),hi_g_all(3,0:nrank-1), &
              blocks_all(0:nrank-1),cbc_all(0:1,3,0:nrank-1),bc_all(0:1,3,0:nrank-1))
-    call MPI_ALLGATHER(lo      ,3,MPI_INTEGER,lo_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-    call MPI_ALLGATHER(hi      ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-    call MPI_ALLGATHER(lo_g    ,3,MPI_INTEGER,lo_g_all  ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-    call MPI_ALLGATHER(hi_g    ,3,MPI_INTEGER,hi_g_all  ,3,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-    call MPI_ALLGATHER(my_block,1,MPI_INTEGER,blocks_all,1,MPI_INTEGER,MPI_COMM_WORLD,ierr)
-    call MPI_ALLGATHER(cbc,6,MPI_CHARACTER,cbc_all,6,MPI_CHARACTER,MPI_COMM_WORLD,ierr)
-    call MPI_ALLGATHER( bc,6,MPI_REAL_RP  , bc_all,6,MPI_REAL_RP  ,MPI_COMM_WORLD,ierr)
+    call MPI_ALLGATHER(lo      ,3,MPI_INTEGER,lo_all    ,3,MPI_INTEGER,MPI_COMM_WORLD)
+    call MPI_ALLGATHER(hi      ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD)
+    call MPI_ALLGATHER(lo_g    ,3,MPI_INTEGER,lo_g_all  ,3,MPI_INTEGER,MPI_COMM_WORLD)
+    call MPI_ALLGATHER(hi_g    ,3,MPI_INTEGER,hi_g_all  ,3,MPI_INTEGER,MPI_COMM_WORLD)
+    call MPI_ALLGATHER(my_block,1,MPI_INTEGER,blocks_all,1,MPI_INTEGER,MPI_COMM_WORLD)
+    call MPI_ALLGATHER(cbc,6,MPI_CHARACTER,cbc_all,6,MPI_CHARACTER,MPI_COMM_WORLD)
+    call MPI_ALLGATHER( bc,6,MPI_REAL_RP  , bc_all,6,MPI_REAL_RP  ,MPI_COMM_WORLD)
     do idir=1,3
       do inb=0,1
         if(cbc(inb,idir) == 'F') then
@@ -174,9 +174,9 @@ module mod_initmpi
     ! check distribution of grid points over the different tasks
     !
     ntot = product(hi(:)-lo(:)+1)
-    call MPI_ALLREDUCE(ntot,ntot_min,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD,ierr)
-    call MPI_ALLREDUCE(ntot,ntot_max,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,ierr)
-    call MPI_ALLREDUCE(ntot,ntot_sum,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(ntot,ntot_min,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(ntot,ntot_max,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(ntot,ntot_sum,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD)
     write(stdout,*) 'Maximum, minimum, average, and normalized average average number of grid points for task ',myid, &
                     '(block',my_block,'): ',ntot_max, &
                                             ntot_min, &
@@ -187,17 +187,17 @@ module mod_initmpi
     implicit none
     integer, intent(in ) :: idir,nh
     integer, intent(in ), dimension(3) :: n
-    integer, intent(out) :: halo
+    type(MPI_DATATYPE), intent(out) :: halo
     integer, dimension(3) :: nn
     nn(:) = n(:) + 2*nh
     select case(idir)
     case(1)
-      call MPI_TYPE_VECTOR(nn(2)*nn(3),nh            ,nn(1)            ,MPI_REAL_RP,halo,ierr)
+      call MPI_TYPE_VECTOR(nn(2)*nn(3),nh            ,nn(1)            ,MPI_REAL_RP,halo)
     case(2)
-      call MPI_TYPE_VECTOR(      nn(3),nh*nn(1)      ,nn(1)*nn(2)      ,MPI_REAL_RP,halo,ierr)
+      call MPI_TYPE_VECTOR(      nn(3),nh*nn(1)      ,nn(1)*nn(2)      ,MPI_REAL_RP,halo)
     case(3)
-      call MPI_TYPE_VECTOR(          1,nh*nn(1)*nn(2),nn(1)*nn(2)*nn(3),MPI_REAL_RP,halo,ierr)
+      call MPI_TYPE_VECTOR(          1,nh*nn(1)*nn(2),nn(1)*nn(2)*nn(3),MPI_REAL_RP,halo)
     end select
-    call MPI_TYPE_COMMIT(halo,ierr)
+    call MPI_TYPE_COMMIT(halo)
   end subroutine makehalo
 end module mod_initmpi

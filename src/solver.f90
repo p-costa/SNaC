@@ -1,5 +1,5 @@
 module mod_solver
-  use mpi
+  use mpi_f08
   use mod_common_mpi, only: ierr
   use mod_types
   implicit none
@@ -139,8 +139,7 @@ module mod_solver
     real(rp) :: cc,cxm,cxp,cym,cyp,czm,czp
     integer            :: comm_hypre
     !
-    comm_hypre = MPI_COMM_WORLD
-    !
+    comm_hypre = MPI_COMM_WORLD%MPI_VAL
     qqq(:) = 0
     where(.not.is_centered(:)) qqq(:) = 1
     factor(:,:) = 0._rp
@@ -515,7 +514,7 @@ module mod_solver
     real(rp) :: cc,c1m,c1p,c2m,c2p
     integer            :: comm_hypre
     !
-    comm_hypre = MPI_COMM_WORLD
+    comm_hypre = MPI_COMM_WORLD%MPI_VAL
     !
     qqq(:) = 0
          qqq(:) = 0

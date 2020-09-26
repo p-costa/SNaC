@@ -1,6 +1,5 @@
 module mod_chkdt
-  use mpi
-  use mod_common_mpi, only: ierr
+  use mpi_f08
   use mod_types
   implicit none
   private
@@ -48,7 +47,7 @@ module mod_chkdt
       enddo
     enddo
     !$OMP END PARALLEL DO
-    call mpi_allreduce(MPI_IN_PLACE,dti,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
+    call mpi_allreduce(MPI_IN_PLACE,dti,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
     if(dti == 0._rp) dti = 1._rp
     dlmin     = min(minval(dxf),minval(dyf),minval(dzf))
 #ifdef _IMPDIFF

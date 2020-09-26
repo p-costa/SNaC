@@ -1,5 +1,5 @@
 module mod_bound
-  use mpi
+  use mpi_f08
   use mod_types
   implicit none
   private
@@ -15,7 +15,7 @@ module mod_bound
     integer , intent(in   ), dimension(3) :: lo,hi
     real(rp), intent(in   ), dimension(0:1,3,3) :: bc
     logical , intent(in   )                   :: is_correc
-    integer , intent(in   ), dimension(3    ) :: halos
+    type(MPI_DATATYPE), intent(in   ), dimension(3    ) :: halos
     logical , intent(in   ), dimension(0:1,3) :: is_bound
     integer , intent(in   ), dimension(0:1,3) :: nb
     real(rp), intent(in   ), dimension(lo(1)-1:) :: dxc,dxf
@@ -73,7 +73,7 @@ module mod_bound
     character(len=1), intent(in), dimension(0:1,3) :: cbc
     integer , intent(in   ), dimension(3    )      :: lo,hi
     real(rp), intent(in   ), dimension(0:1,3)      :: bc
-    integer , intent(in   ), dimension(3    )      :: halos
+    type(MPI_DATATYPE), intent(in   ), dimension(3    )      :: halos
     logical , intent(in   ), dimension(0:1,3)      :: is_bound
     integer , intent(in   ), dimension(0:1,3)      :: nb
     real(rp), intent(in   ), dimension(lo(1)-1:)   :: dxc
@@ -344,10 +344,10 @@ module mod_bound
   end subroutine updt_rhs
   !
   subroutine updthalo(lo,hi,nh,halo,nb,idir,p)
-    use mod_common_mpi, only: ierr
     implicit none
     integer , dimension(3), intent(in) :: lo,hi
-    integer , intent(in) :: nh,halo ! nh -> number of ghost points
+    integer , intent(in) :: nh ! number of ghost points
+    type(MPI_DATATYPE), intent(in) :: halo
     integer , intent(in), dimension(0:1) :: nb
     integer , intent(in) :: idir
     real(rp), dimension(lo(1)-nh:,lo(2)-nh:,lo(3)-nh:), intent(inout) :: p
@@ -360,10 +360,10 @@ module mod_bound
     case(1) ! x direction
       call MPI_SENDRECV(p(lo(1)     ,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
                         p(hi(1)+1   ,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
-                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE)
       call MPI_SENDRECV(p(hi(1)-nh+1,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
                         p(lo(1)-nh  ,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
-                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE)
       !call MPI_IRECV( p(lo(1)-nh  ,lo(2)-nh,lo(3)-nh),1,halo,nb(0),1, &
       !                MPI_COMM_WORLD,requests(1),error)
       !call MPI_IRECV( p(hi(1)+1   ,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
@@ -376,10 +376,10 @@ module mod_bound
     case(2) ! y direction
       call MPI_SENDRECV(p(lo(1)-nh,lo(2)     ,lo(3)-nh),1,halo,nb(0),0, &
                         p(lo(1)-nh,hi(2)+1   ,lo(3)-nh),1,halo,nb(1),0, &
-                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE)
       call MPI_SENDRECV(p(lo(1)-nh,hi(2)-nh+1,lo(3)-nh),1,halo,nb(1),0, &
                         p(lo(1)-nh,lo(2)-nh  ,lo(3)-nh),1,halo,nb(0),0, &
-                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE)
       !call MPI_IRECV( p(lo(1)-nh,hi(2)+1   ,lo(3)-nh),1,halo,nb(1),0, &
       !                MPI_COMM_WORLD,requests(1),error)
       !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh  ,lo(3)-nh),1,halo,nb(0),1, &
@@ -392,10 +392,10 @@ module mod_bound
     case(3) ! z direction
       call MPI_SENDRECV(p(lo(1)-nh,lo(2)-nh,lo(3)     ),1,halo,nb(0),0, &
                         p(lo(1)-nh,lo(2)-nh,hi(3)+1   ),1,halo,nb(1),0, &
-                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE)
       call MPI_SENDRECV(p(lo(1)-nh,lo(2)-nh,hi(3)-nh+1),1,halo,nb(1),0, &
                         p(lo(1)-nh,lo(2)-nh,lo(3)-nh  ),1,halo,nb(0),0, &
-                        MPI_COMM_WORLD,MPI_STATUS_IGNORE,ierr)
+                        MPI_COMM_WORLD,MPI_STATUS_IGNORE)
       !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,hi(3)+1   ),1,halo,nb(1),0, &
       !                MPI_COMM_WORLD,requests(1),error)
       !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,lo(3)-nh  ),1,halo,nb(0),1, &

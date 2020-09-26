@@ -1,6 +1,6 @@
 module mod_sanity
-  use mpi
-  use mod_common_mpi, only: myid,ierr
+  use mpi_f08
+  use mod_common_mpi, only: myid
   use mod_types
   implicit none
   private
@@ -67,19 +67,19 @@ module mod_sanity
     real(rp) :: lmin_min,lmin_max,lmax_min,lmax_max
     passed = .true.
     passed_loc = dims == 1
-    call MPI_ALLREDUCE(MPI_IN_PLACE,passed_loc,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(MPI_IN_PLACE,passed_loc,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
     if(.not.passed_loc) &
       call write_error('no domain decomposition allowed in the uniform (FFT) direction')
     passed = passed.and.passed_loc
     !
-    call MPI_ALLREDUCE(lo  ,lo_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD,ierr) 
-    call MPI_ALLREDUCE(lo  ,lo_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,ierr) 
-    call MPI_ALLREDUCE(hi  ,hi_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD,ierr) 
-    call MPI_ALLREDUCE(hi  ,hi_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,ierr) 
-    call MPI_ALLREDUCE(lmin,lmin_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr) 
-    call MPI_ALLREDUCE(lmin,lmin_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr) 
-    call MPI_ALLREDUCE(lmax,lmax_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr) 
-    call MPI_ALLREDUCE(lmax,lmax_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr) 
+    call MPI_ALLREDUCE(lo  ,lo_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD) 
+    call MPI_ALLREDUCE(lo  ,lo_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD) 
+    call MPI_ALLREDUCE(hi  ,hi_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD) 
+    call MPI_ALLREDUCE(hi  ,hi_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD) 
+    call MPI_ALLREDUCE(lmin,lmin_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD) 
+    call MPI_ALLREDUCE(lmin,lmin_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD) 
+    call MPI_ALLREDUCE(lmax,lmax_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD) 
+    call MPI_ALLREDUCE(lmax,lmax_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD) 
     passed_loc = (lo_min == lo).and.(lo_max == lo).and. &
                  (hi_min == hi).and.(hi_max == hi)
     passed_loc = passed_loc.and. &
@@ -153,7 +153,7 @@ module mod_sanity
     if(myid == 0) write(stderr,*) ''
     if(myid == 0) write(stderr,*) '*** Simulation aborted due to errors in the input file ***'
     if(myid == 0) write(stderr,*) '    check dns.in'
-    call MPI_FINALIZE(ierr)
+    call MPI_FINALIZE()
     error stop
   end subroutine abortit
   subroutine write_error(message)

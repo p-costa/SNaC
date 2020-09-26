@@ -1,6 +1,6 @@
 module mod_output
-  use mpi
-  use mod_common_mpi, only: ierr,myid,myid_block
+  use mpi_f08
+  use mod_common_mpi, only: myid,myid_block
   use mod_load      , only: io_field 
   use mod_types
   implicit none
@@ -31,7 +31,7 @@ module mod_output
     endif
   end subroutine out0d
   !
-  subroutine out1d(fname,lo,hi,lo_g,hi_g,idir,l,dx,dy,dz,x_g,y_g,z_g,mpi_comm,myrank,p)
+  subroutine out1d(fname,lo,hi,lo_g,hi_g,idir,l,dx,dy,dz,x_g,y_g,z_g,comm,myrank,p)
     !
     ! writes the profile of a variable averaged over two domain directions
     !
@@ -58,7 +58,8 @@ module mod_output
     real(rp), intent(in), dimension(lo_g(1)-1:) :: x_g
     real(rp), intent(in), dimension(lo_g(2)-1:) :: y_g
     real(rp), intent(in), dimension(lo_g(3)-1:) :: z_g
-    integer , intent(in)                      :: mpi_comm,myrank
+    type(MPI_COMM), intent(in)                  :: comm
+    integer , intent(in)                        :: myrank
     real(rp), intent(in), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     real(rp), allocatable, dimension(:) :: p1d
     integer, dimension(3) :: ng
@@ -77,7 +78,7 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d,ng(3),MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d,ng(3),MPI_REAL_RP,MPI_SUM,comm)
       if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do k=lo_g(3),hi_g(3)
@@ -95,7 +96,7 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d,ng(2),MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d,ng(2),MPI_REAL_RP,MPI_SUM,comm)
       if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do j=lo_g(2),hi_g(2)
@@ -113,7 +114,7 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d,ng(1),MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d,ng(1),MPI_REAL_RP,MPI_SUM,comm)
       if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do i=lo_g(1),hi_g(1)
@@ -143,18 +144,18 @@ module mod_output
     implicit none
     character(len=*), intent(in) :: fname
     integer , intent(in   ), dimension(3) :: lo,hi,ng,nskip
-    integer , intent(in   )               :: comm
+    type(MPI_COMM) , intent(in   )               :: comm
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
-    integer :: fh
+    type(MPI_FILE) :: fh
     integer(kind=MPI_OFFSET_KIND) :: filesize,disp
     !
     call MPI_FILE_OPEN(comm, fname, &
-         MPI_MODE_CREATE+MPI_MODE_WRONLY, MPI_INFO_NULL,fh, ierr)
+         MPI_MODE_CREATE+MPI_MODE_WRONLY, MPI_INFO_NULL,fh)
     filesize = 0_MPI_OFFSET_KIND
-    call MPI_FILE_SET_SIZE(fh,filesize,ierr)
+    call MPI_FILE_SET_SIZE(fh,filesize)
     disp = 0_MPI_OFFSET_KIND
     call io_field('w',fh,ng,[1,1,1],lo,hi,disp,p)
-    call MPI_FILE_CLOSE(fh,ierr)
+    call MPI_FILE_CLOSE(fh)
   end subroutine out3d
   !
   subroutine write_log_output(fname,fname_fld,varname,nmin,nmax,nskip,time,istep)
@@ -193,7 +194,7 @@ module mod_output
     !
     implicit none
     character(len=*), intent(in)             :: datadir,fname_bin,fname_log,varname
-    integer , intent(in   )                  :: comm
+    type(MPI_COMM) , intent(in   )           :: comm
     integer , intent(in   ), dimension(3)    :: lo,hi,ng,nmin,nmax,nskip
     real(rp), intent(in   )                  :: time
     integer , intent(in   )                  :: istep

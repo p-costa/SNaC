@@ -1,12 +1,11 @@
 module mod_chkdiv
-  use mpi
-  use mod_common_mpi, only: ierr
+  use mpi_f08
   use mod_types
   implicit none
   private
   public chkdiv
   contains
-    subroutine chkdiv(lo,hi,dxf,dyf,dzf,u,v,w,vol,mpi_comm,divtot,divmax)
+    subroutine chkdiv(lo,hi,dxf,dyf,dzf,u,v,w,vol,comm,divtot,divmax)
     !
     ! checks the divergence of the velocity field
     !
@@ -17,7 +16,7 @@ module mod_chkdiv
     real(rp), intent(in ), dimension(lo(3)-1:) :: dzf
     real(rp), intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
     real(rp), intent(in ) :: vol 
-    integer , intent(in ) :: mpi_comm
+    type(MPI_COMM), intent(in ) :: comm
     real(rp), intent(out) :: divtot,divmax
     real(rp) :: div
     integer  :: i,j,k
@@ -41,7 +40,7 @@ module mod_chkdiv
       enddo
     enddo
     !$OMP END PARALLEL DO
-    call mpi_allreduce(MPI_IN_PLACE,divtot,1,MPI_REAL_RP,MPI_SUM,mpi_comm,ierr)
-    call mpi_allreduce(MPI_IN_PLACE,divmax,1,MPI_REAL_RP,MPI_MAX,mpi_comm,ierr)
+    call mpi_allreduce(MPI_IN_PLACE,divtot,1,MPI_REAL_RP,MPI_SUM,comm)
+    call mpi_allreduce(MPI_IN_PLACE,divmax,1,MPI_REAL_RP,MPI_MAX,comm)
   end subroutine chkdiv
 end module mod_chkdiv

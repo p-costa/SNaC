@@ -1,5 +1,5 @@
 module mod_initflow
-  use mpi
+  use mpi_f08
   use mod_common_mpi, only: myid_block,ierr,comm_block
   use mod_param     , only: pi
   use mod_types
@@ -83,7 +83,7 @@ module mod_initflow
       if(myid_block == 0) write(stderr,*) ''
       if(myid_block == 0) write(stderr,*) '*** Simulation aborted due to errors in the case file ***'
       if(myid_block == 0) write(stderr,*) '    check INFO_INPUT.md'
-      call MPI_FINALIZE(ierr)
+      call MPI_FINALIZE()
       error stop
     end select
     if(inivel /= 'tgv') then
@@ -208,7 +208,7 @@ module mod_initflow
       enddo
     enddo
     !$OMP END PARALLEL DO
-    call mpi_allreduce(MPI_IN_PLACE,meanold,1,MPI_REAL_RP,MPI_SUM,comm_block,ierr)
+    call mpi_allreduce(MPI_IN_PLACE,meanold,1,MPI_REAL_RP,MPI_SUM,comm_block)
     if(meanold /= 0._rp) then
       !$OMP WORKSHARE
       p(:,:,:) = p(:,:,:)/meanold*mean
