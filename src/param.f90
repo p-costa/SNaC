@@ -51,12 +51,12 @@ real(rp), dimension(3) :: dli
 !
 contains 
   subroutine read_input()
-  use mpi
-  use mod_common_mpi, only:myid,ierr
+  use mpi_f08
+  use mod_common_mpi, only:myid
   implicit none
-  integer :: iunit
+  integer :: iunit,ierr
     open(newunit=iunit,file='dns.in',status='old',action='read',iostat=ierr)
-      if( ierr == 0 ) then
+      if(ierr == 0) then
         read(iunit,*) ng(1),ng(2),ng(3)
         read(iunit,*) l(1),l(2),l(3)
         read(iunit,*) gt(1),gt(2),gt(3)
@@ -85,7 +85,7 @@ contains
       else
         if(myid == 0) write(stderr,*) '*** Error reading the input file *** ' 
         if(myid == 0) write(stderr,*) 'Aborting...'
-        call MPI_FINALIZE(ierr)
+        call MPI_FINALIZE()
         error stop
       endif
     close(iunit)

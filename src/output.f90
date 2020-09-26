@@ -1,6 +1,6 @@
 module mod_output
-  use mpi
-  use mod_common_mpi, only: ierr,myid
+  use mpi_f08
+  use mod_common_mpi, only: myid
   use mod_load      , only: io_field 
   use mod_types
   implicit none
@@ -73,7 +73,7 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(3),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
       if(myid == 0) then
         open(newunit=iunit,file=fname)
         do k=1,ng(3)
@@ -91,7 +91,7 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(2),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(2),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
       if(myid == 0) then
         open(newunit=iunit,file=fname)
         do j=1,ng(2)
@@ -109,7 +109,7 @@ module mod_output
           enddo
         enddo
       enddo
-      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(1),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+      call mpi_allreduce(MPI_IN_PLACE,p1d(1),ng(1),MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
       if(myid == 0) then
         open(newunit=iunit,file=fname)
         do i=1,ng(1)
@@ -140,16 +140,16 @@ module mod_output
     character(len=*), intent(in) :: fname
     integer , intent(in   ), dimension(3) :: lo,hi,ng,nskip
     real(rp), intent(inout), dimension(lo(1)-1,lo(2)-1,lo(3)-1) :: p
-    integer :: fh
+    type(MPI_FILE) :: fh
     integer(kind=MPI_OFFSET_KIND) :: filesize,disp
     !
     call MPI_FILE_OPEN(MPI_COMM_WORLD, fname, &
-         MPI_MODE_CREATE+MPI_MODE_WRONLY, MPI_INFO_NULL,fh, ierr)
+         MPI_MODE_CREATE+MPI_MODE_WRONLY, MPI_INFO_NULL,fh)
     filesize = 0_MPI_OFFSET_KIND
-    call MPI_FILE_SET_SIZE(fh,filesize,ierr)
+    call MPI_FILE_SET_SIZE(fh,filesize)
     disp = 0_MPI_OFFSET_KIND
     call io_field('w',fh,ng,[1,1,1],lo,hi,disp,p)
-    call MPI_FILE_CLOSE(fh,ierr)
+    call MPI_FILE_CLOSE(fh)
   end subroutine out3d
   !
   subroutine write_log_output(fname,fname_fld,varname,nmin,nmax,nskip,time,istep)

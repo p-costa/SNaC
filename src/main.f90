@@ -19,12 +19,12 @@
 ! Pedro Costa (p.simoes.costa@gmail.com)
 !-----------------------------------------------------------------------------------
 program snac
-  use mpi
+  use mpi_f08
   use mod_bound          , only: bounduvw,boundp,updt_rhs
   use mod_debug          , only: chkmean
   use mod_chkdiv         , only: chkdiv
   use mod_chkdt          , only: chkdt
-  use mod_common_mpi     , only: myid,ierr
+  use mod_common_mpi     , only: myid
   use mod_correc         , only: correc
   use mod_initflow       , only: initflow
   use mod_initgrid       , only: initgrid,distribute_grid,save_grid
@@ -55,7 +55,7 @@ program snac
   implicit none
   integer , dimension(0:1,3) :: nb
   logical , dimension(0:1,3) :: is_bound
-  integer , dimension(3    ) :: halos
+  type(MPI_DATATYPE) , dimension(3    ) :: halos
   integer , dimension(3) :: lo,hi
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
 #ifdef _IMPDIFF
@@ -104,8 +104,8 @@ program snac
   real(rp) :: dt12,dt12av,dt12min,dt12max
 #endif
   !
-  call MPI_INIT(ierr)
-  call MPI_COMM_RANK(MPI_COMM_WORLD, myid, ierr)
+  call MPI_INIT()
+  call MPI_COMM_RANK(MPI_COMM_WORLD, myid)
   twi = MPI_WTIME()
   !
   ! read parameter file
@@ -219,7 +219,7 @@ program snac
                     all(dyf(:) == dyf(lo(2))) .and. &
                     all(dxf(:) == dxf(lo(1))) .and. &
                     dxf(lo(1)) == dyf(lo(2)) .and. dyf(lo(2)) == dzf(lo(3))
-  call mpi_allreduce(MPI_IN_PLACE,is_uniform_grid,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
+  call mpi_allreduce(MPI_IN_PLACE,is_uniform_grid,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
   !
   ! initialization of the flow fields
   !
@@ -397,7 +397,7 @@ program snac
     endif
     if(stop_type(3)) then ! maximum wall-clock time reached
       tw = (MPI_WTIME()-twi)/3600._rp
-      call MPI_ALLREDUCE(MPI_IN_PLACE,tw,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
+      call MPI_ALLREDUCE(MPI_IN_PLACE,tw,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
       if(tw    >= tw_max  ) is_done = is_done.or..true.
     endif
     if(mod(istep,icheck) == 0) then
@@ -477,9 +477,9 @@ program snac
     endif
 #ifdef _TIMING
       dt12 = MPI_WTIME()-dt12
-      call MPI_ALLREDUCE(dt12,dt12av ,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
-      call MPI_ALLREDUCE(dt12,dt12min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
-      call MPI_ALLREDUCE(dt12,dt12max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
+      call MPI_ALLREDUCE(dt12,dt12av ,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
+      call MPI_ALLREDUCE(dt12,dt12min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD)
+      call MPI_ALLREDUCE(dt12,dt12max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
       if(myid == 0) write(stdout,*) 'Avrg, min & max elapsed time: '
       if(myid == 0) write(stdout,*) dt12av/(1._rp*product(dims)),dt12min,dt12max
 #endif
@@ -492,6 +492,6 @@ program snac
   call finalize_matrix(wsolver)
 #endif
   if(myid == 0.and.(.not.kill)) write(stdout,*) '*** Fim ***'
-  call MPI_FINALIZE(ierr)
+  call MPI_FINALIZE()
   stop
 end program snac

@@ -1,6 +1,5 @@
 module mod_debug
-  use mpi
-  use mod_common_mpi, only:ierr
+  use mpi_f08
   use mod_types
   implicit none
   private
@@ -32,7 +31,7 @@ module mod_debug
       enddo
     enddo
     !$OMP END PARALLEL DO
-    call mpi_allreduce(MPI_IN_PLACE,mean,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+    call mpi_allreduce(MPI_IN_PLACE,mean,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
   end subroutine chkmean
   subroutine chk_helmholtz(lo,hi,is_centered,dx1,dx2,dy1,dy2,dz1,dz2,alpha,fpp,fp,diffmax)
     !
@@ -69,7 +68,7 @@ module mod_debug
         enddo
       enddo
     enddo
-    call mpi_allreduce(MPI_IN_PLACE,diffmax,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
+    call mpi_allreduce(MPI_IN_PLACE,diffmax,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
   end subroutine chk_helmholtz
   subroutine mean_boundary_force(dt,factor,l,tau,tauo,f)
     implicit none
@@ -133,7 +132,7 @@ module mod_debug
         enddo
       enddo
     endif
-    call mpi_allreduce(MPI_IN_PLACE,tau%x(1),3,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+    call mpi_allreduce(MPI_IN_PLACE,tau%x(1),3,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
     tau%y(:) = 0._rp
     idir = 1
     if(is_bound(0,idir)) then
@@ -169,7 +168,7 @@ module mod_debug
         enddo
       enddo
     endif
-    call mpi_allreduce(MPI_IN_PLACE,tau%y(1),3,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+    call mpi_allreduce(MPI_IN_PLACE,tau%y(1),3,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
     tau%z(:) = 0._rp
     idir = 1
     if(is_bound(0,idir)) then
@@ -205,6 +204,6 @@ module mod_debug
         enddo
       enddo
     endif
-    call mpi_allreduce(MPI_IN_PLACE,tau%z(1),3,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+    call mpi_allreduce(MPI_IN_PLACE,tau%z(1),3,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
   end subroutine compute_mean_wall_shear
 end module mod_debug

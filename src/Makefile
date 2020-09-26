@@ -2,9 +2,9 @@
 FC   = mpifort
 # flags
 BIG :=
-DBG := #-O0 -g -fbacktrace -Wall -Wextra -pedantic -fcheck=all -finit-real=snan -ffpe-trap=invalid -std=f2018
+DBG := -O0 -g -fbacktrace -Wall -Wextra #-pedantic -fcheck=all -finit-real=snan -ffpe-trap=invalid -std=f2018
 OMP :=
-OPT := -O3
+OPT := #-O3
 OTH := 
 PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
@@ -20,9 +20,9 @@ all: $(TARGET)
 $(TARGET): $(OBJ)
 	$(FC) $(FFLAGS) $(OBJ) $(LIBS) -o $(TARGET)
 # src, run and data directories
-SRCDIR := $(PWD)
-RUNDIR := ${SRCDIR}/../run
-DATDIR := ${RUNDIR}/data
+SRCDIR := $(pwd)
+RUNDIR := $(SRCDIR)../run
+DATDIR := $(RUNDIR)/data
 #
 run: $(TARGET)
 	@mkdir -p $(RUNDIR) $(DATDIR)
@@ -40,7 +40,7 @@ debug.o: debug.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 chkdiv.o: chkdiv.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
-chkdt.o: chkdt.f90 common_mpi.o types.o
+chkdt.o: chkdt.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 common_mpi.o: common_mpi.f90
 	$(FC) $(FFLAGS) -cpp -c  $<

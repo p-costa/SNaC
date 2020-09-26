@@ -1,5 +1,5 @@
 module mod_mom
-  use mpi
+  use mpi_f08
   use mod_types
   implicit none
   private

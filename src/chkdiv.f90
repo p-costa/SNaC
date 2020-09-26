@@ -1,6 +1,5 @@
 module mod_chkdiv
-  use mpi
-  use mod_common_mpi, only: ierr
+  use mpi_f08
   use mod_types
   implicit none
   private
@@ -40,7 +39,7 @@ module mod_chkdiv
       enddo
     enddo
     !$OMP END PARALLEL DO
-    call mpi_allreduce(MPI_IN_PLACE,divtot,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
-    call mpi_allreduce(MPI_IN_PLACE,divmax,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
+    call mpi_allreduce(MPI_IN_PLACE,divtot,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
+    call mpi_allreduce(MPI_IN_PLACE,divmax,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
   end subroutine chkdiv
 end module mod_chkdiv

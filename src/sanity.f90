@@ -1,6 +1,6 @@
 module mod_sanity
-  use mpi
-  use mod_common_mpi, only: myid,ierr
+  use mpi_f08
+  use mod_common_mpi, only: myid
   use mod_types
   implicit none
   private
@@ -120,7 +120,7 @@ module mod_sanity
     if(myid == 0) write(stderr,*) ''
     if(myid == 0) write(stderr,*) '*** Simulation aborted due to errors in the input file ***'
     if(myid == 0) write(stderr,*) '    check dns.in'
-    call MPI_FINALIZE(ierr)
+    call MPI_FINALIZE()
     error stop
   end subroutine abortit
   subroutine write_error(message)

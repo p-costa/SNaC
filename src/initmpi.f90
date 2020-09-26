@@ -1,7 +1,7 @@
 module mod_initmpi
-  use mpi
+  use mpi_f08
   use mod_types
-  use mod_common_mpi, only: ierr,myid,comm_cart
+  use mod_common_mpi, only: myid,comm_cart
   implicit none
   private
   public initmpi
@@ -14,7 +14,7 @@ module mod_initmpi
     integer, intent(out), dimension(3) :: lo,hi
     integer, intent(out), dimension(0:1,3) :: nb
     logical, intent(out), dimension(0:1,3) :: is_bound
-    integer, intent(out), dimension(3    ) :: halos
+    type(MPI_DATATYPE), intent(out), dimension(3    ) :: halos
     integer :: nrank
     logical, dimension(3) :: periods
     integer, dimension(3) :: n,coords
@@ -22,10 +22,10 @@ module mod_initmpi
     !
     ! sanity check
     !
-    call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
+    call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank)
     if(nrank /= product(dims(:))) then
       dims(:) = 0
-      call MPI_DIMS_CREATE(nrank,3,dims,ierr)
+      call MPI_DIMS_CREATE(nrank,3,dims)
       if(myid == 0) then
         write(stdout,*) 'WARNING: product(dims(:)) not equal to the number of MPI tasks!'
         write(stdout,*) 'dims changed with MPI_DIMS_CREATE to ', dims(1),dims(2),dims(3)
@@ -36,8 +36,8 @@ module mod_initmpi
     !
     periods(:) = .false.
     where (bc(0,:)//bc(1,:) == 'PP') periods(:) = .true.
-    call MPI_CART_CREATE(MPI_COMM_WORLD,3,dims,periods,.true.,comm_cart,ierr)
-    call MPI_CART_COORDS(comm_cart,myid,3,coords,ierr)
+    call MPI_CART_CREATE(MPI_COMM_WORLD,3,dims,periods,.true.,comm_cart)
+    call MPI_CART_COORDS(comm_cart,myid,3,coords)
     !
     ! determine array extents for possibly uneven data
     !
@@ -53,7 +53,7 @@ module mod_initmpi
     ! generate neighbor arrays and derived types for halo regions
     !
     do idir=1,3
-      call MPI_CART_SHIFT(comm_cart,idir-1,1,nb(0,idir),nb(1,idir),ierr)
+      call MPI_CART_SHIFT(comm_cart,idir-1,1,nb(0,idir),nb(1,idir))
       is_bound(:,idir) = .false.
       where(nb(0:1,idir) == MPI_PROC_NULL) is_bound(0:1,idir) = .true.
       call makehalo(idir,1,n,halos(idir))
@@ -63,17 +63,17 @@ module mod_initmpi
     implicit none
     integer, intent(in ) :: idir,nh
     integer, intent(in ), dimension(3) :: n
-    integer, intent(out) :: halo
+    type(MPI_DATATYPE), intent(out) :: halo
     integer, dimension(3) :: nn
     nn(:) = n(:) + 2*nh
     select case(idir)
     case(1)
-      call MPI_TYPE_VECTOR(nn(2)*nn(3),nh            ,nn(1)            ,MPI_REAL_RP,halo,ierr)
+      call MPI_TYPE_VECTOR(nn(2)*nn(3),nh            ,nn(1)            ,MPI_REAL_RP,halo)
     case(2)
-      call MPI_TYPE_VECTOR(      nn(3),nh*nn(1)      ,nn(1)*nn(2)      ,MPI_REAL_RP,halo,ierr)
+      call MPI_TYPE_VECTOR(      nn(3),nh*nn(1)      ,nn(1)*nn(2)      ,MPI_REAL_RP,halo)
     case(3)
-      call MPI_TYPE_VECTOR(          1,nh*nn(1)*nn(2),nn(1)*nn(2)*nn(3),MPI_REAL_RP,halo,ierr)
+      call MPI_TYPE_VECTOR(          1,nh*nn(1)*nn(2),nn(1)*nn(2)*nn(3),MPI_REAL_RP,halo)
     end select
-    call MPI_TYPE_COMMIT(halo,ierr)
+    call MPI_TYPE_COMMIT(halo)
   end subroutine makehalo
 end module mod_initmpi
