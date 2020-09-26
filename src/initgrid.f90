@@ -1,6 +1,5 @@
 module mod_initgrid
-  use mpi
-  use mod_common_mpi, only:ierr
+  use mpi_f08
   use mod_param     , only:pi
   use mod_types
   implicit none
@@ -84,28 +83,28 @@ module mod_initgrid
     integer , intent(in   )                   :: lo_min,hi_max
     real(rp), intent(inout), dimension(lo-1:) :: grid_f,grid_c
     integer                                   :: shift
-    integer , dimension(4)                    :: requests
+    type(MPI_REQUEST), dimension(4)           :: requests
     integer                                   :: nrequests
     nrequests = 0
     shift = 0
     if(lo == lo_g) then
       if(is_periodic.and.lo == lo_min) shift = hi_max-lo_min + 1
       call MPI_ISEND(grid_f(lo  ),1,MPI_REAL_RP,nb(0),lo_g+shift, &
-                     MPI_COMM_WORLD,requests(nrequests+1),ierr)
+                     MPI_COMM_WORLD,requests(nrequests+1))
       call MPI_IRECV(grid_f(lo-1),1,MPI_REAL_RP,nb(0),lo_g-1    , &
-                     MPI_COMM_WORLD,requests(nrequests+2),ierr)
+                     MPI_COMM_WORLD,requests(nrequests+2))
       nrequests = nrequests + 2
     endif
     shift = 0
     if(hi == hi_g) then
       if(is_periodic.and.hi == hi_max) shift = hi_max-lo_min + 1
       call MPI_ISEND(grid_f(hi  ),1,MPI_REAL_RP,nb(1),hi_g-shift, &
-                     MPI_COMM_WORLD,requests(nrequests+1),ierr)
+                     MPI_COMM_WORLD,requests(nrequests+1))
       call MPI_IRECV(grid_f(hi+1),1,MPI_REAL_RP,nb(1),hi_g+1    , &
-                     MPI_COMM_WORLD,requests(nrequests+2),ierr)
+                     MPI_COMM_WORLD,requests(nrequests+2))
       nrequests = nrequests + 2
     endif
-    call MPI_WAITALL(nrequests,requests,MPI_STATUSES_IGNORE,ierr)
+    call MPI_WAITALL(nrequests,requests,MPI_STATUSES_IGNORE)
     if(lo == lo_g) grid_c(lo-1) = (grid_f(lo  )+grid_f(lo-1))/2._rp
     if(hi == hi_g) grid_c(hi  ) = (grid_f(hi+1)+grid_f(hi  ))/2._rp
     if(hi == hi_g) grid_c(hi+1) = grid_c(hi) ! not needed
