@@ -1,4 +1,5 @@
 module mod_initgrid
+  use mpi
   use mod_common_mpi, only:ierr
   use mod_param     , only:pi
   use mod_types
