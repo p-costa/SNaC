@@ -41,7 +41,7 @@ debug.o: debug.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 chkdiv.o: chkdiv.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
-chkdt.o: chkdt.f90 types.o
+chkdt.o: chkdt.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 common_mpi.o: common_mpi.f90
 	$(FC) $(FFLAGS) -cpp -c  $<
