@@ -13,5 +13,6 @@ F F  F N  F N            ! cbcpre(0:1,1:3  ) [p BC type]
 4. 4.  3. 0.  2. 1.      !  bcvel(0:1,1:3,2) [v BC value]
 4. 4.  3. 0.  2. 0.      !  bcvel(0:1,1:3,3) [w BC value]
 4. 4.  3. 0.  2. 0.      !  bcpre(0:1,1:3  ) [p BC value]
+0 0  0 0  0 0            !  inflow_type(0:1,1:3)
 zer                      ! inivel
 4                        ! id

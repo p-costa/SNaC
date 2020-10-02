@@ -126,6 +126,7 @@ N N  N F  N N            ! cbcpre(0:1,1:3  ) [p BC type]
 0. 0.  1. 2.  0. 0.      !  bcvel(0:1,1:3,2) [v BC value]
 0. 0.  0. 2.  0. 0.      !  bcvel(0:1,1:3,3) [w BC value]
 0. 0.  0. 2.  0. 0.      !  bcpre(0:1,1:3  ) [p BC value]
+0 0  0 0  0 0            !  is_inflow(0:1,1:3)
 zer                      ! inivel
 1                        ! id
 ~~~
@@ -146,6 +147,7 @@ N F  F N  N N            ! cbcpre(0:1,1:3  ) [p BC type]
 0. 3.  1. 0.  0. 0.      !  bcvel(0:1,1:3,2) [v BC value]
 0. 3.  1. 0.  0. 0.      !  bcvel(0:1,1:3,3) [w BC value]
 0. 3.  1. 0.  0. 0.      !  bcpre(0:1,1:3  ) [p BC value]
+0 0  0 0  0 0            !  is_inflow(0:1,1:3)
 zer                      ! inivel
 2                        ! id
 ~~~
@@ -166,6 +168,7 @@ F D  N N  N N            ! cbcpre(0:1,1:3  ) [p BC type]
 2. 0.  0. 0.  0. 0.      !  bcvel(0:1,1:3,2) [v BC value]
 2. 0.  0. 0.  0. 0.      !  bcvel(0:1,1:3,3) [w BC value]
 2. 0.  0. 0.  0. 0.      !  bcpre(0:1,1:3  ) [p BC value]
+0 0  0 0  0 0            !  is_inflow(0:1,1:3)
 zer                      ! inivel
 3                        ! id
 ~~~
@@ -229,6 +232,13 @@ The following options are available:
 * `N` Neumann.
 
 The **last four rows** follow the same logic, but now for the BC **values**. For a `F` BC, the BC value corresponds to the *friend* block this block is connected to, in the direction in question. A periodicity boundary condition is naturally set if the blocks are cyclicly connected with `F` boundary conditions.
+
+---
+
+~~~
+0 0  0 0  0 0            !  is_inflow(0:1,1:3)
+~~~
+These lines set an inflow boundary condition for the block in question. Right now, if `is_inflow > 0` and a Dirichlet BC for the velocity is emplyed in that direction, a Poiseuille-type inflow of the kind `vel(x1,x2) = velref*(vel1(x1)**p1)*(vel2(x2)**p2)`, where `vel1` and `vel2` are Poiseuille profiles with unit mean, `velref` the Dirichlet BC set for the velocity above, and the exponent `p1` (`p2`) is set to `0` if the direction of coordinate `x1` (`x2`) is periodic, and `1` otherwise. Finally, `is_inflow <= 0` and a Dirichlet BC for the velocity is employed in that direction, SNaC will simply prescribe that BC, i.e. enforce a constant inflow velocity.
 
 ---
 
