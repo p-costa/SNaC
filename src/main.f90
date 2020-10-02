@@ -21,12 +21,12 @@
 program snac
   use iso_c_binding      , only: C_PTR
   use mpi
-  use mod_bound          , only: bounduvw,boundp,updt_rhs
+  use mod_bound          , only: bounduvw,boundp,updt_rhs,inflow
   use mod_chkdiv         , only: chkdiv
   use mod_chkdt          , only: chkdt
   use mod_common_mpi     , only: myid,myid_block,ierr,comm_block
   use mod_correc         , only: correc
-  use mod_initflow       , only: initflow
+  use mod_initflow       , only: initflow,init_inflow
   use mod_initgrid       , only: initgrid,distribute_grid,bound_grid,save_grid
   use mod_initmpi        , only: initmpi
   use mod_fillps         , only: fillps
@@ -44,6 +44,7 @@ program snac
                                  dims,lo,hi,lmin,lmax,                     &
                                  gt,gr,                                    &
                                  cbcvel,bcvel,cbcpre,bcpre,                &
+                                 inflow_type,                              &
                                  bforce,periods,inivel,                    &
                                  vol_all,my_block,id_first,nblocks,nrank,  &
                                  is_periodic,l_periodic,                   &
@@ -68,6 +69,7 @@ program snac
   integer , dimension(    3) :: halos
   integer , dimension(    3) :: ng,lo_g,hi_g,lo_1,hi_1
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
+  real(rp), allocatable, dimension(:,:,:) :: velin_x,velin_y,velin_z
 #ifdef _IMPDIFF
   real(rp), allocatable, dimension(:,:,:) :: uo,vo,wo
 #endif
@@ -106,7 +108,6 @@ program snac
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   target                              :: dxc,dxf,dyc,dyf,dzc,dzf
   real(rp), pointer, dimension(:)     :: dl1_1,dl1_2,dl2_1,dl2_2
-  integer                             :: idir,il,iu,iskip
   type(C_PTR)          , dimension(2) :: arrplan_p
   real(rp)                            :: normfft_p
   real(rp), allocatable, dimension(:) :: lambda_p
@@ -135,6 +136,7 @@ program snac
 #ifdef _TIMING
   real(rp) :: dt12,dt12av,dt12min,dt12max
 #endif
+  integer :: idir,ib,il,iu,iskip
   !
   call MPI_INIT(ierr)
   call MPI_COMM_RANK(MPI_COMM_WORLD, myid, ierr)
@@ -183,6 +185,9 @@ program snac
            wp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            pp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            po(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
+  allocate(velin_x( lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1,0:1), &
+           velin_y( lo(1)-1:hi(1)+1,lo(3)-1:hi(3)+1,0:1), &
+           velin_z( lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,0:1))
 #ifdef _IMPDIFF
   allocate(uo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            vo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
@@ -302,6 +307,29 @@ program snac
   call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
                 dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
   call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
+  velin_x(:,:,:) = 0._rp
+  velin_y(:,:,:) = 0._rp
+  velin_z(:,:,:) = 0._rp
+  do idir=1,3
+    do ib=0,1
+      if(inflow_type(ib,idir)>0.and.is_bound(ib,idir)) then
+        select case(idir)
+        case(1)
+          il = 2;iu = 3;iskip = 1
+          call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                           yc,zc,bcvel(ib,idir,idir),velin_x(:,:,ib))
+        case(2)
+          il = 1;iu = 3;iskip = 2
+          call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                           xc,zc,bcvel(ib,idir,idir),velin_y(:,:,ib))
+        case(3)
+          il = 2;iu = 3;iskip = 1
+          call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                           xc,yc,bcvel(ib,idir,idir),velin_z(:,:,ib))
+        end select
+      endif
+    enddo
+  enddo
   up(:,:,:)      = 0._rp
   vp(:,:,:)      = 0._rp
   wp(:,:,:)      = 0._rp
@@ -518,6 +546,7 @@ program snac
 #endif
       call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,up,vp,wp)
+      call inflow(is_bound.and.(inflow_type>0),lo,hi,velin_x,velin_y,velin_z,up,vp,wp)
 #if !defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
       dtrk  = dt
       if(irk < 3) then ! pressure correction only at the last RK step

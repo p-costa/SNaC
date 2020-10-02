@@ -3,7 +3,7 @@ module mod_bound
   use mod_types
   implicit none
   private
-  public boundp,bounduvw,updt_rhs
+  public boundp,bounduvw,updt_rhs,inflow
   contains
   subroutine bounduvw(cbc,lo,hi,bc,is_correc,halos,is_bound,nb, &
                       dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
@@ -265,38 +265,31 @@ module mod_bound
     end select
   end subroutine set_bc
   !
-  subroutine inflow(lo,hi,idir,vel2d,u,v,w)
+  subroutine inflow(is_inflow_bound,lo,hi,velx,vely,velz,u,v,w)
     !
     implicit none
-    integer, intent(in), dimension(3) :: lo,hi
-    integer, intent(in) :: idir
-    real(rp), dimension(0:,0:), intent(in) :: vel2d
-    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(inout) :: u,v,w
-    integer :: i,j,k
-    !
-    select case(idir)
-      case(1) ! x direction
-        i = lo(idir)-1
-        do k=lo(3),hi(3)
-          do j=lo(2),hi(2)
-            u(i,j,k) = vel2d(j,k)
-          enddo
-        enddo 
-      case(2) ! y direction
-        j = lo(idir)-1
-        do k=lo(3),hi(3)
-          do i=lo(1),hi(1)
-            v(i,j,k) = vel2d(i,k)
-          enddo
-        enddo 
-      case(3) ! z direction
-        k = lo(idir)-1
-        do j=lo(2),hi(2)
-          do i=lo(1),hi(1)
-            w(i,j,k) = vel2d(i,j)
-          enddo
-        enddo 
-    end select
+    logical , intent(in   ), dimension(0:1,1:3) :: is_inflow_bound
+    integer , intent(in   ), dimension(3      ) :: lo,hi
+    real(rp), intent(in   ), dimension(lo(2)-1:,lo(3)-1:,0:) :: velx
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(3)-1:,0:) :: vely
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,0:) :: velz
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
+    integer :: ibound,idir,q
+    do idir=1,3
+      do ibound=0,1
+        if(is_inflow_bound(ibound,idir)) then
+          q = (1-ibound)*(lo(idir)-1)+ibound*hi(idir)
+          select case(idir)
+            case(1)
+              u(q,:,:) = velx(:,:,ibound)
+            case(2)
+              v(:,q,:) = vely(:,:,ibound)
+            case(3)
+              w(:,:,q) = velz(:,:,ibound)
+          end select
+        endif
+      enddo
+    enddo
   end subroutine inflow
   !
   subroutine updt_rhs(lo,hi,is_bound,rhsbx,rhsby,rhsbz,p)
