@@ -3,7 +3,7 @@ module mod_bound
   use mod_types
   implicit none
   private
-  public boundp,bounduvw,updt_rhs
+  public boundp,bounduvw,updt_rhs,inflow
   contains
   subroutine bounduvw(cbc,lo,hi,bc,is_correc,halos,is_bound,nb, &
                       dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
@@ -265,25 +265,31 @@ module mod_bound
     end select
   end subroutine set_bc
   !
-  subroutine inflow(lo,hi,lo_2d,ibound,idir,vel2d,p)
+  subroutine inflow(is_inflow_bound,lo,hi,velx,vely,velz,u,v,w)
     !
     implicit none
-    integer, intent(in), dimension(3) :: lo,hi
-    integer, intent(in), dimension(2) :: lo_2d
-    integer, intent(in) :: ibound,idir
-    real(rp), dimension(lo_2d(1)-1:,lo_2d(2)-1:), intent(in) :: vel2d
-    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(inout) :: p
-    integer :: q
-    !
-    q = (ibound-1)*(lo(idir)-1)+ibound*hi(idir)
-    select case(idir)
-      case(1)
-        p(q,:,:) = vel2d(:,:)
-      case(2)
-        p(:,q,:) = vel2d(:,:)
-      case(3)
-        p(:,:,q) = vel2d(:,:)
-    end select
+    logical , intent(in   ), dimension(0:1,1:3) :: is_inflow_bound
+    integer , intent(in   ), dimension(3      ) :: lo,hi
+    real(rp), intent(in   ), dimension(lo(2)-1:,lo(3)-1:,0:) :: velx
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(3)-1:,0:) :: vely
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,0:) :: velz
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
+    integer :: ibound,idir,q
+    do idir=1,3
+      do ibound=0,1
+        if(is_inflow_bound(ibound,idir)) then
+          q = (1-ibound)*(lo(idir)-1)+ibound*hi(idir)
+          select case(idir)
+            case(1)
+              u(q,:,:) = velx(:,:,ibound)
+            case(2)
+              v(:,q,:) = vely(:,:,ibound)
+            case(3)
+              w(:,:,q) = velz(:,:,ibound)
+          end select
+        endif
+      enddo
+    enddo
   end subroutine inflow
   !
   subroutine updt_rhs(lo,hi,is_bound,rhsbx,rhsby,rhsbz,p)

@@ -5,7 +5,7 @@ module mod_initflow
   use mod_types
   implicit none
   private
-  public initflow
+  public initflow,init_inflow
   contains
   subroutine initflow(inivel,is_wallturb,lo,hi,lo_g,hi_g,l,uref,lref,visc,bforce, &
                       xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
@@ -134,7 +134,7 @@ module mod_initflow
         enddo
       enddo
       !
-      ! alternatively, using a Taylor-Green vortex 
+      ! alternatively, using a Taylor-Green vortex
       ! for the cross-stream velocity components
       ! (commented below)
       !
@@ -249,6 +249,55 @@ module mod_initflow
       p(k) = 6._rp*z*(1._rp-z)*norm
     enddo
   end subroutine poiseuille
+  !
+  function poiseuille_square(r,lmin,lmax) result(vel)
+    !
+    ! below a poiseuille inflow is calculated
+    !   it is convinient that the integral a function of this kind
+    !   is equal to one, such that it can be easily recycled 
+    !   for the inflow of a square duct, as done in
+    !   in init_inflow below
+    !
+    real(rp), intent(in) :: r,lmin,lmax ! position where velocity is calculated
+                                        ! and locations lower and upper boundary
+    real(rp) :: vel,rr
+    !
+    rr = (r-lmin)/(lmax-lmin)
+    vel = 6._rp*(rr*(1._rp-rr))
+  end function poiseuille_square
+  !
+  subroutine init_inflow(periods,lo,hi,lmin,lmax,x1c,x2c,uref,vel)
+    !
+    ! below an inflow is calculated for a 2d plane
+    ! later this subroutine can be generalized with other shapes of
+    ! inflow velocity; by construction, the profile will not vary along
+    ! a direction that does not have Dirichlet BCs; note that
+    ! since the inflow is evaluated at the center of a face, 
+    ! there is no danger of experiencing a singularity '0._rp**0'.
+    !
+    implicit none
+    integer , intent(in ), dimension(2       ) :: periods
+    integer , intent(in ), dimension(2       ) :: lo,hi
+    real(rp), intent(in ), dimension(2       ) :: lmin,lmax
+    real(rp), intent(in ), dimension(lo(1)-1:) :: x1c
+    real(rp), intent(in ), dimension(lo(2)-1:) :: x2c
+    real(rp), intent(in ) :: uref ! target bulk velocity
+    real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:) :: vel
+    integer, dimension(2) :: q
+    integer :: i1,i2
+    ! real(rp), external :: poiseuille_square
+    ! procedure (), pointer :: inflow_function => null()
+    ! if(inflow_type == POISEUILLE) inflow_function => poiseuille_square
+    !
+    q(:) = 1
+    where(periods(:) /= 0) q(:) = 0
+    do i2 = lo(2)-1,hi(2)+1
+      do i1 = lo(1)-1,hi(1)+1
+        vel(i1,i2) = uref*poiseuille_square(x1c(i1),lmin(1),lmax(1))**q(1) * &
+                          poiseuille_square(x2c(i2),lmin(2),lmax(2))**q(2)
+      enddo
+    enddo
+  end subroutine init_inflow
   !
   subroutine log_profile(lo,hi,zc,l,uref,lref,visc,p)
     implicit none
