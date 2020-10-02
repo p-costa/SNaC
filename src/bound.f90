@@ -265,37 +265,24 @@ module mod_bound
     end select
   end subroutine set_bc
   !
-  subroutine inflow(lo,hi,idir,vel2d,u,v,w)
+  subroutine inflow(lo,hi,lo_2d,ibound,idir,vel2d,p)
     !
     implicit none
     integer, intent(in), dimension(3) :: lo,hi
-    integer, intent(in) :: idir
-    real(rp), dimension(0:,0:), intent(in) :: vel2d
-    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(inout) :: u,v,w
-    integer :: i,j,k
+    integer, intent(in), dimension(2) :: lo_2d
+    integer, intent(in) :: ibound,idir
+    real(rp), dimension(lo_2d(1)-1:,lo_2d(2)-1:), intent(in) :: vel2d
+    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(inout) :: p
+    integer :: q
     !
+    q = (ibound-1)*(lo(idir)-1)+ibound*hi(idir)
     select case(idir)
-      case(1) ! x direction
-        i = lo(idir)-1
-        do k=lo(3),hi(3)
-          do j=lo(2),hi(2)
-            u(i,j,k) = vel2d(j,k)
-          enddo
-        enddo 
-      case(2) ! y direction
-        j = lo(idir)-1
-        do k=lo(3),hi(3)
-          do i=lo(1),hi(1)
-            v(i,j,k) = vel2d(i,k)
-          enddo
-        enddo 
-      case(3) ! z direction
-        k = lo(idir)-1
-        do j=lo(2),hi(2)
-          do i=lo(1),hi(1)
-            w(i,j,k) = vel2d(i,j)
-          enddo
-        enddo 
+      case(1)
+        p(q,:,:) = vel2d(:,:)
+      case(2)
+        p(:,q,:) = vel2d(:,:)
+      case(3)
+        p(:,:,q) = vel2d(:,:)
     end select
   end subroutine inflow
   !
