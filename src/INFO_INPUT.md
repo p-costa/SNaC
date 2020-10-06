@@ -238,7 +238,7 @@ The **last four rows** follow the same logic, but now for the BC **values**. For
 ~~~
 0 0  0 0  0 0            !  is_inflow(0:1,1:3)
 ~~~
-These lines set an inflow boundary condition for the block in question. Right now, if `is_inflow > 0` and a Dirichlet BC for the velocity is emplyed in that direction, a Poiseuille-type inflow of the kind `vel(x1,x2) = velref*(vel1(x1)**p1)*(vel2(x2)**p2)`, where `vel1` and `vel2` are Poiseuille profiles with unit mean, `velref` the Dirichlet BC set for the velocity above, and the exponent `p1` (`p2`) is set to `0` if the direction of coordinate `x1` (`x2`) is periodic, and `1` otherwise. Finally, `is_inflow <= 0` and a Dirichlet BC for the velocity is employed in that direction, SNaC will simply prescribe that BC, i.e. enforce a constant inflow velocity.
+These lines set an inflow boundary condition for the block in question. Right now, if `is_inflow > 0` *and* a Dirichlet BC for the velocity is emplyed in that direction, a Poiseuille-type inflow of the kind `vel(x1,x2) = velref*(vel1(x1)**p1)*(vel2(x2)**p2)`, where `vel1` and `vel2` are Poiseuille profiles with unit mean, `velref` the Dirichlet BC set for the velocity above, and the exponent `p1` (`p2`) is set to `0` if the direction of coordinate `x1` (`x2`) is periodic, and `1` otherwise. Finally, `is_inflow <= 0` and a Dirichlet BC for the velocity is employed in that direction, SNaC will simply prescribe that BC, i.e. enforce a constant inflow velocity.
 
 ---
 
