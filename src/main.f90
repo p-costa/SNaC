@@ -65,7 +65,7 @@ program snac
   !$ use omp_lib
   implicit none
   integer , dimension(0:1,3) :: nb
-  logical , dimension(0:1,3) :: is_bound
+  logical , dimension(0:1,3) :: is_bound,is_bound_inflow
   integer , dimension(    3) :: halos
   integer , dimension(    3) :: ng,lo_g,hi_g,lo_1,hi_1
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
@@ -312,7 +312,8 @@ program snac
   velin_z(:,:,:) = 0._rp
   do idir=1,3
     do ib=0,1
-      if(inflow_type(ib,idir)>0.and.is_bound(ib,idir)) then
+      is_bound_inflow(ib,idir) = is_bound(ib,idir).and.inflow_type(ib,idir)>0.and.cbcvel(ib,idir,idir)=='D'
+      if(is_bound_inflow(ib,idir)) then
         select case(idir)
         case(1)
           il = 2;iu = 3;iskip = 1
@@ -546,7 +547,7 @@ program snac
 #endif
       call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,up,vp,wp)
-      call inflow(is_bound.and.(inflow_type>0),lo,hi,velin_x,velin_y,velin_z,up,vp,wp)
+      call inflow(is_bound_inflow,lo,hi,velin_x,velin_y,velin_z,up,vp,wp)
 #if !defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
       dtrk  = dt
       if(irk < 3) then ! pressure correction only at the last RK step
