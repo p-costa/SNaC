@@ -324,7 +324,7 @@ program snac
           call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                            xc,zc,bcvel(ib,idir,idir),velin_y(:,:,ib))
         case(3)
-          il = 2;iu = 3;iskip = 1
+          il = 1;iu = 2;iskip = 1
           call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                            xc,yc,bcvel(ib,idir,idir),velin_z(:,:,ib))
         end select
