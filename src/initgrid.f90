@@ -14,9 +14,10 @@ module mod_initgrid
     ! NEEDS TO BE PROBABLY SLIGHTLY ADAPTED IN CASE IT IS IN THE MIDDLE OF A BLOCK
     !
     implicit none
-    integer, parameter :: CLUSTER_TWO_END = 0, &
-                          CLUSTER_ONE_END = 1, &
-                          CLUSTER_MIDDLE  = 2
+    integer, parameter :: CLUSTER_TWO_END   = 0, &
+                          CLUSTER_ONE_END   = 1, &
+                          CLUSTER_MIDDLE    = 2, &
+                          CLUSTER_ONE_END_R = 3
     integer         , intent(in )                  :: lo,hi,gt
     real(rp)        , intent(in )                  :: gr,lmin,lmax
     real(rp)        , intent(out), dimension(lo-1:) :: drc_g,drf_g,rc_g,rf_g
@@ -27,9 +28,11 @@ module mod_initgrid
     case(CLUSTER_TWO_END)
       gridpoint => gridpoint_cluster_two_end
     case(CLUSTER_ONE_END)
-      gridpoint => gridpoint_cluster_middle
-    case(CLUSTER_MIDDLE)
       gridpoint => gridpoint_cluster_one_end
+    case(CLUSTER_MIDDLE)
+      gridpoint => gridpoint_cluster_middle
+    case(CLUSTER_ONE_END_R)
+      gridpoint => gridpoint_cluster_one_end_r
     case default
       gridpoint => gridpoint_cluster_two_end
     end select
@@ -159,6 +162,20 @@ module mod_initgrid
       r = r0
     endif
   end subroutine gridpoint_cluster_one_end
+  subroutine gridpoint_cluster_one_end_r(alpha,r0,r)
+    !
+    ! clustered at the lower side
+    !
+    implicit none
+    real(rp), intent(in ) :: alpha,r0
+    real(rp), intent(out) :: r
+    if(alpha /= 0._rp) then
+      r = 1._rp-1.0_rp*(1._rp+tanh((1._rp-r0-1.0_rp)*alpha)/tanh(alpha/1._rp))
+      !r = 1._rp-1.0_rp*(1._rp+erf( (1._rp-r0-1.0_rp)*alpha)/erf( alpha/1._rp))
+    else
+      r = r0
+    endif
+  end subroutine gridpoint_cluster_one_end_r
   subroutine gridpoint_cluster_middle(alpha,r0,r)
     !
     ! clustered in the middle
