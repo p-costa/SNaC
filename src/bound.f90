@@ -121,7 +121,7 @@ module mod_bound
       factor = 2._rp*factor
       sgn    = -1._rp
     endif
-    if(ctype == 'N'.and.centered) then
+    if(ctype == 'N') then
       if(    ibound == 0) then
         factor = -dr*factor
       elseif(ibound == 1) then
