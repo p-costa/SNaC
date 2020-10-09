@@ -6,13 +6,15 @@ module mod_initmpi
   private
   public initmpi
   contains
-  subroutine initmpi(my_block,id_first,dims,cbc,bc,periods,lo,hi,ng,nb,is_bound,halos)
+  subroutine initmpi(my_block,id_first,dims,cbc,bc,periods,gr,gt,lo,hi,ng,nb,is_bound,halos)
     implicit none
     integer         , intent(in   )                   :: my_block,id_first
     integer         , intent(inout), dimension(    3) :: dims
     character(len=1), intent(in   ), dimension(0:1,3) :: cbc
     real(rp)        , intent(in   ), dimension(0:1,3) ::  bc
     integer         , intent(in   ), dimension(    3) :: periods
+    integer         , intent(in   ), dimension(    3) :: gt
+    real(rp)        , intent(in   ), dimension(    3) :: gr
     integer         , intent(inout), dimension(    3) :: lo,hi
     integer         , intent(out  ), dimension(    3) :: ng
     integer         , intent(out  ), dimension(0:1,3) :: nb
@@ -20,9 +22,10 @@ module mod_initmpi
     type(MPI_DATATYPE), intent(out  ), dimension(    3) :: halos
     integer                 :: nrank
     integer         , dimension(0:dims(1)-1,0:dims(2)-1,0:dims(3)-1) :: id_grid
-    integer, dimension(  3) :: n,start,coords,lo_g,hi_g
-    integer, allocatable, dimension(:,:  ) :: lo_all,hi_all,l,lo_g_all,hi_g_allo_g_all,hi_g_all
-    integer, allocatable, dimension(  :  ) :: blocks_all
+    integer , dimension(  3) :: n,start,coords,lo_g,hi_g
+    integer , allocatable, dimension(:,:) :: lo_all,hi_all,gt_all,l,lo_g_all,hi_g_allo_g_all,hi_g_all
+    real(rp), allocatable, dimension(:,:) :: gr_all
+    integer , allocatable, dimension(:) :: blocks_all
     real(rp)        , allocatable, dimension(:,:,:) ::  bc_all
     character(len=1), allocatable, dimension(:,:,:) :: cbc_all
     integer, dimension(3,3) :: eye
@@ -76,11 +79,14 @@ module mod_initmpi
     end where
     !
     allocate(lo_all(3,0:nrank-1),hi_all(3,0:nrank-1),lo_g_all(3,0:nrank-1),hi_g_all(3,0:nrank-1), &
+             gr_all(3,0:nrank-1),gt_all(3,0:nrank-1), &
              blocks_all(0:nrank-1),cbc_all(0:1,3,0:nrank-1),bc_all(0:1,3,0:nrank-1))
     call MPI_ALLGATHER(lo      ,3,MPI_INTEGER,lo_all    ,3,MPI_INTEGER,MPI_COMM_WORLD)
     call MPI_ALLGATHER(hi      ,3,MPI_INTEGER,hi_all    ,3,MPI_INTEGER,MPI_COMM_WORLD)
     call MPI_ALLGATHER(lo_g    ,3,MPI_INTEGER,lo_g_all  ,3,MPI_INTEGER,MPI_COMM_WORLD)
     call MPI_ALLGATHER(hi_g    ,3,MPI_INTEGER,hi_g_all  ,3,MPI_INTEGER,MPI_COMM_WORLD)
+    call MPI_ALLGATHER(gr      ,3,MPI_REAL_RP,gr_all    ,3,MPI_REAL_RP,MPI_COMM_WORLD)
+    call MPI_ALLGATHER(gt      ,3,MPI_INTEGER,gt_all    ,3,MPI_INTEGER,MPI_COMM_WORLD)
     call MPI_ALLGATHER(my_block,1,MPI_INTEGER,blocks_all,1,MPI_INTEGER,MPI_COMM_WORLD)
     call MPI_ALLGATHER(cbc,6,MPI_CHARACTER,cbc_all,6,MPI_CHARACTER,MPI_COMM_WORLD)
     call MPI_ALLGATHER( bc,6,MPI_REAL_RP  , bc_all,6,MPI_REAL_RP  ,MPI_COMM_WORLD)
@@ -99,11 +105,13 @@ module mod_initmpi
           do irank=0,nrank-1
             if(cbc(inb,idir) == cbc_all(1-inb,idir,irank).and. blocks_all(myid) == nint(bc_all(1-inb,idir,irank))) then
               is_nb = .true.
-              do iidir = 1,3 ! ensure that the sub blocks blocks share the same extents in the two directions normal to the boundary
+              do iidir = 1,3 ! ensure that the sub blocks blocks share the same extents and grid in the two directions normal to the boundary
                 if(iidir /= idir) then
                   is_nb = is_nb.and. &
                   lo(iidir) == lo_all(iidir,irank).and. &
-                  hi(iidir) == hi_all(iidir,irank)
+                  hi(iidir) == hi_all(iidir,irank).and. &
+                  gr(iidir) == gr_all(iidir,irank).and. &
+                  gt(iidir) == gt_all(iidir,irank)
                 endif
               enddo
               !
@@ -153,7 +161,7 @@ module mod_initmpi
         endif
       enddo
     enddo
-    deallocate(lo_all,hi_all,blocks_all)
+    deallocate(lo_all,hi_all,gr_all,gt_all,blocks_all)
     do idir=1,3
       do inb=0,1
         if(cbc(inb,idir) == 'F'.and.nb(inb,idir) == MPI_PROC_NULL) then
