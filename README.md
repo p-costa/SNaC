@@ -61,7 +61,7 @@ Run the executable with `mpirun` with a number of tasks and shared threads compl
 
 ### Visualizing field data
 
-See `src/INFO_VISU.md`.
+See `[src/INFO_VISU.md](src/INFO_VISU.md)`.
 
 ## Notes
 
