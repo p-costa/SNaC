@@ -319,8 +319,8 @@ module mod_solver
       elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSetPrecond(solver,precond_id,precond,ierr)
       endif
+      asolver%precond = precond
     endif
-    asolver%precond = precond
     asolver%solver  = solver
     asolver%stype   = stype
   end subroutine create_solver
