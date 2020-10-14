@@ -57,7 +57,7 @@ program snac
                                  add_constant_to_diagonal,solve_helmholtz,finalize_solver,finalize_matrix, &
                                  hypre_solver,HYPRESolverPFMG
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  use mod_solver         , only: init_fft_reduction,init_n_matrix_2d,create_n_solvers,setup_n_solvers,solve_n_helmholtz_2d_rev, &
+  use mod_solver         , only: init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers,solve_n_helmholtz_2d, &
                                  add_constant_to_n_diagonals,finalize_n_solvers,finalize_n_matrices
   use mod_fft            , only: fft,fftend
   use mod_sanity         , only: test_sanity_fft
@@ -406,10 +406,10 @@ program snac
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcpre(:,idir),.true.,dl(0,idir),arrplan_p,normfft_p,lambda_p)
   alpha_lambda_p = 0._rp
   allocate(psolver_fft(hi(idir)-lo(idir)+1))
-  call init_n_matrix_2d(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
-                       is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
-                       lo(idir),hi(idir),lo(il:iu:iskip),hi(il:iu:iskip),periods(il:iu:iskip), &
-                       dl1_1,dl1_2,dl2_1,dl2_2,lambda_p,psolver_fft)
+  call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
+                          is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          lo(idir),hi(idir),lo(il:iu:iskip),hi(il:iu:iskip),periods(il:iu:iskip), &
+                          dl1_1,dl1_2,dl2_1,dl2_2,lambda_p,psolver_fft)
   call create_n_solvers(hi(idir)-lo(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver_fft)
   call setup_n_solvers(hi(idir)-lo(idir)+1,psolver_fft)
 #else
@@ -432,10 +432,10 @@ program snac
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,1),is_centered(idir),dl(0,idir),arrplan_u,normfft_u,lambda_u)
   alpha_lambda_u = 0._rp
   allocate(usolver_fft(hi(idir)-lo(idir)+1))
-  call init_n_matrix_2d(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dl(:,il:iu:iskip), &
-                        is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
-                        lo(idir),hiu(idir),lo(il:iu:iskip),hiu(il:iu:iskip),periods(il:iu:iskip), &
-                        dlu1_1,dlu1_2,dlu2_1,dlu2_2,lambda_u,usolver_fft)
+  call init_n_2d_matrices(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dl(:,il:iu:iskip), &
+                          is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          lo(idir),hiu(idir),lo(il:iu:iskip),hiu(il:iu:iskip),periods(il:iu:iskip), &
+                          dlu1_1,dlu1_2,dlu2_1,dlu2_2,lambda_u,usolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,is_centered,lo,hiu,periods, &
                       dxf,dxc,dyc,dyf,dzc,dzf,usolver)
@@ -453,10 +453,10 @@ program snac
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,2),is_centered(idir),dl(0,idir),arrplan_v,normfft_v,lambda_v)
   alpha_lambda_v = 0._rp
   allocate(vsolver_fft(hi(idir)-lo(idir)+1))
-  call init_n_matrix_2d(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dl(:,il:iu:iskip), &
-                        is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
-                        lo(idir),hiv(idir),lo(il:iu:iskip),hiv(il:iu:iskip),periods(il:iu:iskip), &
-                        dlv1_1,dlv1_2,dlv2_1,dlv2_2,lambda_v,vsolver_fft)
+  call init_n_2d_matrices(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dl(:,il:iu:iskip), &
+                          is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          lo(idir),hiv(idir),lo(il:iu:iskip),hiv(il:iu:iskip),periods(il:iu:iskip), &
+                          dlv1_1,dlv1_2,dlv2_1,dlv2_2,lambda_v,vsolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,is_centered,lo,hiv,periods, &
                       dxc,dxf,dyf,dyc,dzc,dzf,vsolver)
@@ -474,10 +474,10 @@ program snac
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,3),is_centered(idir),dl(0,idir),arrplan_w,normfft_w,lambda_w)
   alpha_lambda_w = 0._rp
   allocate(wsolver_fft(hi(idir)-lo(idir)+1))
-  call init_n_matrix_2d(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dl(:,il:iu:iskip), &
-                        is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
-                        lo(idir),hiw(idir),lo(il:iu:iskip),hiw(il:iu:iskip),periods(il:iu:iskip), &
-                        dlw1_1,dlw1_2,dlw2_1,dlw2_2,lambda_w,wsolver_fft)
+  call init_n_2d_matrices(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dl(:,il:iu:iskip), &
+                          is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          lo(idir),hiw(idir),lo(il:iu:iskip),hiw(il:iu:iskip),periods(il:iu:iskip), &
+                          dlw1_1,dlw1_2,dlw2_1,dlw2_2,lambda_w,wsolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,is_centered,lo,hiw,periods, &
                       dxc,dxf,dyc,dyf,dzf,dzc,wsolver)
@@ -514,7 +514,7 @@ program snac
       call create_n_solvers(hiu(idir)-lo(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,usolver_fft)
       call setup_n_solvers(hiu(idir)-lo(idir)+1,usolver_fft)
       call fft(arrplan_u(1),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      call solve_n_helmholtz_2d_rev(usolver_fft,lo(idir),hiu(idir),lo(il:iu:iskip),hiu(il:iu:iskip),up,uo)
+      call solve_n_helmholtz_2d(usolver_fft,lo(idir),hiu(idir),lo(il:iu:iskip),hiu(il:iu:iskip),up,uo)
       call fft(arrplan_u(2),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_u
       call finalize_n_solvers(hiu(idir)-lo(idir)+1,usolver_fft)
@@ -536,7 +536,7 @@ program snac
       call create_n_solvers(hiv(idir)-lo(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,vsolver_fft)
       call setup_n_solvers(hiv(idir)-lo(idir)+1,vsolver_fft)
       call fft(arrplan_v(1),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      call solve_n_helmholtz_2d_rev(vsolver_fft,lo(idir),hiv(idir),lo(il:iu:iskip),hiv(il:iu:iskip),vp,vo)
+      call solve_n_helmholtz_2d(vsolver_fft,lo(idir),hiv(idir),lo(il:iu:iskip),hiv(il:iu:iskip),vp,vo)
       call fft(arrplan_v(2),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_v
       call finalize_n_solvers(hiv(idir)-lo(idir)+1,vsolver_fft)
@@ -558,7 +558,7 @@ program snac
       call create_n_solvers(hiw(idir)-lo(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,wsolver_fft)
       call setup_n_solvers(hiw(idir)-lo(idir)+1,wsolver_fft)
       call fft(arrplan_w(1),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      call solve_n_helmholtz_2d_rev(wsolver_fft,lo(idir),hiw(idir),lo(il:iu:iskip),hiw(il:iu:iskip),wp,wo)
+      call solve_n_helmholtz_2d(wsolver_fft,lo(idir),hiw(idir),lo(il:iu:iskip),hiw(il:iu:iskip),wp,wo)
       call fft(arrplan_w(2),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_w
       call finalize_n_solvers(hiw(idir)-lo(idir)+1,wsolver_fft)
@@ -590,7 +590,7 @@ program snac
       call updt_rhs(lo,hi,is_bound,rhsp%x,rhsp%y,rhsp%z,pp)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call fft(arrplan_p(1),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      call solve_n_helmholtz_2d_rev(psolver_fft,lo(idir),hi(idir),lo(il:iu:iskip),hi(il:iu:iskip),pp,po)
+      call solve_n_helmholtz_2d(psolver_fft,lo(idir),hi(idir),lo(il:iu:iskip),hi(il:iu:iskip),pp,po)
       call fft(arrplan_p(2),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_p
 #else
