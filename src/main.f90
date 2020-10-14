@@ -57,7 +57,8 @@ program snac
                                  add_constant_to_diagonal,solve_helmholtz,finalize_solver,finalize_matrix, &
                                  hypre_solver,HYPRESolverPFMG
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  use mod_solver         , only: init_fft_reduction,init_matrix_2d,solve_n_helmholtz_2d
+  use mod_solver         , only: init_fft_reduction,init_n_matrix_2d,create_n_solvers,setup_n_solvers,solve_n_helmholtz_2d_rev, &
+                                 add_constant_to_n_diagonals,finalize_n_solvers,finalize_n_matrices
   use mod_fft            , only: fft,fftend
   use mod_sanity         , only: test_sanity_fft
 #endif
@@ -112,6 +113,7 @@ program snac
   real(rp)                            :: normfft_p
   real(rp), allocatable, dimension(:) :: lambda_p
   real(rp)                            :: alpha_lambda_p
+  type(hypre_solver), allocatable, dimension(:) :: psolver_fft
 #ifdef _IMPDIFF
   real(rp), pointer, dimension(:)     :: dlu1_1,dlu1_2,dlu2_1,dlu2_2, &
                                          dlv1_1,dlv1_2,dlv2_1,dlv2_2, &
@@ -122,6 +124,9 @@ program snac
   real(rp)                            :: alpha_lambda_u, &
                                          alpha_lambda_v, &
                                          alpha_lambda_w
+  type(hypre_solver), allocatable, dimension(:) :: usolver_fft, &
+                                                   vsolver_fft, &
+                                                   wsolver_fft
 #endif
 #endif
   !
@@ -400,15 +405,19 @@ program snac
   allocate(lambda_p(hi(idir)-lo(idir)+1))
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcpre(:,idir),.true.,dl(0,idir),arrplan_p,normfft_p,lambda_p)
   alpha_lambda_p = 0._rp
-  call init_matrix_2d(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
-                      is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
-                      lo(il:iu:iskip),hi(il:iu:iskip),periods(il:iu:iskip),dl1_1,dl1_2,dl2_1,dl2_2,psolver)
+  allocate(psolver_fft(hi(idir)-lo(idir)+1))
+  call init_n_matrix_2d(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
+                       is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                       lo(idir),hi(idir),lo(il:iu:iskip),hi(il:iu:iskip),periods(il:iu:iskip), &
+                       dl1_1,dl1_2,dl2_1,dl2_2,lambda_p,psolver_fft)
+  call create_n_solvers(hi(idir)-lo(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver_fft)
+  call setup_n_solvers(hi(idir)-lo(idir)+1,psolver_fft)
 #else
   call init_matrix_3d(cbcpre,bcpre,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
                       dxc,dxf,dyc,dyf,dzc,dzf,psolver)
-#endif
   call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver)
   call setup_solver(psolver)
+#endif
 #ifdef _IMPDIFF
   dl = reshape([dxf_g(lo_g(1)-0),dxf_g(hi_g(1)), &
                 dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
@@ -422,9 +431,11 @@ program snac
   allocate(lambda_u(hi(idir)-lo(idir)+1))
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,1),is_centered(idir),dl(0,idir),arrplan_u,normfft_u,lambda_u)
   alpha_lambda_u = 0._rp
-  call init_matrix_2d(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dl(:,il:iu:iskip), &
-                      is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
-                      lo(il:iu:iskip),hiu(il:iu:iskip),periods(il:iu:iskip),dlu1_1,dlu1_2,dlu2_1,dlu2_2,usolver)
+  allocate(usolver_fft(hi(idir)-lo(idir)+1))
+  call init_n_matrix_2d(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dl(:,il:iu:iskip), &
+                        is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                        lo(idir),hiu(idir),lo(il:iu:iskip),hiu(il:iu:iskip),periods(il:iu:iskip), &
+                        dlu1_1,dlu1_2,dlu2_1,dlu2_2,lambda_u,usolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,is_centered,lo,hiu,periods, &
                       dxf,dxc,dyc,dyf,dzc,dzf,usolver)
@@ -441,9 +452,11 @@ program snac
   allocate(lambda_v(hi(idir)-lo(idir)+1))
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,2),is_centered(idir),dl(0,idir),arrplan_v,normfft_v,lambda_v)
   alpha_lambda_v = 0._rp
-  call init_matrix_2d(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dl(:,il:iu:iskip), &
-                      is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
-                      lo(il:iu:iskip),hiv(il:iu:iskip),periods(il:iu:iskip),dlv1_1,dlv1_2,dlv2_1,dlv2_2,vsolver)
+  allocate(vsolver_fft(hi(idir)-lo(idir)+1))
+  call init_n_matrix_2d(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dl(:,il:iu:iskip), &
+                        is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                        lo(idir),hiv(idir),lo(il:iu:iskip),hiv(il:iu:iskip),periods(il:iu:iskip), &
+                        dlv1_1,dlv1_2,dlv2_1,dlv2_2,lambda_v,vsolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,is_centered,lo,hiv,periods, &
                       dxc,dxf,dyf,dyc,dzc,dzf,vsolver)
@@ -460,9 +473,11 @@ program snac
   allocate(lambda_w(hi(idir)-lo(idir)+1))
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,3),is_centered(idir),dl(0,idir),arrplan_w,normfft_w,lambda_w)
   alpha_lambda_w = 0._rp
-  call init_matrix_2d(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dl(:,il:iu:iskip), &
-                      is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
-                      lo(il:iu:iskip),hiw(il:iu:iskip),periods(il:iu:iskip),dlw1_1,dlw1_2,dlw2_1,dlw2_2,wsolver)
+  allocate(wsolver_fft(hi(idir)-lo(idir)+1))
+  call init_n_matrix_2d(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dl(:,il:iu:iskip), &
+                        is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                        lo(idir),hiw(idir),lo(il:iu:iskip),hiw(il:iu:iskip),periods(il:iu:iskip), &
+                        dlw1_1,dlw1_2,dlw2_1,dlw2_2,lambda_w,wsolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,is_centered,lo,hiw,periods, &
                       dxc,dxf,dyc,dyf,dzf,dzc,wsolver)
@@ -493,16 +508,20 @@ program snac
       up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
       call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,up)
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+      call add_constant_to_n_diagonals(hiu(idir)-lo(idir)+1,lo(il:iu:iskip),hiu(il:iu:iskip), &
+                                       alphai-alphaoi,usolver_fft(:)%mat) ! correct diagonal term
+      call create_n_solvers(hiu(idir)-lo(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,usolver_fft)
+      call setup_n_solvers(hiu(idir)-lo(idir)+1,usolver_fft)
+      call fft(arrplan_u(1),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call solve_n_helmholtz_2d_rev(usolver_fft,lo(idir),hiu(idir),lo(il:iu:iskip),hiu(il:iu:iskip),up,uo)
+      call fft(arrplan_u(2),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_u
+      call finalize_n_solvers(hiu(idir)-lo(idir)+1,usolver_fft)
+#else
       call add_constant_to_diagonal(lo,hiu,alphai-alphaoi,usolver%mat) ! correct diagonal term
       call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,usolver)
       call setup_solver(usolver)
-#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-      call fft(arrplan_u(1),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      call solve_n_helmholtz_2d(usolver,hypre_maxiter,hypre_tol,lo(idir),hiu(idir),lo(il:iu:iskip),hiu(il:iu:iskip), &
-                                lambda_u,alpha_lambda_u,up,uo)
-      call fft(arrplan_u(2),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_u
-#else
       call solve_helmholtz(usolver,lo,hiu,up,uo)
       call finalize_solver(usolver)
 #endif
@@ -511,16 +530,20 @@ program snac
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
       call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,vp)
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+      call add_constant_to_n_diagonals(hiv(idir)-lo(idir)+1,lo(il:iu:iskip),hiv(il:iu:iskip), &
+                                       alphai-alphaoi,vsolver_fft(:)%mat) ! correct diagonal term
+      call create_n_solvers(hiv(idir)-lo(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,vsolver_fft)
+      call setup_n_solvers(hiv(idir)-lo(idir)+1,vsolver_fft)
+      call fft(arrplan_v(1),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call solve_n_helmholtz_2d_rev(vsolver_fft,lo(idir),hiv(idir),lo(il:iu:iskip),hiv(il:iu:iskip),vp,vo)
+      call fft(arrplan_v(2),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_v
+      call finalize_n_solvers(hiv(idir)-lo(idir)+1,vsolver_fft)
+#else
       call add_constant_to_diagonal(lo,hiv,alphai-alphaoi,vsolver%mat) ! correct diagonal term
       call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,vsolver)
       call setup_solver(vsolver)
-#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-      call fft(arrplan_v(1),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      call solve_n_helmholtz_2d(vsolver,hypre_maxiter,hypre_tol,lo(idir),hiv(idir),lo(il:iu:iskip),hiv(il:iu:iskip), &
-                                lambda_v,alpha_lambda_v,vp,vo)
-      call fft(arrplan_v(2),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_v
-#else
       call solve_helmholtz(vsolver,lo,hiv,vp,vo)
       call finalize_solver(vsolver)
 #endif
@@ -529,16 +552,20 @@ program snac
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
       call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,wp)
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+      call add_constant_to_n_diagonals(hiw(idir)-lo(idir)+1,lo(il:iu:iskip),hiw(il:iu:iskip), &
+                                       alphai-alphaoi,wsolver_fft(:)%mat) ! correct diagonal term
+      call create_n_solvers(hiw(idir)-lo(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,wsolver_fft)
+      call setup_n_solvers(hiw(idir)-lo(idir)+1,wsolver_fft)
+      call fft(arrplan_w(1),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call solve_n_helmholtz_2d_rev(wsolver_fft,lo(idir),hiw(idir),lo(il:iu:iskip),hiw(il:iu:iskip),wp,wo)
+      call fft(arrplan_w(2),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_w
+      call finalize_n_solvers(hiw(idir)-lo(idir)+1,wsolver_fft)
+#else
       call add_constant_to_diagonal(lo,hiw,alphai-alphaoi,wsolver%mat) ! correct diagonal term
       call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,wsolver)
       call setup_solver(wsolver)
-#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-      call fft(arrplan_w(1),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      call solve_n_helmholtz_2d(wsolver,hypre_maxiter,hypre_tol,lo(idir),hiw(idir),lo(il:iu:iskip),hiw(il:iu:iskip), &
-                                lambda_w,alpha_lambda_w,wp,wo)
-      call fft(arrplan_w(2),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_w
-#else
       call solve_helmholtz(wsolver,lo,hiw,wp,wo)
       call finalize_solver(wsolver)
 #endif
@@ -563,8 +590,7 @@ program snac
       call updt_rhs(lo,hi,is_bound,rhsp%x,rhsp%y,rhsp%z,pp)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call fft(arrplan_p(1),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      call solve_n_helmholtz_2d(psolver,hypre_maxiter,hypre_tol,lo(idir),hi(idir),lo(il:iu:iskip),hi(il:iu:iskip), &
-                                lambda_p,alpha_lambda_p,pp,po)
+      call solve_n_helmholtz_2d_rev(psolver_fft,lo(idir),hi(idir),lo(il:iu:iskip),hi(il:iu:iskip),pp,po)
       call fft(arrplan_p(2),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_p
 #else
@@ -658,20 +684,26 @@ program snac
       if(myid == 0) write(stdout,*) dt12av/(1._rp*nrank),dt12min,dt12max
 #endif
   enddo
-  call finalize_matrix(psolver)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+  call finalize_n_matrices(hi(idir)-lo(idir)+1,psolver_fft)
   call fftend(arrplan_p)
+  call finalize_n_solvers(hi(idir)-lo(idir)+1,psolver_fft)
 #else
+  call finalize_matrix(psolver)
   call finalize_solver(psolver)
 #endif
 #ifdef _IMPDIFF
-  call finalize_matrix(usolver)
-  call finalize_matrix(vsolver)
-  call finalize_matrix(wsolver)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+  call finalize_n_matrices(hiu(idir)-lo(idir)+1,usolver_fft)
+  call finalize_n_matrices(hiv(idir)-lo(idir)+1,vsolver_fft)
+  call finalize_n_matrices(hiw(idir)-lo(idir)+1,wsolver_fft)
   call fftend(arrplan_u)
   call fftend(arrplan_v)
   call fftend(arrplan_w)
+#else
+  call finalize_matrix(usolver)
+  call finalize_matrix(vsolver)
+  call finalize_matrix(wsolver)
 #endif
 #endif
   if(myid == 0.and.(.not.kill)) write(stdout,*) '*** Fim ***'
