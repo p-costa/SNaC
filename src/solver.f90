@@ -115,7 +115,7 @@ module mod_solver
     enddo
   end subroutine init_bc_rhs
   subroutine init_matrix_3d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                            dx1,dx2,dy1,dy2,dz1,dz2,asolver)
+                            dx1,dx2,dy1,dy2,dz1,dz2,asolver,lambda)
     !
     ! description
     !
@@ -132,6 +132,7 @@ module mod_solver
     real(rp)          , intent(in ), target, dimension(lo(2)-1:) :: dy1,dy2
     real(rp)          , intent(in ), target, dimension(lo(3)-1:) :: dz1,dz2
     type(hypre_solver), intent(out)                              :: asolver
+    real(rp)          , intent(in ), optional, dimension(:)      :: lambda
     integer, dimension(3         ) :: qqq
     integer, dimension(3,nstencil) :: offsets
     real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
@@ -209,7 +210,23 @@ module mod_solver
           cyp = 1._rp/(dy1(j  +qqq(2))*dy2(j))
           czm = 1._rp/(dz1(k-1+qqq(3))*dz2(k))
           czp = 1._rp/(dz1(k  +qqq(3))*dz2(k))
+#ifdef _FFT_X
+          cxm = 0._rp
+          cxp = 0._rp
+          qq  = i - lo(1) + 1
+#elif  _FFT_Y
+          cym = 0._rp
+          cyp = 0._rp
+          qq  = j - lo(2) + 1
+#elif  _FFT_Z
+          czm = 0._rp
+          czp = 0._rp
+          qq  = k - lo(3) + 1
+#endif
           cc  = -(cxm+cxp+cym+cyp+czm+czp)
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+          cc  = cc + lambda(qq)
+#endif
           if(periods(1) == 0) then
             if(is_bound(0,1).and.i == lo(1)) then
               cc = cc + sgn(0,1)*cxm
