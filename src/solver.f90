@@ -9,7 +9,9 @@ module mod_solver
          hypre_solver, &
          HYPRESolverSMG,HYPRESolverPFMG,HYPRESolverGMRES,HYPRESolverBiCGSTAB
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  public init_fft_reduction,init_matrix_2d,solve_n_helmholtz_2d
+  public init_fft_reduction,init_n_matrix_2d,create_n_solvers,setup_n_solvers, &
+         add_constant_to_n_diagonals,solve_n_helmholtz_2d,solve_n_helmholtz_2d_rev, &
+         finalize_n_matrices,finalize_n_solvers
 #endif
   integer, parameter :: HYPRESolverSMG      = 1, &
                         HYPRESolverPFMG     = 2, &
@@ -517,7 +519,6 @@ module mod_solver
     comm_hypre = MPI_COMM_WORLD%MPI_VAL
     !
     qqq(:) = 0
-         qqq(:) = 0
     where(.not.is_centered(:)) qqq(:) = 1
     factor(:,:) = 0._rp
     sgn(   :,:) = 0._rp
@@ -551,7 +552,7 @@ module mod_solver
     !
     ! setup the finite-difference stencil
     !
-         call HYPRE_StructStencilCreate(2,nstencil,stencil,ierr)
+    call HYPRE_StructStencilCreate(2,nstencil,stencil,ierr)
     offsets = reshape([ 0, 0, &
                        -1, 0, &
                         1, 0, &
@@ -724,6 +725,173 @@ module mod_solver
     enddo
   end subroutine solve_n_helmholtz_2d
 #endif
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+  subroutine solve_n_helmholtz_2d_rev(asolver,lo_out,hi_out,lo,hi,p,po)
+    implicit none
+    type(hypre_solver), target, intent(inout), dimension(:) :: asolver
+    integer           ,         intent(in   )               :: lo_out,hi_out
+    integer           ,         intent(in   ), dimension(2) :: lo,hi
+#ifdef _FFT_Z
+    real(rp)          ,         intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo_out-1:) :: p,po
+#elif  _FFT_Y
+    real(rp)          ,         intent(inout), dimension(lo(1)-1:,lo_out-1:,lo(2)-1:) :: p,po
+#elif  _FFT_X
+    real(rp)          ,         intent(inout), dimension(lo_out-1:,lo(1)-1:,lo(2)-1:) :: p,po
+#endif
+    integer(8), pointer :: solver,mat,rhs,sol
+    integer   , pointer :: stype
+    real(rp), dimension(product(hi(:)-lo(:)+1)) :: solvalues,rhsvalues
+    integer :: i_out,ii,i1,i2,q,n
+    do i_out=lo_out,hi_out
+      n = i_out-lo_out+1 
+      solver  => asolver(n)%solver
+      mat     => asolver(n)%mat
+      rhs     => asolver(n)%rhs
+      sol     => asolver(n)%sol
+      stype   => asolver(n)%stype
+      q = 0
+      do i2=lo(2),hi(2)
+        do i1=lo(1),hi(1)
+          q = q + 1
+#ifdef _FFT_Z
+          rhsvalues(q) = p( i1,i2,i_out)
+          solvalues(q) = po(i1,i2,i_out)
+#elif  _FFT_Y
+          rhsvalues(q) = p( i1,i_out,i2)
+          solvalues(q) = po(i1,i_out,i2)
+#elif  _FFT_X
+          rhsvalues(q) = p( i_out,i1,i2)
+          solvalues(q) = po(i_out,i1,i2)
+#endif
+        enddo
+      enddo
+      !
+      call HYPRE_StructVectorSetBoxValues(rhs,lo,hi, &
+                                          rhsvalues,ierr)
+      call HYPRE_StructVectorAssemble(rhs,ierr)
+      !
+      ! create soluction vector
+      !
+      call HYPRE_StructVectorSetBoxValues(sol,lo,hi, &
+                                          solvalues,ierr)
+      call HYPRE_StructVectorAssemble(sol,ierr)
+      !
+      ! setup solver, and solve
+      !
+      ! note: this part was based on the the Paris Simulator code
+      !       freely available under a GPL license; see:
+      !       http://www.ida.upmc.fr/~zaleski/paris/
+      !
+      if ( stype == HYPRESolverSMG ) then
+        call HYPRE_StructSMGSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructSMGGetNumIterations(solver,num_iterations,ierr)
+      elseif ( stype == HYPRESolverPFMG ) then
+        call HYPRE_StructPFMGSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructPFMGGetNumIterations(solver,num_iterations,ierr)
+      elseif (stype == HYPRESolverGMRES) then
+        call HYPRE_StructGMRESSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructGMRESGetNumIterations(solver, num_iterations,ierr)
+      elseif (stype == HYPRESolverBiCGSTAB) then
+        call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructBiCGSTABGetNumIterations(solver, num_iterations,ierr)
+      endif ! stype
+      !
+      ! end of part based on the Paris Simulator code
+      !
+      ! fecth results
+      !
+      call HYPRE_StructVectorGetBoxValues(sol,lo,hi,solvalues,ierr)
+      q = 0
+      do i2=lo(2),hi(2)
+        do i1=lo(1),hi(1)
+          q = q + 1
+#ifdef _FFT_Z
+          p( i1,i2,i_out) = solvalues(q)
+          po(i1,i2,i_out) = p(i1,i2,i_out)
+#elif  _FFT_Y
+          p( i1,i_out,i2) = solvalues(q)
+          po(i1,i_out,i2) = p(i1,i_out,i2)
+#elif  _FFT_X
+          p( i_out,i1,i2) = solvalues(q)
+          po(i_out,i1,i2) = p(i_out,i1,i2)
+#endif
+        enddo
+      enddo
+    enddo
+  end subroutine solve_n_helmholtz_2d_rev
+#endif
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+  subroutine init_n_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_out,hi_out,lo,hi,periods, &
+                              dl1_1,dl1_2,dl2_1,dl2_2,lambda,asolver)
+    character(len=1)  , intent(in   ), dimension(0:1,2) :: cbc
+    real(rp)          , intent(in   ), dimension(0:1,2) ::  bc
+    real(rp)          , intent(in   ), dimension(0:1,2) ::  dl
+    logical           , intent(in   )                   ::  is_uniform_grid
+    logical           , intent(in   ), dimension(0:1,2) ::  is_bound
+    logical           , intent(in   ), dimension(    2) ::  is_centered
+    integer           , intent(in   )                   :: lo_out,hi_out
+    integer           , intent(in   ), dimension(    2) :: lo,hi,periods
+    real(rp)          , intent(in   ), target, dimension(lo(1)-1:) :: dl1_1,dl1_2
+    real(rp)          , intent(in   ), target, dimension(lo(2)-1:) :: dl2_1,dl2_2
+    real(rp)          , intent(in   ), dimension(:) :: lambda
+    type(hypre_solver), intent(inout), dimension(:) :: asolver
+    type(hypre_solver) :: asolver_aux
+    integer :: i_out,q
+    do i_out=lo_out,hi_out
+      q = i_out-lo_out+1
+      asolver_aux = asolver(q)
+      call init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
+                          dl1_1,dl1_2,dl2_1,dl2_2,asolver_aux)
+      call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],lambda(q),asolver_aux%mat)
+      asolver(q) = asolver_aux
+    enddo
+  end subroutine init_n_matrix_2d
+#endif
+  subroutine create_n_solvers(n,maxiter,maxerror,stype,asolver)
+    integer           , intent(   in) :: n
+    integer           , intent(   in) :: maxiter
+    real(rp)          , intent(   in) :: maxerror
+    integer           , intent(   in) :: stype
+    type(hypre_solver), intent(inout), dimension(:) :: asolver
+    integer :: q
+    do q=1,n
+      call create_solver(maxiter,maxerror,stype,asolver(q))
+    enddo
+  end subroutine create_n_solvers
+  subroutine setup_n_solvers(n,asolver)
+    integer           , intent(   in) :: n
+    type(hypre_solver), intent(inout), dimension(:) :: asolver
+    integer :: q
+    do q=1,n
+      call setup_solver(asolver(q))
+    enddo
+  end subroutine setup_n_solvers
+  subroutine add_constant_to_n_diagonals(n,lo,hi,alpha,mat)
+    integer   , intent(in   )               :: n
+    integer   , intent(in   ), dimension(2) :: lo,hi
+    real(rp)  , intent(in   )               :: alpha
+    integer(8), intent(inout), dimension(:) :: mat
+    integer :: q
+    do q=1,n
+      call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],alpha,mat(q))
+    enddo
+  end subroutine add_constant_to_n_diagonals
+  subroutine finalize_n_matrices(n,asolver)
+    integer           , intent(   in) :: n
+    type(hypre_solver), intent(inout), dimension(:) :: asolver
+    integer :: q
+    do q=1,n
+      call finalize_matrix(asolver(q))
+    enddo
+  end subroutine finalize_n_matrices
+  subroutine finalize_n_solvers(n,asolver)
+    integer           , intent(   in) :: n
+    type(hypre_solver), intent(inout), dimension(:) :: asolver
+    integer :: q
+    do q=1,n
+      call finalize_solver(asolver(q))
+    enddo
+  end subroutine finalize_n_solvers
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   subroutine init_fft_reduction(idir,n,bc,is_centered,dl,arrplan,normfft,lambda)
     use iso_c_binding , only: C_PTR
