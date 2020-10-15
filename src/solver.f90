@@ -400,32 +400,18 @@ module mod_solver
     real(rp)          ,         intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p,po
     integer(8), pointer :: solver,mat,rhs,sol
     integer   , pointer :: stype
-    real(rp), dimension(product(hi(:)-lo(:)+1)) :: solvalues,rhsvalues
-    integer :: i,j,k,q
     solver  => asolver%solver
     mat     => asolver%mat
     rhs     => asolver%rhs
     sol     => asolver%sol
     stype   => asolver%stype
-    q = 0
-    do k=lo(3),hi(3)
-      do j=lo(2),hi(2)
-        do i=lo(1),hi(1)
-          q = q + 1
-          rhsvalues(q) = p( i,j,k)
-          solvalues(q) = po(i,j,k)
-        enddo
-      enddo
-    enddo
     !
-    call HYPRE_StructVectorSetBoxValues(rhs,lo,hi, &
-                                        rhsvalues,ierr)
+    call HYPRE_StructVectorSetBoxValues(rhs,lo,hi,p(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)),ierr)
     call HYPRE_StructVectorAssemble(rhs,ierr)
     !
     ! create soluction vector
     !
-    call HYPRE_StructVectorSetBoxValues(sol,lo,hi, &
-                                        solvalues,ierr)
+    call HYPRE_StructVectorSetBoxValues(sol,lo,hi,po(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)),ierr)
     call HYPRE_StructVectorAssemble(sol,ierr)
     !
     ! setup solver, and solve
@@ -452,17 +438,8 @@ module mod_solver
     !
     ! fecth results
     !
-    call HYPRE_StructVectorGetBoxValues(sol,lo,hi,solvalues,ierr)
-    q = 0
-    do k=lo(3),hi(3)
-      do j=lo(2),hi(2)
-        do i=lo(1),hi(1)
-          q = q + 1
-          p( i,j,k) = solvalues(q)
-          po(i,j,k) = p(i,j,k)
-        enddo
-      enddo
-    enddo
+    call HYPRE_StructVectorGetBoxValues(sol,lo,hi,p(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)),ierr)
+    po(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = p(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
   end subroutine solve_helmholtz
   subroutine finalize_solver(asolver)
     implicit none
@@ -650,8 +627,7 @@ module mod_solver
 #endif
     integer(8), pointer :: solver,mat,rhs,sol
     integer   , pointer :: stype
-    real(rp), dimension(product(hi(:)-lo(:)+1)) :: solvalues,rhsvalues
-    integer :: i_out,ii,i1,i2,q,n
+    integer :: i_out,ii,i1,i2,n
     do i_out=lo_out,hi_out
       n = i_out-lo_out+1 
       solver  => asolver(n)%solver
@@ -659,31 +635,20 @@ module mod_solver
       rhs     => asolver(n)%rhs
       sol     => asolver(n)%sol
       stype   => asolver(n)%stype
-      q = 0
-      do i2=lo(2),hi(2)
-        do i1=lo(1),hi(1)
-          q = q + 1
+      !
+      ! setup soluction and rhs vectors
+      !
 #ifdef _FFT_Z
-          rhsvalues(q) = p( i1,i2,i_out)
-          solvalues(q) = po(i1,i2,i_out)
+      call HYPRE_StructVectorSetBoxValues(rhs,lo,hi, p(lo(1):hi(1),lo(2):hi(2),i_out),ierr)
+      call HYPRE_StructVectorSetBoxValues(sol,lo,hi,po(lo(1):hi(1),lo(2):hi(2),i_out),ierr)
 #elif  _FFT_Y
-          rhsvalues(q) = p( i1,i_out,i2)
-          solvalues(q) = po(i1,i_out,i2)
+      call HYPRE_StructVectorSetBoxValues(rhs,lo,hi, p(lo(1):hi(1),i_out,lo(2):hi(2)),ierr)
+      call HYPRE_StructVectorSetBoxValues(sol,lo,hi,po(lo(1):hi(1),i_out,lo(2):hi(2)),ierr)
 #elif  _FFT_X
-          rhsvalues(q) = p( i_out,i1,i2)
-          solvalues(q) = po(i_out,i1,i2)
+      call HYPRE_StructVectorSetBoxValues(rhs,lo,hi, p(i_out,lo(1):hi(1),lo(2):hi(2)),ierr)
+      call HYPRE_StructVectorSetBoxValues(sol,lo,hi,po(i_out,lo(1):hi(1),lo(2):hi(2)),ierr)
 #endif
-        enddo
-      enddo
-      !
-      call HYPRE_StructVectorSetBoxValues(rhs,lo,hi, &
-                                          rhsvalues,ierr)
       call HYPRE_StructVectorAssemble(rhs,ierr)
-      !
-      ! create soluction vector
-      !
-      call HYPRE_StructVectorSetBoxValues(sol,lo,hi, &
-                                          solvalues,ierr)
       call HYPRE_StructVectorAssemble(sol,ierr)
       !
       ! setup solver, and solve
@@ -710,23 +675,16 @@ module mod_solver
       !
       ! fecth results
       !
-      call HYPRE_StructVectorGetBoxValues(sol,lo,hi,solvalues,ierr)
-      q = 0
-      do i2=lo(2),hi(2)
-        do i1=lo(1),hi(1)
-          q = q + 1
 #ifdef _FFT_Z
-          p( i1,i2,i_out) = solvalues(q)
-          po(i1,i2,i_out) = p(i1,i2,i_out)
+      call HYPRE_StructVectorGetBoxValues(sol,lo,hi,p(lo(1):hi(1),lo(2):hi(2),i_out),ierr)
+      po(lo(1):hi(1),lo(2):hi(2),i_out) = p(lo(1):hi(1),lo(2):hi(2),i_out)
 #elif  _FFT_Y
-          p( i1,i_out,i2) = solvalues(q)
-          po(i1,i_out,i2) = p(i1,i_out,i2)
+      call HYPRE_StructVectorGetBoxValues(sol,lo,hi,p(lo(1):hi(1),i_out,lo(2):hi(2)),ierr)
+      po(lo(1):hi(1),i_out,lo(2):hi(2)) = p(lo(1):hi(1),i_out,lo(2):hi(2))
 #elif  _FFT_X
-          p( i_out,i1,i2) = solvalues(q)
-          po(i_out,i1,i2) = p(i_out,i1,i2)
+      call HYPRE_StructVectorGetBoxValues(sol,lo,hi,p(i_out,lo(1):hi(1),lo(2):hi(2)),ierr)
+      po(i_out,lo(1):hi(1),lo(2):hi(2)) = p(i_out,lo(1):hi(1),lo(2):hi(2))
 #endif
-        enddo
-      enddo
     enddo
   end subroutine solve_n_helmholtz_2d
   subroutine init_n_2d_matrices(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_out,hi_out,lo,hi,periods, &
