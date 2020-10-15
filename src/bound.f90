@@ -286,6 +286,94 @@ module mod_bound
     end select
   end subroutine inflow
   !
+  subroutine outflow(is_outflow_bound,is_correc,lo,hi,dt,vel,dxc,dxf,dyc,dyf,dzc,dzf, &
+                     vel_x_old,vel_y_old,vel_z_old,u,v,w)
+    !
+    ! convective outflow boundary condition
+    !
+    ! n.b.: when determining is_outflow_bound, it should be determined similarly to is_inflow_bound as:
+    !       is_outflow_bound(ibound,idir) = is_outflow_bound(ibound,idir).and.is_bound(ibound,idir)
+    !
+    implicit none
+    logical , intent(in   ), dimension(0:1,1:3)                 :: is_outflow_bound
+    logical , intent(in   )                                     :: is_correc
+    integer , intent(in   ), dimension(3      )                 :: lo,hi
+    real(rp), intent(in   )                                     :: dt        ! time step
+    real(rp), intent(in   ), dimension(0:1,1:3)                 :: vel       ! outflow velocities (uniform for now)
+    real(rp), intent(in   ), dimension(lo(1)-1:)                :: dxc,dxf   ! x-velocity at previous step
+    real(rp), intent(in   ), dimension(lo(2)-1:)                :: dyc,dyf   ! x-velocity at previous step
+    real(rp), intent(in   ), dimension(lo(3)-1:)                :: dzc,dzf   ! x-velocity at previous step
+    real(rp), intent(in   ), dimension(lo(2)-1:,lo(3)-1:,0:,1:) :: vel_x_old ! x-velocity at previous step
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(3)-1:,0:,1:) :: vel_y_old ! y-velocity at previous step
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,0:,1:) :: vel_z_old ! z-velocity at previous step
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
+    integer :: ibound,idir,q
+    do idir=1,3
+      do ibound=0,1
+        if(is_outflow_bound(ibound,idir)) then
+          q = (1-ibound)*(lo(idir)-1)+ibound*hi(idir)
+          select case(idir)
+            case(1)
+              if(.not.is_correc) &
+              u(q  ,:,:) = u(q-1,:,:) + (dxf(q)/(vel(ibound,idir)*dt))*(u(q-1,:,:)-vel_x_old(:,:,ibound,idir))
+              v(q+1,:,:) = v(q  ,:,:) + (dxc(q)/(vel(ibound,idir)*dt))*(v(q  ,:,:)-vel_y_old(:,:,ibound,idir))
+              w(q+1,:,:) = w(q  ,:,:) + (dxc(q)/(vel(ibound,idir)*dt))*(w(q  ,:,:)-vel_z_old(:,:,ibound,idir))
+            case(2)
+              u(:,q+1,:) = u(q  ,:,:) + (dyc(q)/(vel(ibound,idir)*dt))*(u(q  ,:,:)-vel_x_old(:,:,ibound,idir))
+              if(.not.is_correc) &
+              v(:,q  ,:) = v(q-1,:,:) + (dyf(q)/(vel(ibound,idir)*dt))*(v(q-1,:,:)-vel_y_old(:,:,ibound,idir))
+              w(:,q+1,:) = w(q  ,:,:) + (dyc(q)/(vel(ibound,idir)*dt))*(w(q  ,:,:)-vel_z_old(:,:,ibound,idir))
+            case(3)
+              u(:,q+1,:) = u(q  ,:,:) + (dzc(q)/(vel(ibound,idir)*dt))*(u(q  ,:,:)-vel_x_old(:,:,ibound,idir))
+              v(:,q+1,:) = v(q  ,:,:) + (dzc(q)/(vel(ibound,idir)*dt))*(v(q  ,:,:)-vel_y_old(:,:,ibound,idir))
+              if(.not.is_correc) &
+              w(:,q  ,:) = w(q-1,:,:) + (dzf(q)/(vel(ibound,idir)*dt))*(w(q-1,:,:)-vel_z_old(:,:,ibound,idir))
+          end select
+        endif
+      enddo
+    enddo
+  end subroutine outflow
+  subroutine store_outflow_velocity(is_outflow_bound,lo,hi,u,v,w,vel_x,vel_y,vel_z)
+    !
+    ! stores outflow velocity for computing a convective outflow BC (not tested)
+    !
+    ! n.b.: when determining is_outflow_bound, it should be determined similarly to is_inflow_bound as:
+    !       is_outflow_bound(ibound,idir) = is_outflow_bound(ibound,idir).and.is_bound(ibound,idir)
+    !
+    implicit none
+    logical , intent(in ), dimension(0:1,1:3)                    :: is_outflow_bound
+    integer , intent(in ), dimension(3      )                    :: lo,hi
+    real(rp), intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
+    real(rp), intent(out), dimension(lo(2)-1:,lo(3)-1:,0:,1:)    :: vel_x
+    real(rp), intent(out), dimension(lo(1)-1:,lo(3)-1:,0:,1:)    :: vel_y
+    real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:,0:,1:)    :: vel_z
+    integer :: ibound,idir,q
+    do idir=1,3
+      do ibound=0,1
+        vel_x(:,:,idir,ibound) = 0._rp
+        vel_y(:,:,idir,ibound) = 0._rp
+        vel_z(:,:,idir,ibound) = 0._rp
+        if(is_outflow_bound(ibound,idir)) then
+          q = (1-ibound)*(lo(idir)-1)+ibound*hi(idir)
+          select case(idir)
+            case(1)
+              vel_x(:,:,ibound,idir) = u(q-1,:,:)
+              vel_y(:,:,ibound,idir) = v(q  ,:,:)
+              vel_z(:,:,ibound,idir) = w(q  ,:,:)
+            case(2)
+              vel_x(:,:,ibound,idir) = u(:,q  ,:)
+              vel_y(:,:,ibound,idir) = v(:,q-1,:)
+              vel_z(:,:,ibound,idir) = w(:,q  ,:)
+            case(3)
+              vel_x(:,:,ibound,idir) = u(:,:,q  )
+              vel_y(:,:,ibound,idir) = v(:,:,q  )
+              vel_z(:,:,ibound,idir) = w(:,:,q-1)
+          end select
+        endif
+      enddo
+    enddo
+  end subroutine store_outflow_velocity
+  !
   subroutine updt_rhs(lo,hi,is_bound,rhsbx,rhsby,rhsbz,p)
     !
     ! updates the right-hand-side of the Helmholtz/Poisson equation
