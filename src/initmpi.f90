@@ -190,7 +190,7 @@ module mod_initmpi
     call MPI_ALLREDUCE(ntot,ntot_min,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD,ierr)
     call MPI_ALLREDUCE(ntot,ntot_max,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,ierr)
     call MPI_ALLREDUCE(ntot,ntot_sum,1,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr)
-    write(stdout,*) 'Maximum, minimum, average, and normalized average average number of grid points for task ',myid, &
+    write(stdout,*) 'Maximum, minimum, average, and normalized average number of grid points for task ',myid, &
                     '(block',my_block,'): ',ntot_max, &
                                             ntot_min, &
                                             (1.*ntot_sum)/(1._rp*nrank), &
