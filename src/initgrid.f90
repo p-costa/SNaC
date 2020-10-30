@@ -14,10 +14,12 @@ module mod_initgrid
     ! NEEDS TO BE PROBABLY SLIGHTLY ADAPTED IN CASE IT IS IN THE MIDDLE OF A BLOCK
     !
     implicit none
-    integer, parameter :: CLUSTER_TWO_END   = 0, &
-                          CLUSTER_ONE_END   = 1, &
-                          CLUSTER_MIDDLE    = 2, &
-                          CLUSTER_ONE_END_R = 3
+    integer, parameter :: CLUSTER_TWO_END     = 0, &
+                          CLUSTER_ONE_END     = 1, &
+                          CLUSTER_MIDDLE      = 2, &
+                          CLUSTER_ONE_END_R   = 3, &
+                          CLUSTER_GEOMETRIC   = 4, &
+                          CLUSTER_GEOMETRIC_R = 5
     integer         , intent(in )                  :: lo,hi,gt
     real(rp)        , intent(in )                  :: gr,lmin,lmax
     real(rp)        , intent(out), dimension(lo-1:) :: drc_g,drf_g,rc_g,rf_g
@@ -33,6 +35,10 @@ module mod_initgrid
       gridpoint => gridpoint_cluster_middle
     case(CLUSTER_ONE_END_R)
       gridpoint => gridpoint_cluster_one_end_r
+    case(CLUSTER_GEOMETRIC)
+     gridpoint => gridpoint_cluster_geometric
+    case(CLUSTER_GEOMETRIC_R)
+     gridpoint => gridpoint_cluster_geometric_r
     case default
       gridpoint => gridpoint_cluster_two_end
     end select
@@ -195,4 +201,27 @@ module mod_initgrid
       r = r0
     endif
   end subroutine gridpoint_cluster_middle
+  subroutine gridpoint_cluster_geometric(alpha,r0,r)
+    !
+    ! geometric progression
+    !
+    implicit none
+    real(rp), intent(in ) :: alpha,r0
+    real(rp), intent(out) :: r
+    if(    r0 == 1.0_rp) then
+      r = 1._rp
+    else
+      r = (1._rp-r0**(alpha))/(1._rp-r0)/alpha
+    endif
+  end subroutine gridpoint_cluster_geometric
+  subroutine gridpoint_cluster_geometric_r(alpha,r0,r)
+    !
+    ! reversed geometric progression
+    !
+    implicit none
+    real(rp), intent(in ) :: alpha,r0
+    real(rp), intent(out) :: r
+    call gridpoint_cluster_geometric(alpha,1._rp-r0,r)
+    r = 1._rp-r
+  end subroutine gridpoint_cluster_geometric_r
 end module mod_initgrid
