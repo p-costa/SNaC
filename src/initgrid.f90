@@ -205,12 +205,15 @@ module mod_initgrid
     ! geometric progression
     !
     implicit none
+    !real(rp), parameter   :: power = 1._rp/2._rp
+    !real(rp), parameter   :: power = 1._rp/1._rp
+    real(rp), parameter   :: power = 1._rp/3._rp
     real(rp), intent(in ) :: alpha,r0
     real(rp), intent(out) :: r
     if(    r0 == 1.0_rp) then
-      r = 1._rp
+      r = r0
     else
-      r = (1._rp-r0**(alpha))/(1._rp-r0)/alpha
+      r = r0*((1._rp-r0**(alpha))/(1._rp-r0)/alpha)**power
     endif
   end subroutine gridpoint_cluster_geometric
   subroutine gridpoint_cluster_geometric_r(alpha,r0,r)
