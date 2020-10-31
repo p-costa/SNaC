@@ -13,13 +13,14 @@ module mod_initgrid
     ! NEEDS TO BE PROBABLY SLIGHTLY ADAPTED IN CASE IT IS IN THE MIDDLE OF A BLOCK
     !
     implicit none
-    integer, parameter :: CLUSTER_TWO_END             = 0, &
-                          CLUSTER_ONE_END             = 1, &
-                          CLUSTER_MIDDLE              = 2, &
-                          CLUSTER_ONE_END_R           = 3, &
-                          CLUSTER_GEOMETRIC_ONE_END   = 4, &
-                          CLUSTER_GEOMETRIC_ONE_END_R = 5, &
-                          CLUSTER_GEOMETRIC_TWO_ENDS  = 6
+    integer, parameter :: CLUSTER_TWO_END              = 0, &
+                          CLUSTER_ONE_END              = 1, &
+                          CLUSTER_MIDDLE               = 2, &
+                          CLUSTER_ONE_END_R            = 3, &
+                          CLUSTER_GEOMETRIC_ONE_END    = 4, &
+                          CLUSTER_GEOMETRIC_ONE_END_R  = 5, &
+                          CLUSTER_GEOMETRIC_TWO_ENDS   = 6, &
+                          CLUSTER_GEOMETRIC_MIDDLE     = 7
     integer         , intent(in )                  :: lo,hi,gt
     real(rp)        , intent(in )                  :: gr,lmin,lmax
     real(rp)        , intent(out), dimension(lo-1:) :: drc_g,drf_g,rc_g,rf_g
@@ -41,6 +42,8 @@ module mod_initgrid
      gridpoint => gridpoint_cluster_geometric_one_end_r
     CASE(CLUSTER_GEOMETRIC_TWO_ENDS)
      gridpoint => gridpoint_cluster_geometric_two_ends
+    CASE(CLUSTER_GEOMETRIC_MIDDLE)
+     gridpoint => gridpoint_cluster_geometric_middle
     case default
       gridpoint => gridpoint_cluster_two_end
     end select
@@ -244,4 +247,19 @@ module mod_initgrid
       r = 1._rp-r/2._rp
     endif
   end subroutine gridpoint_cluster_geometric_two_ends
+  subroutine gridpoint_cluster_geometric_middle(alpha,r0,r)
+    !
+    ! geometric progression towards each end
+    !
+    implicit none
+    real(rp), intent(in ) :: alpha,r0
+    real(rp), intent(out) :: r
+    if(r0 <= 0.5) then
+      call gridpoint_cluster_geometric_one_end(alpha/2._rp,(.5_rp-r0)*2._rp,r)
+      r = (1._rp-r)/2._rp
+    else
+      call gridpoint_cluster_geometric_one_end(alpha/2._rp,(r0-.5_rp)*2._rp,r)
+      r = (1._rp+r)/2._rp
+    endif
+  end subroutine gridpoint_cluster_geometric_middle
 end module mod_initgrid
