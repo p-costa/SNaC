@@ -13,12 +13,13 @@ module mod_initgrid
     ! NEEDS TO BE PROBABLY SLIGHTLY ADAPTED IN CASE IT IS IN THE MIDDLE OF A BLOCK
     !
     implicit none
-    integer, parameter :: CLUSTER_TWO_END     = 0, &
-                          CLUSTER_ONE_END     = 1, &
-                          CLUSTER_MIDDLE      = 2, &
-                          CLUSTER_ONE_END_R   = 3, &
-                          CLUSTER_GEOMETRIC   = 4, &
-                          CLUSTER_GEOMETRIC_R = 5
+    integer, parameter :: CLUSTER_TWO_END             = 0, &
+                          CLUSTER_ONE_END             = 1, &
+                          CLUSTER_MIDDLE              = 2, &
+                          CLUSTER_ONE_END_R           = 3, &
+                          CLUSTER_GEOMETRIC_ONE_END   = 4, &
+                          CLUSTER_GEOMETRIC_ONE_END_R = 5, &
+                          CLUSTER_GEOMETRIC_TWO_ENDS  = 6
     integer         , intent(in )                  :: lo,hi,gt
     real(rp)        , intent(in )                  :: gr,lmin,lmax
     real(rp)        , intent(out), dimension(lo-1:) :: drc_g,drf_g,rc_g,rf_g
@@ -34,10 +35,12 @@ module mod_initgrid
       gridpoint => gridpoint_cluster_middle
     case(CLUSTER_ONE_END_R)
       gridpoint => gridpoint_cluster_one_end_r
-    case(CLUSTER_GEOMETRIC)
-     gridpoint => gridpoint_cluster_geometric
-    case(CLUSTER_GEOMETRIC_R)
-     gridpoint => gridpoint_cluster_geometric_r
+    case(CLUSTER_GEOMETRIC_ONE_END)
+     gridpoint => gridpoint_cluster_geometric_one_end
+    CASE(CLUSTER_GEOMETRIC_ONE_END_R)
+     gridpoint => gridpoint_cluster_geometric_one_end_r
+    CASE(CLUSTER_GEOMETRIC_TWO_ENDS)
+     gridpoint => gridpoint_cluster_geometric_two_ends
     case default
       gridpoint => gridpoint_cluster_two_end
     end select
@@ -200,7 +203,7 @@ module mod_initgrid
       r = r0
     endif
   end subroutine gridpoint_cluster_middle
-  subroutine gridpoint_cluster_geometric(alpha,r0,r)
+  subroutine gridpoint_cluster_geometric_one_end(alpha,r0,r)
     !
     ! geometric progression
     !
@@ -215,15 +218,30 @@ module mod_initgrid
     else
       r = r0*((1._rp-r0**(alpha))/(1._rp-r0)/alpha)**power
     endif
-  end subroutine gridpoint_cluster_geometric
-  subroutine gridpoint_cluster_geometric_r(alpha,r0,r)
+  end subroutine gridpoint_cluster_geometric_one_end
+  subroutine gridpoint_cluster_geometric_one_end_r(alpha,r0,r)
     !
     ! reversed geometric progression
     !
     implicit none
     real(rp), intent(in ) :: alpha,r0
     real(rp), intent(out) :: r
-    call gridpoint_cluster_geometric(alpha,1._rp-r0,r)
+    call gridpoint_cluster_geometric_one_end(alpha,1._rp-r0,r)
     r = 1._rp-r
-  end subroutine gridpoint_cluster_geometric_r
+  end subroutine gridpoint_cluster_geometric_one_end_r
+  subroutine gridpoint_cluster_geometric_two_ends(alpha,r0,r)
+    !
+    ! geometric progression towards each end
+    !
+    implicit none
+    real(rp), intent(in ) :: alpha,r0
+    real(rp), intent(out) :: r
+    if(r0 <= 0.5) then
+      call gridpoint_cluster_geometric_one_end(alpha/2._rp,2._rp*r0        ,r)
+      r = r/2._rp
+    else
+      call gridpoint_cluster_geometric_one_end(alpha/2._rp,2._rp*(1._rp-r0),r)
+      r = 1._rp-r/2._rp
+    endif
+  end subroutine gridpoint_cluster_geometric_two_ends
 end module mod_initgrid
