@@ -32,10 +32,10 @@ for iblock in range(1,nblocks+1):
     #
     dtype_saves = np.dtype([                                                         \
                             ('file' , 'U100'), ('variable', 'U100'),                 \
-                            ('imin' , np.int), ('jmin' , np.int), ('kmin' , np.int), \
-                            ('imax' , np.int), ('jmax' , np.int), ('kmax' , np.int), \
-                            ('istep', np.int), ('jstep', np.int), ('kstep', np.int), \
-                            ('time', np.float), ('isave', np.int)                    \
+                            ('imin' , int), ('jmin' , int), ('kmin' , int), \
+                            ('imax' , int), ('jmax' , int), ('kmax' , int), \
+                            ('istep', int), ('jstep', int), ('kstep', int), \
+                            ('time', float), ('isave', int)                    \
                            ])
     geofile  = "geometry"+blockname+".out"
     logfile  = input("Name of the log file written by CaNS [log_visu_3d"+blockname+".out]: ") or "log_visu_3d"+blockname+".out"
