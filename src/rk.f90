@@ -4,8 +4,11 @@ module mod_rk
   private
   public rk_mom,rk_scal
   contains
-  subroutine rk_mom(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp)
+  subroutine rk_mom(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,mu)
     use mod_mom  , only: momx_a,momy_a,momz_a,momx_d,momy_d,momz_d,momx_p,momy_p,momz_p
+#ifdef _NON_NEWTONIAN
+    use mod_non_newtonian, only: momx_d_nn,momy_d_nn,momz_d_nn
+#endif
     implicit none
     real(rp), intent(in   ), dimension(2) :: rkpar
     integer , intent(in   ), dimension(3) :: lo,hi
@@ -21,6 +24,7 @@ module mod_rk
 #ifdef _IMPDIFF
     real(rp),                dimension(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) :: dudtrkd,dvdtrkd,dwdtrkd
 #endif
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), optional :: mu
     real(rp) :: factor1,factor2,factor12
     integer  :: i,j,k
     !
@@ -35,9 +39,19 @@ module mod_rk
     dvdtrk(:,:,:) = 0._rp
     dwdtrk(:,:,:) = 0._rp
     !$OMP END WORKSHARE
+#ifndef _NON_NEWTONIAN
     call momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudtrk)
     call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrk)
     call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrk)
+#else
+    if(present(mu)) then
+      call momx_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu,u,v,w,dudtrk)
+      call momy_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu,u,v,w,dvdtrk)
+      call momz_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu,u,v,w,dwdtrk)
+    else
+      error stop "ERROR: variable viscosity field not provided; aborting..."
+    endif
+#endif
 #ifdef _IMPDIFF
     dudtrkd(:,:,:) = dudtrk(:,:,:)
     dvdtrkd(:,:,:) = dvdtrk(:,:,:)

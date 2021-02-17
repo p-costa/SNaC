@@ -6,6 +6,9 @@ module mod_initflow
   implicit none
   private
   public initflow,init_inflow
+#ifdef _NON_NEWTONIAN
+  public init_inflow_nn
+#endif
   contains
   subroutine initflow(inivel,is_wallturb,lo,hi,lo_g,hi_g,l,uref,lref,visc,bforce, &
                       xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
@@ -298,6 +301,56 @@ module mod_initflow
       enddo
     enddo
   end subroutine init_inflow
+  !
+#ifdef _NON_NEWTONIAN
+  function inflow_herschel_bulkley(r,lmin,lmax,rn,dpdl,kappa,tauy) result(vel)
+    real(rp), intent(in) :: r,lmin,lmax,rn,dpdl,kappa,tauy
+    real(rp) :: vel,rr,h,aux,ryield
+    rr = 2._rp*(r-(lmin+lmax)/2._rp)/(lmax-lmin) ! between -1 and +1
+    h  = (lmax-lmin)/2._rp
+    aux = 1._rp+1._rp/rn
+    vel = 1._rp/aux*(h**rn*dpdl*h/kappa)**(aux-1._rp)
+    ryield = tauy/(dpdl*h)
+    if(abs(rr) > ryield) then
+      vel = vel*((1._rp  -ryield)**aux - (abs(rr)-ryield)**aux)
+    else
+      vel = vel*((1._rp  -ryield)**aux)
+    endif
+  end function inflow_herschel_bulkley
+  !
+  subroutine init_inflow_nn(periods,lo,hi,lmin,lmax,x1c,x2c,rn,dpdl,kappa,tauy,vel)
+    !
+    ! below an inflow is calculated for a 2d plane
+    ! later this subroutine can be generalized with other shapes of
+    ! inflow velocity; by construction, the profile will not vary along
+    ! a direction that does not have Dirichlet BCs; note that
+    ! since the inflow is evaluated at the center of a face, 
+    ! there is no danger of experiencing a singularity '0._rp**0'.
+    !
+    implicit none
+    integer , intent(in ), dimension(2       ) :: periods
+    integer , intent(in ), dimension(2       ) :: lo,hi
+    real(rp), intent(in ), dimension(2       ) :: lmin,lmax
+    real(rp), intent(in ), dimension(lo(1)-1:) :: x1c
+    real(rp), intent(in ), dimension(lo(2)-1:) :: x2c
+    real(rp), intent(in ) :: rn,dpdl,kappa,tauy
+    real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:) :: vel
+    integer, dimension(2) :: q
+    integer :: i1,i2
+    ! real(rp), external :: poiseuille_square
+    ! procedure (), pointer :: inflow_function => null()
+    ! if(inflow_type == POISEUILLE) inflow_function => poiseuille_square
+    !
+    q(:) = 1
+    where(periods(:) /= 0) q(:) = 0
+    do i2 = lo(2)-1,hi(2)+1
+      do i1 = lo(1)-1,hi(1)+1
+        vel(i1,i2) = inflow_herschel_bulkley(x1c(i1),lmin(1),lmax(1),rn,dpdl,kappa,tauy)**q(1) * &
+                     inflow_herschel_bulkley(x2c(i2),lmin(2),lmax(2),rn,dpdl,kappa,tauy)**q(2)
+      enddo
+    enddo
+  end subroutine init_inflow_nn
+#endif
   !
   subroutine log_profile(lo,hi,zc,l,uref,lref,visc,p)
     implicit none

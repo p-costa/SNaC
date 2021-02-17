@@ -27,10 +27,16 @@ program snac
   use mod_common_mpi     , only: myid,myid_block,comm_block
   use mod_correc         , only: correc
   use mod_initflow       , only: initflow,init_inflow
+#ifdef _NON_NEWTONIAN
+  use mod_initflow       , only: init_inflow_nn
+#endif
   use mod_initgrid       , only: initgrid,distribute_grid,bound_grid,save_grid
   use mod_initmpi        , only: initmpi
   use mod_fillps         , only: fillps
   use mod_load           , only: load
+#ifdef _NON_NEWTONIAN
+  use mod_non_newtonian, only: strain_rate_norm,compute_viscosity
+#endif
   use mod_output         , only: out0d,out1d,write_visu_3d
   use mod_param          , only: read_input, &
                                  datadir,    &
@@ -50,6 +56,9 @@ program snac
                                  is_periodic,l_periodic,                   &
                                  lmax_max,lmin_min,lo_min,hi_max,          &
                                  hypre_tol,hypre_maxiter
+#ifdef _NON_NEWTONIAN
+  use mod_param          , only: kappa,rn,tau0,eps,dpdl_nn
+#endif
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
@@ -71,6 +80,9 @@ program snac
   integer , dimension(    3) :: ng,lo_g,hi_g,lo_1,hi_1
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
   real(rp), allocatable, dimension(:,:,:) :: velin_x,velin_y,velin_z
+#ifdef _NON_NEWTONIAN
+  real(rp), allocatable, dimension(:,:,:) :: mu
+#endif
 #ifdef _IMPDIFF
   real(rp), allocatable, dimension(:,:,:) :: uo,vo,wo
 #endif
@@ -198,6 +210,9 @@ program snac
            vo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            wo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
 #endif
+#ifdef _NON_NEWTONIAN
+  allocate(mu(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
+#endif
   allocate(dudtrko(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)), &
            dvdtrko(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)), &
            dwdtrko(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
@@ -315,6 +330,7 @@ program snac
   velin_x(:,:,:) = 0._rp
   velin_y(:,:,:) = 0._rp
   velin_z(:,:,:) = 0._rp
+#ifndef _NON_NEWTONIAN
   do idir=1,3
     do ib=0,1
       is_bound_inflow(ib,idir) = is_bound(ib,idir).and.inflow_type(ib,idir)>0.and.cbcvel(ib,idir,idir)=='D'
@@ -336,6 +352,44 @@ program snac
       endif
     enddo
   enddo
+#else
+  do idir=1,3
+    do ib=0,1
+      is_bound_inflow(ib,idir) = is_bound(ib,idir).and.inflow_type(ib,idir)>0.and.cbcvel(ib,idir,idir)=='D'
+      if(is_bound_inflow(ib,idir)) then
+        select case(idir)
+        case(1)
+          il = 2;iu = 3;iskip = 1
+          call init_inflow_nn(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                              yc,zc,rn,dpdl_nn(idir),kappa,tau0,velin_x(:,:,ib))
+          if(inivel=='poi') then ! temporary solution, then change to initflow.f90
+            do il=lo(1)-1,hi(1)+1
+              u(il,:,:) = velin_x(:,:,ib)
+            enddo
+          endif
+        case(2)
+          il = 1;iu = 3;iskip = 2
+          call init_inflow_nn(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                              xc,zc,rn,dpdl_nn(idir),kappa,tau0,velin_y(:,:,ib))
+          if(inivel=='poi') then ! temporary solution, then change to initflow.f90
+            do il=lo(2)-1,hi(2)+1
+              v(il,:,:) = velin_y(:,:,ib)
+            enddo
+          endif
+        case(3)
+          il = 1;iu = 2;iskip = 1
+          call init_inflow_nn(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                              yc,zc,rn,dpdl_nn(idir),kappa,tau0,velin_z(:,:,ib))
+          if(inivel=='poi') then ! temporary solution, then change to initflow.f90
+            do il=lo(3)-1,hi(3)+1
+              w(il,:,:) = velin_z(:,:,ib)
+            enddo
+          endif
+        end select
+      endif
+    enddo
+  enddo
+#endif
   up(:,:,:)      = 0._rp
   vp(:,:,:)      = 0._rp
   wp(:,:,:)      = 0._rp
@@ -499,8 +553,16 @@ program snac
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
       alpha = -visc*dtrk/2._rp
+#ifndef _NON_NEWTONIAN
       call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce, &
                   visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp)
+#else
+      call strain_rate_norm(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,mu)
+      call compute_viscosity(lo,hi,kappa,rn,tau0,eps,mu)
+      call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,mu)
+      call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce, &
+                  visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,mu)
+#endif
 #ifdef _IMPDIFF
       alphai = alpha**(-1)
       !
@@ -620,6 +682,10 @@ program snac
     if(mod(istep,icheck) == 0) then
       if(myid == 0) write(stdout,*) 'Checking stability and divergence...'
       !
+#ifdef _NON_NEWTONIAN
+      visc = minval(mu(:,:,:))
+      call MPI_ALLREDUCE(MPI_IN_PLACE,visc,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD)
+#endif
       call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
       dt = min(cfl*dtmax,dtmin)
       if(myid == 0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
