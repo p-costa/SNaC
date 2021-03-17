@@ -116,6 +116,121 @@ module mod_mom
     !$OMP END PARALLEL DO
   end subroutine momz_a
   !
+  subroutine momx_a_vv(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudt)
+    implicit none
+    integer , intent(in), dimension(3) :: lo,hi
+    real(rp), intent(in), dimension(lo(1)-1:) :: dxc,dxf
+    real(rp), intent(in), dimension(lo(2)-1:) :: dyf
+    real(rp), intent(in), dimension(lo(3)-1:) :: dzf
+    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in   ) :: u,v,w
+    real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(inout) :: dudt
+    real(rp) :: uuip,uuim,uvjp,uvjm,uwkp,uwkm
+    integer  :: i,j,k
+    !
+    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PRIVATE(i,j,k) &
+    !$OMP PRIVATE(uuip,uuim,uvjp,uvjm,uwkp,uwkm) &
+    !$OMP SHARED(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudt)
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+          uuip  = 0.25_rp*(u(i,j  ,k  )*dyf(j)*dzf(k) + u(i+1,j  ,k  )*dyf(j  )*dzf(k))*u(i+1,j,k)
+          uuim  = 0.25_rp*(u(i,j  ,k  )*dyf(j)*dzf(k) + u(i-1,j  ,k  )*dyf(j  )*dzf(k))*u(i-1,j,k)
+          uvjp  = 0.25_rp*(v(i,j  ,k  )*dxf(i)*dzf(k) + v(i+1,j  ,k  )*dxf(i+1)*dzf(k))*u(i,j+1,k)
+          uvjm  = 0.25_rp*(v(i,j-1,k  )*dxf(i)*dzf(k) + v(i+1,j-1,k  )*dxf(i+1)*dzf(k))*u(i,j-1,k)
+          uwkp  = 0.25_rp*(w(i,j  ,k  )*dxf(i)*dyf(j) + w(i+1,j  ,k  )*dxf(i+1)*dyf(j))*u(i,j,k+1)
+          uwkm  = 0.25_rp*(w(i,j  ,k-1)*dxf(i)*dyf(j) + w(i+1,j  ,k-1)*dxf(i+1)*dyf(j))*u(i,j,k-1)
+          !
+          ! Momentum balance
+          !
+          dudt(i,j,k) = dudt(i,j,k) + ( &
+                                       ( -uuip + uuim ) + &
+                                       ( -uvjp + uvjm ) + &
+                                       ( -uwkp + uwkm ) &
+                                      )/(dxc(i)*dyf(j)*dzf(k))
+        enddo
+      enddo
+    enddo
+    !$OMP END PARALLEL DO
+  end subroutine momx_a_vv
+  !
+  subroutine momy_a_vv(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdt)
+    implicit none
+    integer , intent(in), dimension(3) :: lo,hi
+    real(rp), intent(in), dimension(lo(1)-1:) :: dxf
+    real(rp), intent(in), dimension(lo(2)-1:) :: dyc,dyf
+    real(rp), intent(in), dimension(lo(3)-1:) :: dzf
+    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in   ) :: u,v,w
+    real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(inout) :: dvdt
+    real(rp) :: uvip,uvim,vvjp,vvjm,wvkp,wvkm
+    integer  :: i,j,k
+    !
+    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PRIVATE(i,j,k) &
+    !$OMP PRIVATE(uvip,uvim,vvjp,vvjm,wvkp,wvkm) &
+    !$OMP SHARED(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdt)
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+          uvip  = 0.25_rp*(u(i  ,j,k  )*dyf(j)*dzf(k)+u(i  ,j+1,k  )*dyf(j+1)*dzf(k))*v(i+1,j,k)
+          uvim  = 0.25_rp*(u(i-1,j,k  )*dyf(j)*dzf(k)+u(i-1,j+1,k  )*dyf(j+1)*dzf(k))*v(i-1,j,k)
+          vvjp  = 0.25_rp*(v(i  ,j,k  )*dxf(i)*dzf(k)+v(i  ,j+1,k  )*dxf(i  )*dzf(k))*v(i,j+1,k)
+          vvjm  = 0.25_rp*(v(i  ,j,k  )*dxf(i)*dzf(k)+v(i  ,j-1,k  )*dxf(i  )*dzf(k))*v(i,j-1,k)
+          wvkp  = 0.25_rp*(w(i  ,j,k  )*dyf(j)*dxf(i)+w(i  ,j+1,k  )*dyf(j+1)*dxf(i))*v(i,j,k+1)
+          wvkm  = 0.25_rp*(w(i  ,j,k-1)*dyf(j)*dxf(i)+w(i  ,j+1,k-1)*dyf(j+1)*dxf(i))*v(i,j,k-1)
+          !
+          ! Momentum balance
+          !
+          dvdt(i,j,k) = dvdt(i,j,k) + ( &
+                                       ( -uvip + uvim ) + &
+                                       ( -vvjp + vvjm ) + &
+                                       ( -wvkp + wvkm ) &
+                                      )/(dxf(i)*dyc(j)*dzf(k))
+
+        enddo
+      enddo
+    enddo
+    !$OMP END PARALLEL DO
+  end subroutine momy_a_vv
+  !
+  subroutine momz_a_vv(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdt)
+    implicit none
+    integer , intent(in), dimension(3) :: lo,hi
+    real(rp), intent(in), dimension(lo(1)-1:) :: dxf
+    real(rp), intent(in), dimension(lo(2)-1:) :: dyf
+    real(rp), intent(in), dimension(lo(3)-1:) :: dzc,dzf
+    real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(in   ) :: u,v,w
+    real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(inout) :: dwdt
+    real(rp) :: uwip,uwim,vwjp,vwjm,wwkp,wwkm
+    integer  :: i,j,k
+    !
+    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PRIVATE(i,j,k) &
+    !$OMP PRIVATE(uwip,uwim,vwjp,vwjm,wwkp,wwkm) &
+    !$OMP SHARED(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdt)
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+          uwip  = 0.25_rp*(u(i  ,j  ,k)*dzf(k)*dyf(j)+u(i  ,j  ,k+1)*dzf(k+1)*dyf(j))*w(i+1,j,k)
+          uwim  = 0.25_rp*(u(i-1,j  ,k)*dzf(k)*dyf(j)+u(i-1,j  ,k+1)*dzf(k+1)*dyf(j))*w(i+1,j,k)
+          vwjp  = 0.25_rp*(v(i  ,j  ,k)*dzf(k)*dxf(i)+v(i  ,j  ,k+1)*dzf(k+1)*dxf(i))*w(i,j+1,k)
+          vwjm  = 0.25_rp*(v(i  ,j-1,k)*dzf(k)*dxf(i)+v(i  ,j-1,k+1)*dzf(k+1)*dxf(i))*w(i,j+1,k)
+          wwkp  = 0.25_rp*(w(i  ,j  ,k)*dxf(i)*dyf(j)+w(i  ,j  ,k+1)*dxf(i  )*dyf(j))*w(i,j,k+1)
+          wwkm  = 0.25_rp*(w(i  ,j  ,k)*dxf(i)*dyf(j)+w(i  ,j  ,k-1)*dxf(i  )*dyf(j))*w(i,j,k-1)
+          !
+          ! Momentum balance
+          !
+          dwdt(i,j,k) = dwdt(i,j,k) + ( &
+                                       ( -uwip + uwim ) + &
+                                       ( -vwjp + vwjm ) + &
+                                       ( -wwkp + wwkm ) &
+                                      )/(dxf(i)*dyf(j)*dzc(k))
+        enddo
+      enddo
+    enddo
+    !$OMP END PARALLEL DO
+  end subroutine momz_a_vv
+  !
   subroutine momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudt)
     implicit none
     integer , intent(in), dimension(3) :: lo,hi
