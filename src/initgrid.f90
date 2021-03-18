@@ -211,9 +211,9 @@ module mod_initgrid
     ! geometric progression
     !
     implicit none
-    !real(rp), parameter   :: power = 1._rp/2._rp
     !real(rp), parameter   :: power = 1._rp/1._rp
-    real(rp), parameter   :: power = 1._rp/3._rp
+    real(rp), parameter   :: power = 1._rp/2._rp
+    !real(rp), parameter   :: power = 1._rp/3._rp
     real(rp), intent(in ) :: alpha,r0
     real(rp), intent(out) :: r
     if(    r0 == 1.0_rp) then

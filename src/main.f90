@@ -683,7 +683,7 @@ program snac
       if(myid == 0) write(stdout,*) 'Checking stability and divergence...'
       !
 #ifdef _NON_NEWTONIAN
-      visc = minval(mu(:,:,:))
+      visc = minval(mu(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       call MPI_ALLREDUCE(MPI_IN_PLACE,visc,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD)
 #endif
       call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
