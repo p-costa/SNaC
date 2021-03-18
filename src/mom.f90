@@ -134,12 +134,12 @@ module mod_mom
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
-          uuip  = 0.25_rp*(u(i,j  ,k  )*dyf(j)*dzf(k) + u(i+1,j  ,k  )*dyf(j  )*dzf(k))*u(i+1,j,k)
-          uuim  = 0.25_rp*(u(i,j  ,k  )*dyf(j)*dzf(k) + u(i-1,j  ,k  )*dyf(j  )*dzf(k))*u(i-1,j,k)
-          uvjp  = 0.25_rp*(v(i,j  ,k  )*dxf(i)*dzf(k) + v(i+1,j  ,k  )*dxf(i+1)*dzf(k))*u(i,j+1,k)
-          uvjm  = 0.25_rp*(v(i,j-1,k  )*dxf(i)*dzf(k) + v(i+1,j-1,k  )*dxf(i+1)*dzf(k))*u(i,j-1,k)
-          uwkp  = 0.25_rp*(w(i,j  ,k  )*dxf(i)*dyf(j) + w(i+1,j  ,k  )*dxf(i+1)*dyf(j))*u(i,j,k+1)
-          uwkm  = 0.25_rp*(w(i,j  ,k-1)*dxf(i)*dyf(j) + w(i+1,j  ,k-1)*dxf(i+1)*dyf(j))*u(i,j,k-1)
+          uuip  = 0.25_rp*(u(i,j  ,k  )*dyf(j)*dzf(k)+u(i+1,j  ,k  )*dyf(j  )*dzf(k))*u(i+1,j,k)
+          uuim  = 0.25_rp*(u(i,j  ,k  )*dyf(j)*dzf(k)+u(i-1,j  ,k  )*dyf(j  )*dzf(k))*u(i-1,j,k)
+          uvjp  = 0.25_rp*(v(i,j  ,k  )*dxf(i)*dzf(k)+v(i+1,j  ,k  )*dxf(i+1)*dzf(k))*u(i,j+1,k)
+          uvjm  = 0.25_rp*(v(i,j-1,k  )*dxf(i)*dzf(k)+v(i+1,j-1,k  )*dxf(i+1)*dzf(k))*u(i,j-1,k)
+          uwkp  = 0.25_rp*(w(i,j  ,k  )*dxf(i)*dyf(j)+w(i+1,j  ,k  )*dxf(i+1)*dyf(j))*u(i,j,k+1)
+          uwkm  = 0.25_rp*(w(i,j  ,k-1)*dxf(i)*dyf(j)+w(i+1,j  ,k-1)*dxf(i+1)*dyf(j))*u(i,j,k-1)
           !
           ! Momentum balance
           !
