@@ -135,10 +135,10 @@ module mod_non_newtonian
           dwdzp = (w(i,j,k+1)-w(i,j,k))/dzf(k+1)
           dwdzm = (w(i,j,k)-w(i,j,k-1))/dzf(k  )
           !
-          dudzp = (u(i  ,j  ,k-1)-u(i  ,j  ,k  ))/dzc(k)
-          dudzm = (u(i-1,j  ,k-1)-u(i-1,j  ,k  ))/dzc(k)
-          dvdzp = (v(i  ,j  ,k-1)-v(i  ,j  ,k  ))/dzc(k)
-          dvdzm = (v(i  ,j-1,k-1)-v(i  ,j-1,k  ))/dzc(k)
+          dudzp = (u(i  ,j  ,k+1)-u(i  ,j  ,k  ))/dzc(k)
+          dudzm = (u(i-1,j  ,k+1)-u(i-1,j  ,k  ))/dzc(k)
+          dvdzp = (v(i  ,j  ,k+1)-v(i  ,j  ,k  ))/dzc(k)
+          dvdzm = (v(i  ,j-1,k+1)-v(i  ,j-1,k  ))/dzc(k)
           !
           muxp = 0.25_rp*(mu(i,j,k)+mu(i,j,k+1)+mu(i+1,j  ,k+1)+mu(i+1,j  ,k) )
           muxm = 0.25_rp*(mu(i,j,k)+mu(i,j,k+1)+mu(i-1,j  ,k+1)+mu(i-1,j  ,k) )
