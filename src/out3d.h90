@@ -30,3 +30,5 @@
                      lo_1,hi_1,ng,[1,1,1],[ng(1),ng(2),ng(3)],[1,1,1],time,istep,w)
   call write_visu_3d(datadir,'pre_fld_'//fldnum//'_b_'//cblock//'.bin',comm_block,'log_visu_3d_b_'//cblock//'.out','Pressure_P', &
                      lo_1,hi_1,ng,[1,1,1],[ng(1),ng(2),ng(3)],[1,1,1],time,istep,p)
+  call write_visu_3d(datadir,'vis_fld_'//fldnum//'_b_'//cblock//'.bin',comm_block,'log_visu_3d_b_'//cblock//'.out','Viscosity', &
+                     lo_1,hi_1,ng,[1,1,1],[ng(1),ng(2),ng(3)],[1,1,1],time,istep,mu)
