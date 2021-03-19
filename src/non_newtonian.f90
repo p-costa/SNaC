@@ -228,9 +228,10 @@ module mod_non_newtonian
     !$OMP END PARALLEL DO
   end subroutine
   pure real(rp) function herschel_bulkley_visc(kappa,rn,tau0,eps,gamma_dot) result(visc)
+    real(rp), parameter :: small = epsilon(0._rp)*10._rp**(precision(0._rp)/2._rp)
     real(rp), intent(in) :: kappa,rn,tau0,eps,gamma_dot
     real(rp) :: gamma_dot_aux
-    gamma_dot_aux = gamma_dot + tiny(1._rp)
+    gamma_dot_aux = gamma_dot + small
     visc = kappa*gamma_dot_aux**(rn-1._rp) + tau0*(1._rp-exp(-gamma_dot_aux/eps))/gamma_dot_aux
   end function herschel_bulkley_visc
 end module mod_non_newtonian
