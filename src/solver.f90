@@ -12,7 +12,20 @@ module mod_solver
   public init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers, &
          add_constant_to_n_diagonals,solve_n_helmholtz_2d, &
          finalize_n_matrices,finalize_n_solvers
+  type alltoallw
+    integer            :: counts
+    integer            :: disps
+    type(MPI_DATATYPE) :: types
+  end type alltoallw
 #endif
+!  ! parameterized derived types like below would make more sense but
+!  ! they are very well supported yet
+!  type alltoallw(n) ! Parameterized derived types are not working so well yet!
+!    integer, len :: n
+!    integer           , dimension(n) :: counts
+!    integer           , dimension(n) :: disps
+!    type(MPI_DATATYPE), dimension(n) :: types
+!  end type alltoallw
   integer, parameter :: HYPRESolverSMG      = 1, &
                         HYPRESolverPFMG     = 2, &
                         HYPRESolverGMRES    = 3, &
@@ -876,5 +889,84 @@ module mod_solver
       call finalize_solver(asolver)
     enddo
   end subroutine solve_n_helmholtz_2d_old
+  subroutine init_transpose(lo_idir,idir,dims,n_p,n_s,transpose_params,comm_slab)
+    use mod_common_mpi, only: myid
+    implicit none
+    integer, intent(in)                            :: lo_idir,idir
+    integer, intent(in), dimension(3)              :: dims,n_p,n_s
+    type(alltoallw), dimension(product(dims),2), intent(out) :: transpose_params
+    type(MPI_COMM), intent(out)                    :: comm_slab
+    integer, dimension(3) :: n_i
+    type(MPI_DATATYPE) :: type_sub_p,type_sub_s
+    integer(MPI_ADDRESS_KIND) :: lb, ext_rp
+    integer, dimension(3,3) :: eye
+    integer :: i,j,k,ii,jj,kk,irank
+    !
+    eye(:,:) = 0
+    do i=1,3
+      eye(i,i) = 1
+    enddo
+    select case(idir)
+      case(1)
+        n_i(:) = [n_s(1),n_p(2),n_p(3)]
+      case(2)
+        n_i(:) = [n_p(1),n_s(2),n_p(3)]
+      case(3)
+        n_i(:) = [n_p(1),n_p(2),n_s(3)]
+    end select
+    transpose_params(:,:)%counts = 1
+    call MPI_TYPE_GET_EXTENT(MPI_REAL_RP,lb,ext_rp)
+    irank = 0
+    do k=0,dims(3)-1
+      do j=0,dims(2)-1
+        do i=0,dims(1)-1
+          ii = irank*n_s(1)*eye(1,idir) + 1
+          jj = irank*n_s(2)*eye(2,idir) + 1
+          kk = irank*n_s(3)*eye(3,idir) + 1
+          transpose_params(irank+1,1)%disps = extent_f(ii,jj,kk,n_p)*ext_rp
+          ii = i*n_p(1)*(1-eye(1,idir)) + 1
+          jj = j*n_p(2)*(1-eye(2,idir)) + 1
+          kk = k*n_p(3)*(1-eye(3,idir)) + 1
+          transpose_params(irank+1,2)%disps = extent_f(ii,jj,kk,n_s)*ext_rp
+          irank = irank + 1
+        enddo
+      enddo
+    enddo
+    call MPI_TYPE_CREATE_SUBARRAY(3,n_p,n_i,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_p)
+    call MPI_TYPE_CREATE_SUBARRAY(3,n_s,n_i,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_s)
+    call MPI_TYPE_COMMIT(type_sub_p)
+    call MPI_TYPE_COMMIT(type_sub_s)
+    transpose_params(:,1)%types = type_sub_p
+    transpose_params(:,2)%types = type_sub_s
+    !
+    ! determine communicator pertaining to a slab (share the same value of lower bound in the slab-decomposed direction)
+    !
+    call MPI_COMM_SPLIT(MPI_COMM_WORLD,lo_idir,myid,comm_slab)
+  end subroutine init_transpose
+  pure integer function extent_f(i,j,k,n) ! memory position of array with point i,j,k assuming Fortran ordering
+     implicit none
+     integer, intent(in) :: i,j,k,n(3)
+     extent_f = (i-1) + (j-1)*n(1) + (k-1)*n(1)*n(2)
+  end function extent_f
+  subroutine transpose_slab(idir,nhi,nho,nrank,t_param,comm_block,arr_in,arr_out)
+    implicit none
+    integer, intent(in)                            :: idir,nhi,nho,nrank
+    type(alltoallw), dimension(nrank,2), intent(in) :: t_param
+    type(MPI_COMM), intent(in)                    :: comm_block
+    real(rp), intent(in ), dimension(1-nhi:,1-nhi:,1-nhi:) :: arr_in
+    real(rp), intent(out), dimension(1-nho:,1-nho:,1-nho:) :: arr_out
+    integer :: is,ir
+    !
+    if(idir == 1) then
+      is = 1
+      ir = 2
+    else
+      is = 2
+      ir = 1
+    endif
+    call MPI_ALLTOALLW(arr_in( 1,1,1),t_param(:,is)%counts,t_param(:,is)%disps,t_param(:,is)%types, &
+                       arr_out(1,1,1),t_param(:,ir)%counts,t_param(:,ir)%disps,t_param(:,ir)%types, &
+                       comm_block)
+  end subroutine transpose_slab
 #endif
 end module mod_solver

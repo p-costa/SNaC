@@ -405,6 +405,24 @@ program snac
   allocate(lambda_p(hi(idir)-lo(idir)+1))
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcpre(:,idir),.true.,dl(0,idir),arrplan_p,normfft_p,lambda_p)
   alpha_lambda_p = 0._rp
+!!!!#if defined (_FFT_USE_SLABS)
+!!!!   if(mod((ng(idir)),product(dims(il:iu:iskip))) == 0) then
+!!!!     n_p = hi(:)-lo(:)+1
+!!!!#ifdef _FFT_X
+!!!!     n_s = [ng(idir)/product(dims),ng(il),ng(iu)]
+!!!!#elif  _FFT_Y
+!!!!     n_s = [ng(il),ng(idir)/product(dims),ng(iu)]
+!!!!#elif  _FFT_Z
+!!!!     n_s = [ng(il),ng(iu),ng(idir)/product(dims)]
+!!!!#endif
+!!!!     call init_transpose(lo(idir),idir,dims,n_p,n_s,t_params,comm_slab)
+!!!!   else
+!!!!   endif
+!!!!#endif
+!!!! TODO --> PREPARE POISSON SOLVER --> WILL NEED TO POINTERS USE DXG DYG DZG, DEFINE HI_S AND LO_S, COMM_SLAB (AND HAVE COMM AS INPUT for HYPRE), AND THAT's IT!
+!!!!                                     THEN JUST SANDWISH SOLVER WITH TRANSPOSES, AND WE'RE DONE! :)
+!!!!                                     ADD IFDEF _FFT_USE_SLABS above where pointers to the (global) grid are initialized
+!!!!                                     NEED TO DISTRIBUTE lambda_p among the slabs, then lo(il:iu:iskip) will be lo_g(il:iu:iskip)
   allocate(psolver_fft(hi(idir)-lo(idir)+1))
   call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
