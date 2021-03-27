@@ -11,7 +11,8 @@ module mod_solver
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   public init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers, &
          add_constant_to_n_diagonals,solve_n_helmholtz_2d, &
-         finalize_n_matrices,finalize_n_solvers
+         finalize_n_matrices,finalize_n_solvers,init_comm_slab, &
+         init_transpose_slab,transpose_slab,alltoallw
   type alltoallw
     integer            :: counts
     integer            :: disps
@@ -640,7 +641,7 @@ module mod_solver
 #endif
     integer(8), pointer :: solver,mat,rhs,sol
     integer   , pointer :: stype
-    integer :: i_out,ii,i1,i2,n
+    integer :: i_out,ii,n
     do i_out=lo_out,hi_out
       n = i_out-lo_out+1 
       solver  => asolver(n)%solver
@@ -891,9 +892,9 @@ module mod_solver
       call finalize_solver(asolver)
     enddo
   end subroutine solve_n_helmholtz_2d_old
-  subroutine init_transpose(lo_idir,idir,dims,n_p,n_s,transpose_params)
+  subroutine init_transpose_slab(idir,dims,n_p,n_s,transpose_params)
     implicit none
-    integer, intent(in)                            :: lo_idir,idir
+    integer, intent(in)                            :: idir
     integer, intent(in), dimension(3)              :: dims,n_p,n_s
     type(alltoallw), dimension(product(dims),2), intent(out) :: transpose_params
     integer, dimension(3) :: n_i
@@ -938,7 +939,7 @@ module mod_solver
     call MPI_TYPE_COMMIT(type_sub_s)
     transpose_params(:,1)%types = type_sub_p
     transpose_params(:,2)%types = type_sub_s
-  end subroutine init_transpose
+  end subroutine init_transpose_slab
   pure integer function extent_f(i,j,k,n) ! memory position of array with point i,j,k assuming Fortran ordering
      implicit none
      integer, intent(in) :: i,j,k,n(3)
@@ -952,14 +953,15 @@ module mod_solver
     do i=1,ng_idir
       icolor = MPI_UNDEFINED
       if(i >= lo_s_idir .and. i <= hi_s_idir) icolor = 1
+      ! n.b. -- order of ranks could be set by e.g. memory layout (i-1 + (j-1)*n(1) + (k-1)*n(1)*n(2)*k)
       call MPI_COMM_SPLIT(MPI_COMM_WORLD,icolor,myid,comms_slab(i))
     enddo
   end subroutine init_comm_slab
-  subroutine transpose_slab(idir,nhi,nho,nrank,t_param,comm_block,arr_in,arr_out)
+  subroutine transpose_slab(idir,nhi,nho,t_param,comm_block,arr_in,arr_out)
     implicit none
-    integer, intent(in)                            :: idir,nhi,nho,nrank
-    type(alltoallw), dimension(nrank,2), intent(in) :: t_param
-    type(MPI_COMM), intent(in)                    :: comm_block
+    integer, intent(in)                            :: idir,nhi,nho
+    type(alltoallw), dimension(:,:), intent(in)    :: t_param
+    type(MPI_COMM), intent(in)                     :: comm_block
     real(rp), intent(in ), dimension(1-nhi:,1-nhi:,1-nhi:) :: arr_in
     real(rp), intent(out), dimension(1-nho:,1-nho:,1-nho:) :: arr_out
     integer :: is,ir
