@@ -713,7 +713,7 @@ module mod_solver
     real(rp)          , intent(in   ), target, dimension(lo(1)-1:) :: dl1_1,dl1_2
     real(rp)          , intent(in   ), target, dimension(lo(2)-1:) :: dl2_1,dl2_2
     real(rp)          , intent(in   ), dimension(:) :: lambda
-    type(MPI_COMM)    , intent(in   )               :: comm
+    type(MPI_COMM)    , intent(in   ), dimension(:) :: comm
     type(hypre_solver), intent(inout), dimension(:) :: asolver
     type(hypre_solver) :: asolver_aux
     integer :: i_out,q
@@ -721,7 +721,7 @@ module mod_solver
       q = i_out-lo_out+1
       asolver_aux = asolver(q)
       call init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                          dl1_1,dl1_2,dl2_1,dl2_2,comm,asolver_aux)
+                          dl1_1,dl1_2,dl2_1,dl2_2,comm(q),asolver_aux)
       call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],lambda(q),asolver_aux%mat)
       asolver(q) = asolver_aux
     enddo
@@ -891,13 +891,11 @@ module mod_solver
       call finalize_solver(asolver)
     enddo
   end subroutine solve_n_helmholtz_2d_old
-  subroutine init_transpose(lo_idir,idir,dims,n_p,n_s,transpose_params,comm_slab)
-    use mod_common_mpi, only: myid
+  subroutine init_transpose(lo_idir,idir,dims,n_p,n_s,transpose_params)
     implicit none
     integer, intent(in)                            :: lo_idir,idir
     integer, intent(in), dimension(3)              :: dims,n_p,n_s
     type(alltoallw), dimension(product(dims),2), intent(out) :: transpose_params
-    type(MPI_COMM), intent(out)                    :: comm_slab
     integer, dimension(3) :: n_i
     type(MPI_DATATYPE) :: type_sub_p,type_sub_s
     integer(MPI_ADDRESS_KIND) :: lb, ext_rp
@@ -940,16 +938,23 @@ module mod_solver
     call MPI_TYPE_COMMIT(type_sub_s)
     transpose_params(:,1)%types = type_sub_p
     transpose_params(:,2)%types = type_sub_s
-    !
-    ! determine communicator pertaining to a slab (share the same value of lower bound in the slab-decomposed direction)
-    !
-    call MPI_COMM_SPLIT(MPI_COMM_WORLD,lo_idir,myid,comm_slab)
   end subroutine init_transpose
   pure integer function extent_f(i,j,k,n) ! memory position of array with point i,j,k assuming Fortran ordering
      implicit none
      integer, intent(in) :: i,j,k,n(3)
      extent_f = (i-1) + (j-1)*n(1) + (k-1)*n(1)*n(2)
   end function extent_f
+  subroutine init_comm_slab(ng_idir,lo_s_idir,hi_s_idir,myid,comms_slab)
+    implicit none
+    integer, intent(in) :: ng_idir,lo_s_idir,hi_s_idir,myid
+    type(MPI_COMM), dimension(ng_idir), intent(out) :: comms_slab
+    integer :: i,icolor
+    do i=1,ng_idir
+      icolor = MPI_UNDEFINED
+      if(i >= lo_s_idir .and. i <= hi_s_idir) icolor = 1
+      call MPI_COMM_SPLIT(MPI_COMM_WORLD,icolor,myid,comms_slab(i))
+    enddo
+  end subroutine init_comm_slab
   subroutine transpose_slab(idir,nhi,nho,nrank,t_param,comm_block,arr_in,arr_out)
     implicit none
     integer, intent(in)                            :: idir,nhi,nho,nrank

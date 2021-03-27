@@ -114,6 +114,7 @@ program snac
   real(rp), allocatable, dimension(:) :: lambda_p
   real(rp)                            :: alpha_lambda_p
   type(hypre_solver), allocatable, dimension(:) :: psolver_fft
+  type(MPI_COMM)    , allocatable, dimension(:) :: comm_fft
 #ifdef _IMPDIFF
   real(rp), pointer, dimension(:)     :: dlu1_1,dlu1_2,dlu2_1,dlu2_2, &
                                          dlv1_1,dlv1_2,dlv2_1,dlv2_2, &
@@ -127,6 +128,10 @@ program snac
   type(hypre_solver), allocatable, dimension(:) :: usolver_fft, &
                                                    vsolver_fft, &
                                                    wsolver_fft
+#endif
+#ifdef _FFT_USE_SLABS
+  real(rp), pointer, dimension(:)     :: dl1_1_g,dl1_2_g,dl2_1_g,dl2_2_g
+  integer , dimension(3) :: n_s,n_p,lo_s,hi_s
 #endif
 #endif
   !
@@ -350,6 +355,29 @@ program snac
   wo(:,:,:) = 0._rp
   alphaoi = 0._rp
 #endif
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+#ifdef _FFT_USE_SLABS
+  if(mod((ng(idir)),product(dims(il:iu:iskip))) == 0) then
+    n_p = hi(:)-lo(:)+1
+#ifdef _FFT_X
+    n_s  = [ng(idir)/product(dims),ng(il),ng(iu)]
+#elif  _FFT_Y
+    n_s = [ng(il),ng(idir)/product(dims),ng(iu)]
+#elif  _FFT_Z
+    n_s = [ng(il),ng(iu),ng(idir)/product(dims)]
+#endif
+  else
+    if(myid == 0) write(stderr,*) 'ERROR: homogeneous direction needs to be divisable by the number of tasks in each block.'
+    if(myid == 0) write(stderr,*) 'Error triggered for block ', my_block, '.'
+    if(myid == 0) write(stderr,*) 'Aborting...'
+    call MPI_FINALIZE()
+    stop
+    ! NOTE -- RIGHT NOW I ASSUME THE SAME N_S FOR ALL, I WILL NEED TO RELAX THIS RESTRICTION! SOLUTION -- ONE COMM PER PLANE!
+  endif
+  lo_s = n_s(:);lo_s(idir) = myid_block*n_s(idir)   + 1
+  hi_s = n_s(:);hi_s(idir) = lo_s(idir) + n_s(idir) - 1
+#endif
+#endif
   !
   ! post-process and write initial condition
   !
@@ -369,29 +397,59 @@ program snac
 #ifdef _FFT_X
   idir = 1
   il = 2;iu = 3;iskip = 1
+#ifndef _FFT_USE_SLABS
   dl1_1  => dyc;dl1_2  => dyf;dl2_1  => dzc;dl2_2  => dzf
+#else
+  dl1_1  => dyc_g;dl1_2  => dyf_g;dl2_1  => dzc_g;dl2_2  => dzf_g
+#endif
 #ifdef _IMPDIFF
+#ifndef _FFT_USE_SLABS
   dlu1_1 => dyc;dlu1_2 => dyf;dlu2_1 => dzc;dlu2_2 => dzf
   dlv1_1 => dyf;dlv1_2 => dyc;dlv2_1 => dzc;dlv2_2 => dzf
   dlw1_1 => dyc;dlw1_2 => dyf;dlw2_1 => dzf;dlw2_2 => dzc
+#else
+  dlu1_1 => dyc_g;dlu1_2 => dyf_g;dlu2_1 => dzc_g;dlu2_2 => dzf_g
+  dlv1_1 => dyf_g;dlv1_2 => dyc_g;dlv2_1 => dzc_g;dlv2_2 => dzf_g
+  dlw1_1 => dyc_g;dlw1_2 => dyf_g;dlw2_1 => dzf_g;dlw2_2 => dzc_g
+#endif
 #endif
 #elif  _FFT_Y
   idir = 2
   il = 1;iu = 3;iskip = 2
+#ifndef _FFT_USE_SLABS
   dl1_1  => dxc;dl1_2  => dxf;dl2_1  => dzc;dl2_2  => dzf
+#else
+  dl1_1  => dxc_g;dl1_2  => dxf_g;dl2_1  => dzc_g;dl2_2  => dzf_g
+#endif
 #ifdef _IMPDIFF
+#ifndef _FFT_USE_SLABS
   dlu1_1 => dxf;dlu1_2 => dxc;dlu2_1 => dzc;dlu2_2 => dzf
   dlv1_1 => dxc;dlv1_2 => dxf;dlv2_1 => dzc;dlv2_2 => dzf
   dlw1_1 => dxc;dlw1_2 => dxf;dlw2_1 => dzf;dlw2_2 => dzc
+#else
+  dlu1_1 => dxf_g;dlu1_2 => dxc_g;dlu2_1 => dzc_g;dlu2_2 => dzf_g
+  dlv1_1 => dxc_g;dlv1_2 => dxf_g;dlv2_1 => dzc_g;dlv2_2 => dzf_g
+  dlw1_1 => dxc_g;dlw1_2 => dxf_g;dlw2_1 => dzf_g;dlw2_2 => dzc_g
+#endif
 #endif
 #elif  _FFT_Z
   idir = 3
   il = 1;iu = 2;iskip = 1
+#ifndef _FFT_USE_SLABS
   dl1_1  => dxc;dl1_2  => dxf;dl2_1  => dyc;dl2_2  => dyf
+#else
+  dl1_1  => dxc_g;dl1_2  => dxf_g;dl2_1  => dyc_g;dl2_2  => dyf_g
+#endif
 #ifdef _IMPDIFF
+#ifndef _FFT_USE_SLABS
   dlu1_1 => dxf;dlu1_2 => dxc;dlu2_1 => dyc;dlu2_2 => dyf
   dlv1_1 => dxc;dlv1_2 => dxf;dlv2_1 => dyf;dlv2_2 => dyc
   dlw1_1 => dxc;dlw1_2 => dxf;dlw2_1 => dyc;dlw2_2 => dyf
+#else
+  dlu1_1 => dxf_g;dlu1_2 => dxc_g;dlu2_1 => dyc_g;dlu2_2 => dyf_g
+  dlv1_1 => dxc_g;dlv1_2 => dxf_g;dlv2_1 => dyf_g;dlv2_2 => dyc_g
+  dlw1_1 => dxc_g;dlw1_2 => dxf_g;dlw2_1 => dyc_g;dlw2_2 => dyf_g
+#endif
 #endif
 #endif
 #endif
@@ -402,32 +460,32 @@ program snac
   call init_bc_rhs(cbcpre,bcpre,dl,is_bound,is_centered,lo,hi,periods, &
                    dxc,dxf,dyc,dyf,dzc,dzf,rhsp%x,rhsp%y,rhsp%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+  allocate(comm_fft(hi(idir)-lo(idir)+1))
+  comm_fft(:) = MPI_COMM_WORLD
   allocate(lambda_p(hi(idir)-lo(idir)+1))
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcpre(:,idir),.true.,dl(0,idir),arrplan_p,normfft_p,lambda_p)
   alpha_lambda_p = 0._rp
-!!!!#if defined (_FFT_USE_SLABS)
-!!!!   if(mod((ng(idir)),product(dims(il:iu:iskip))) == 0) then
-!!!!     n_p = hi(:)-lo(:)+1
-!!!!#ifdef _FFT_X
-!!!!     n_s = [ng(idir)/product(dims),ng(il),ng(iu)]
-!!!!#elif  _FFT_Y
-!!!!     n_s = [ng(il),ng(idir)/product(dims),ng(iu)]
-!!!!#elif  _FFT_Z
-!!!!     n_s = [ng(il),ng(iu),ng(idir)/product(dims)]
-!!!!#endif
-!!!!     call init_transpose(lo(idir),idir,dims,n_p,n_s,t_params,comm_slab)
-!!!!   else
-!!!!   endif
-!!!!#endif
-!!!! TODO --> PREPARE POISSON SOLVER --> WILL NEED TO POINTERS USE DXG DYG DZG, DEFINE HI_S AND LO_S, COMM_SLAB (AND HAVE COMM AS INPUT for HYPRE), AND THAT's IT!
-!!!!                                     THEN JUST SANDWISH SOLVER WITH TRANSPOSES, AND WE'RE DONE! :)
-!!!!                                     ADD IFDEF _FFT_USE_SLABS above where pointers to the (global) grid are initialized
-!!!!                                     NEED TO DISTRIBUTE lambda_p among the slabs, then lo(il:iu:iskip) will be lo_g(il:iu:iskip)
+#if defined (_FFT_USE_SLABS)
+  call init_transpose(lo(idir),idir,dims,n_p,n_s,t_params)
+  call init_comm_slab(ng(idir),lo_s(idir),hi_s(idir),myid,comms_s)
+  allocate(lambda_p(hi_s(idir)-lo_s(idir)+1))
+  lambda_p_s(:) = lambda_p(lo_s(idir):hi_s(idir))
+  allocate(psolver_fft(hi_s(idir)-lo_s(idir)+1))
+  call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
+                          is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          lo_s(idir),hi_s(idir),lo_s(il:iu:iskip),hi_s(il:iu:iskip),periods(il:iu:iskip), &
+                          dl1_1,dl1_2,dl2_1,dl2_2,lambda_p_s,comms_s,psolver_fft)
+#endif
+!!!! TODO --> PREPARE POISSON SOLVER -> THEN JUST SANDWISH SOLVER WITH TRANSPOSES, AND WE'RE DONE! :)
+!!!!                                 -> NEED TO DISTRIBUTE lambda_p among the slabs, then lo(il:iu:iskip) will be lo_g(il:iu:iskip) -> DONE!
+!!!!                                 -> init_n_2d_matrices need to take an array of communicators, one for each matrix -> DONE!
+!!!!                                    because blocks with more ranks will have more planes to solve, and will need to work more;
+!!!!                                    they need to be allowed to have more slabs
   allocate(psolver_fft(hi(idir)-lo(idir)+1))
   call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo(idir),hi(idir),lo(il:iu:iskip),hi(il:iu:iskip),periods(il:iu:iskip), &
-                          dl1_1,dl1_2,dl2_1,dl2_2,lambda_p,MPI_COMM_WORLD,psolver_fft)
+                          dl1_1,dl1_2,dl2_1,dl2_2,lambda_p,comm_fft,psolver_fft)
   call create_n_solvers(hi(idir)-lo(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver_fft)
   call setup_n_solvers(hi(idir)-lo(idir)+1,psolver_fft)
 #else
@@ -453,7 +511,7 @@ program snac
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo(idir),hiu(idir),lo(il:iu:iskip),hiu(il:iu:iskip),periods(il:iu:iskip), &
-                          dlu1_1,dlu1_2,dlu2_1,dlu2_2,lambda_u,MPI_COMM_WORLD,usolver_fft)
+                          dlu1_1,dlu1_2,dlu2_1,dlu2_2,lambda_u,comm_fft,usolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,is_centered,lo,hiu,periods, &
                       dxf,dxc,dyc,dyf,dzc,dzf,usolver)
@@ -474,7 +532,7 @@ program snac
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo(idir),hiv(idir),lo(il:iu:iskip),hiv(il:iu:iskip),periods(il:iu:iskip), &
-                          dlv1_1,dlv1_2,dlv2_1,dlv2_2,lambda_v,MPI_COMM_WORLD,vsolver_fft)
+                          dlv1_1,dlv1_2,dlv2_1,dlv2_2,lambda_v,comm_fft,vsolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,is_centered,lo,hiv,periods, &
                       dxc,dxf,dyf,dyc,dzc,dzf,vsolver)
@@ -495,7 +553,7 @@ program snac
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo(idir),hiw(idir),lo(il:iu:iskip),hiw(il:iu:iskip),periods(il:iu:iskip), &
-                          dlw1_1,dlw1_2,dlw2_1,dlw2_2,lambda_w,MPI_COMM_WORLD,wsolver_fft)
+                          dlw1_1,dlw1_2,dlw2_1,dlw2_2,lambda_w,comm_fft,wsolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,is_centered,lo,hiw,periods, &
                       dxc,dxf,dyc,dyf,dzf,dzc,wsolver)
