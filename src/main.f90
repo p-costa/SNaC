@@ -427,7 +427,7 @@ program snac
   call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo(idir),hi(idir),lo(il:iu:iskip),hi(il:iu:iskip),periods(il:iu:iskip), &
-                          dl1_1,dl1_2,dl2_1,dl2_2,lambda_p,psolver_fft)
+                          dl1_1,dl1_2,dl2_1,dl2_2,lambda_p,MPI_COMM_WORLD,psolver_fft)
   call create_n_solvers(hi(idir)-lo(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver_fft)
   call setup_n_solvers(hi(idir)-lo(idir)+1,psolver_fft)
 #else
@@ -453,7 +453,7 @@ program snac
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo(idir),hiu(idir),lo(il:iu:iskip),hiu(il:iu:iskip),periods(il:iu:iskip), &
-                          dlu1_1,dlu1_2,dlu2_1,dlu2_2,lambda_u,usolver_fft)
+                          dlu1_1,dlu1_2,dlu2_1,dlu2_2,lambda_u,MPI_COMM_WORLD,usolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,is_centered,lo,hiu,periods, &
                       dxf,dxc,dyc,dyf,dzc,dzf,usolver)
@@ -474,7 +474,7 @@ program snac
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo(idir),hiv(idir),lo(il:iu:iskip),hiv(il:iu:iskip),periods(il:iu:iskip), &
-                          dlv1_1,dlv1_2,dlv2_1,dlv2_2,lambda_v,vsolver_fft)
+                          dlv1_1,dlv1_2,dlv2_1,dlv2_2,lambda_v,MPI_COMM_WORLD,vsolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,is_centered,lo,hiv,periods, &
                       dxc,dxf,dyf,dyc,dzc,dzf,vsolver)
@@ -495,7 +495,7 @@ program snac
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo(idir),hiw(idir),lo(il:iu:iskip),hiw(il:iu:iskip),periods(il:iu:iskip), &
-                          dlw1_1,dlw1_2,dlw2_1,dlw2_2,lambda_w,wsolver_fft)
+                          dlw1_1,dlw1_2,dlw2_1,dlw2_2,lambda_w,MPI_COMM_WORLD,wsolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,is_centered,lo,hiw,periods, &
                       dxc,dxf,dyc,dyf,dzf,dzc,wsolver)

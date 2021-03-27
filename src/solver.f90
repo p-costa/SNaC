@@ -498,7 +498,7 @@ module mod_solver
   end subroutine finalize_matrix
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   subroutine init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                            dl1_1,dl1_2,dl2_1,dl2_2,asolver)
+                            dl1_1,dl1_2,dl2_1,dl2_2,comm,asolver)
     !
     ! description
     !
@@ -513,6 +513,7 @@ module mod_solver
     integer           , intent(in ), dimension(    2) :: lo,hi,periods
     real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dl1_1,dl1_2
     real(rp)          , intent(in ), target, dimension(lo(2)-1:) :: dl2_1,dl2_2
+    type(MPI_COMM)    , intent(in )                   :: comm
     type(hypre_solver), intent(out)                              :: asolver
     integer, dimension(2         ) :: qqq
     integer, dimension(2,nstencil) :: offsets
@@ -523,7 +524,7 @@ module mod_solver
     real(rp) :: cc,c1m,c1p,c2m,c2p
     integer            :: comm_hypre
     !
-    comm_hypre = MPI_COMM_WORLD%MPI_VAL
+    comm_hypre = comm%MPI_VAL
     !
     qqq(:) = 0
     where(.not.is_centered(:)) qqq(:) = 1
@@ -700,7 +701,7 @@ module mod_solver
     enddo
   end subroutine solve_n_helmholtz_2d
   subroutine init_n_2d_matrices(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_out,hi_out,lo,hi,periods, &
-                                dl1_1,dl1_2,dl2_1,dl2_2,lambda,asolver)
+                                dl1_1,dl1_2,dl2_1,dl2_2,lambda,comm,asolver)
     character(len=1)  , intent(in   ), dimension(0:1,2) :: cbc
     real(rp)          , intent(in   ), dimension(0:1,2) ::  bc
     real(rp)          , intent(in   ), dimension(0:1,2) ::  dl
@@ -712,6 +713,7 @@ module mod_solver
     real(rp)          , intent(in   ), target, dimension(lo(1)-1:) :: dl1_1,dl1_2
     real(rp)          , intent(in   ), target, dimension(lo(2)-1:) :: dl2_1,dl2_2
     real(rp)          , intent(in   ), dimension(:) :: lambda
+    type(MPI_COMM)    , intent(in   )               :: comm
     type(hypre_solver), intent(inout), dimension(:) :: asolver
     type(hypre_solver) :: asolver_aux
     integer :: i_out,q
@@ -719,7 +721,7 @@ module mod_solver
       q = i_out-lo_out+1
       asolver_aux = asolver(q)
       call init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                          dl1_1,dl1_2,dl2_1,dl2_2,asolver_aux)
+                          dl1_1,dl1_2,dl2_1,dl2_2,comm,asolver_aux)
       call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],lambda(q),asolver_aux%mat)
       asolver(q) = asolver_aux
     enddo
