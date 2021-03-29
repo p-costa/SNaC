@@ -350,6 +350,40 @@ program snac
   call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),is_periodic(1),lo_min(1),hi_max(1),dxf,dxc)
   call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),is_periodic(2),lo_min(2),hi_max(2),dyf,dyc)
   call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),is_periodic(3),lo_min(3),hi_max(3),dzf,dzc)
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+#ifdef _FFT_USE_SLABS
+  if(cbcpre(0,1) == 'F') then
+    dxc_g(lo(1)-1) = dxc(lo(1)-1)
+    dxf_g(lo(1)-1) = dxf(lo(1)-1)
+  endif
+  if(cbcpre(1,1) == 'F') then
+    dxc_g(hi(1)  ) = dxc(hi(1)  )
+    dxf_g(hi(1)  ) = dxf(hi(1)  )
+    dxc_g(hi(1)+1) = dxc(hi(1)+1)
+    dxf_g(hi(1)+1) = dxf(hi(1)+1)
+  endif
+  if(cbcpre(0,2) == 'F') then
+    dyc_g(lo(2)-1) = dyc(lo(2)-1)
+    dyf_g(lo(2)-1) = dyf(lo(2)-1)
+  endif
+  if(cbcpre(1,2) == 'F') then
+    dyc_g(hi(2)  ) = dyc(hi(2)  )
+    dyf_g(hi(2)  ) = dyf(hi(2)  )
+    dyc_g(hi(2)+1) = dyc(hi(2)+1)
+    dyf_g(hi(2)+1) = dyf(hi(2)+1)
+  endif
+  if(cbcpre(0,3) == 'F') then
+    dyc_g(lo(3)-1) = dyc(lo(3)-1)
+    dyf_g(lo(3)-1) = dyf(lo(3)-1)
+  endif
+  if(cbcpre(1,3) == 'F') then
+    dyc_g(hi(3)  ) = dyc(hi(3)  )
+    dyf_g(hi(3)  ) = dyf(hi(3)  )
+    dyc_g(hi(3)+1) = dyc(hi(3)+1)
+    dyf_g(hi(3)+1) = dyf(hi(3)+1)
+  endif
+#endif
+#endif
   is_uniform_grid = all(dzf(:) == dzf(lo(3))) .and. &
                     all(dyf(:) == dyf(lo(2))) .and. &
                     all(dxf(:) == dxf(lo(1))) .and. &
@@ -514,9 +548,12 @@ program snac
   comms_fft(:) = MPI_COMM_WORLD
   lambda_p_a(:) = lambda_p
 #else
+  do ib=1,3 ! determine is_bound pertaining to the slabs
+    is_bound_a(:,ib) = .false.
+    where(cbcpre(0:1,ib) /= 'F') is_bound_a(0:1,ib) = .true.
+  enddo
   call init_comm_slab(lo(idir),hi(idir),lo_s(idir),hi_s(idir),myid,comms_fft)
   lambda_p_a(:) = lambda_p(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
-  is_bound_a(:,:) = is_bound(:,:).or..true.
   call init_transpose_slab(idir,dims,n_p,n_s,t_params)
 #endif
   call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &

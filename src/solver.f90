@@ -1,6 +1,6 @@
 module mod_solver
   use mpi_f08
-  use mod_common_mpi, only: ierr,myid
+  use mod_common_mpi, only: ierr
   use mod_types
   implicit none
   private
@@ -962,19 +962,19 @@ module mod_solver
     type(MPI_COMM), dimension(hi_s_idir-lo_s_idir+1), intent(out) :: comms_slab
     type(MPI_COMM) :: comm
     integer :: i,n,icolor
-    !do i=lo_idir,hi_idir
-    !  n = i-lo_s_idir+1
-    !  icolor = MPI_UNDEFINED
-    !  if( i >= lo_s_idir .and. i <= hi_s_idir) icolor=i
-    !  ! n.b. -- order of ranks could be set by e.g. memory layout (i-1 + (j-1)*n(1) + (k-1)*n(1)*n(2)*k)
-    !  call MPI_COMM_SPLIT(MPI_COMM_WORLD,icolor,myid,comm)
-    !  if(i >= lo_s_idir .and. i <= hi_s_idir) comms_slab(n) = comm
-    !enddo
-    do i=lo_s_idir,hi_s_idir
+    do i=lo_idir,hi_idir
       n = i-lo_s_idir+1
+      icolor = MPI_UNDEFINED
+      if( i >= lo_s_idir .and. i <= hi_s_idir) icolor=i
       ! n.b. -- order of ranks could be set by e.g. memory layout (i-1 + (j-1)*n(1) + (k-1)*n(1)*n(2)*k)
-      call MPI_COMM_SPLIT(MPI_COMM_WORLD,i,myid,comms_slab(n))
+      call MPI_COMM_SPLIT(MPI_COMM_WORLD,icolor,myid,comm)
+      if(i >= lo_s_idir .and. i <= hi_s_idir) comms_slab(n) = comm
     enddo
+    !do i=lo_s_idir,hi_s_idir
+    !  n = i-lo_s_idir+1
+    !  ! n.b. -- order of ranks could be set by e.g. memory layout (i-1 + (j-1)*n(1) + (k-1)*n(1)*n(2)*k)
+    !  call MPI_COMM_SPLIT(MPI_COMM_WORLD,i,myid,comms_slab(n))
+    !enddo
   end subroutine init_comm_slab
 #endif
 end module mod_solver
