@@ -1,6 +1,6 @@
 module mod_solver
   use mpi_f08
-  use mod_common_mpi, only: ierr
+  use mod_common_mpi, only: ierr,myid
   use mod_types
   implicit none
   private
@@ -627,21 +627,21 @@ module mod_solver
     asolver%sol        = sol
     asolver%comm_hypre = comm_hypre
   end subroutine init_matrix_2d
-  subroutine solve_n_helmholtz_2d(asolver,lo_out,hi_out,lo,hi,p,po)
+  subroutine solve_n_helmholtz_2d(asolver,lo_out,hi_out,nh,lo,hi,p,po)
     implicit none
     type(hypre_solver), target, intent(inout), dimension(:) :: asolver
-    integer           ,         intent(in   )               :: lo_out,hi_out
+    integer           ,         intent(in   )               :: lo_out,hi_out,nh
     integer           ,         intent(in   ), dimension(2) :: lo,hi
 #ifdef _FFT_Z
-    real(rp)          ,         intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo_out-1:) :: p,po
+    real(rp)          ,         intent(inout), dimension(lo(1)-nh:,lo(2)-nh:,lo_out-nh:) :: p,po
 #elif  _FFT_Y
-    real(rp)          ,         intent(inout), dimension(lo(1)-1:,lo_out-1:,lo(2)-1:) :: p,po
+    real(rp)          ,         intent(inout), dimension(lo(1)-nh:,lo_out-nh:,lo(2)-nh:) :: p,po
 #elif  _FFT_X
-    real(rp)          ,         intent(inout), dimension(lo_out-1:,lo(1)-1:,lo(2)-1:) :: p,po
+    real(rp)          ,         intent(inout), dimension(lo_out-nh:,lo(1)-nh:,lo(2)-nh:) :: p,po
 #endif
     integer(8), pointer :: solver,mat,rhs,sol
     integer   , pointer :: stype
-    integer :: i_out,ii,n
+    integer :: i_out,n
     do i_out=lo_out,hi_out
       n = i_out-lo_out+1 
       solver  => asolver(n)%solver
@@ -896,10 +896,10 @@ module mod_solver
     implicit none
     integer, intent(in)                            :: idir
     integer, intent(in), dimension(3)              :: dims,n_p,n_s
-    type(alltoallw), dimension(product(dims),2), intent(out) :: transpose_params
+    type(alltoallw), intent(out), dimension(:,:)   :: transpose_params
     integer, dimension(3) :: n_i
     type(MPI_DATATYPE) :: type_sub_p,type_sub_s
-    integer(MPI_ADDRESS_KIND) :: lb, ext_rp
+    integer(MPI_ADDRESS_KIND) :: lb,ext_rp
     integer, dimension(3,3) :: eye
     integer :: i,j,k,ii,jj,kk,irank
     !
@@ -945,37 +945,36 @@ module mod_solver
      integer, intent(in) :: i,j,k,n(3)
      extent_f = (i-1) + (j-1)*n(1) + (k-1)*n(1)*n(2)
   end function extent_f
-  subroutine init_comm_slab(ng_idir,lo_s_idir,hi_s_idir,myid,comms_slab)
+  subroutine transpose_slab(nhi,nho,t_param,comm_block,arr_in,arr_out)
     implicit none
-    integer, intent(in) :: ng_idir,lo_s_idir,hi_s_idir,myid
-    type(MPI_COMM), dimension(ng_idir), intent(out) :: comms_slab
-    integer :: i,icolor
-    do i=1,ng_idir
-      icolor = MPI_UNDEFINED
-      if(i >= lo_s_idir .and. i <= hi_s_idir) icolor = 1
-      ! n.b. -- order of ranks could be set by e.g. memory layout (i-1 + (j-1)*n(1) + (k-1)*n(1)*n(2)*k)
-      call MPI_COMM_SPLIT(MPI_COMM_WORLD,icolor,myid,comms_slab(i))
-    enddo
-  end subroutine init_comm_slab
-  subroutine transpose_slab(idir,nhi,nho,t_param,comm_block,arr_in,arr_out)
-    implicit none
-    integer, intent(in)                            :: idir,nhi,nho
+    integer, intent(in)                            :: nhi,nho
     type(alltoallw), dimension(:,:), intent(in)    :: t_param
     type(MPI_COMM), intent(in)                     :: comm_block
     real(rp), intent(in ), dimension(1-nhi:,1-nhi:,1-nhi:) :: arr_in
     real(rp), intent(out), dimension(1-nho:,1-nho:,1-nho:) :: arr_out
-    integer :: is,ir
-    !
-    if(idir == 1) then
-      is = 1
-      ir = 2
-    else
-      is = 2
-      ir = 1
-    endif
-    call MPI_ALLTOALLW(arr_in( 1,1,1),t_param(:,is)%counts,t_param(:,is)%disps,t_param(:,is)%types, &
-                       arr_out(1,1,1),t_param(:,ir)%counts,t_param(:,ir)%disps,t_param(:,ir)%types, &
+    call MPI_ALLTOALLW(arr_in( 1,1,1),t_param(:,1)%counts,t_param(:,1)%disps,t_param(:,1)%types, &
+                       arr_out(1,1,1),t_param(:,2)%counts,t_param(:,2)%disps,t_param(:,2)%types, &
                        comm_block)
   end subroutine transpose_slab
+  subroutine init_comm_slab(lo_idir,hi_idir,lo_s_idir,hi_s_idir,myid,comms_slab)
+    implicit none
+    integer, intent(in) :: lo_idir,hi_idir,lo_s_idir,hi_s_idir,myid
+    type(MPI_COMM), dimension(hi_s_idir-lo_s_idir+1), intent(out) :: comms_slab
+    type(MPI_COMM) :: comm
+    integer :: i,n,icolor
+    !do i=lo_idir,hi_idir
+    !  n = i-lo_s_idir+1
+    !  icolor = MPI_UNDEFINED
+    !  if( i >= lo_s_idir .and. i <= hi_s_idir) icolor=i
+    !  ! n.b. -- order of ranks could be set by e.g. memory layout (i-1 + (j-1)*n(1) + (k-1)*n(1)*n(2)*k)
+    !  call MPI_COMM_SPLIT(MPI_COMM_WORLD,icolor,myid,comm)
+    !  if(i >= lo_s_idir .and. i <= hi_s_idir) comms_slab(n) = comm
+    !enddo
+    do i=lo_s_idir,hi_s_idir
+      n = i-lo_s_idir+1
+      ! n.b. -- order of ranks could be set by e.g. memory layout (i-1 + (j-1)*n(1) + (k-1)*n(1)*n(2)*k)
+      call MPI_COMM_SPLIT(MPI_COMM_WORLD,i,myid,comms_slab(n))
+    enddo
+  end subroutine init_comm_slab
 #endif
 end module mod_solver
