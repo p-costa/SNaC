@@ -892,9 +892,9 @@ module mod_solver
       call finalize_solver(asolver)
     enddo
   end subroutine solve_n_helmholtz_2d_old
-  subroutine init_transpose_slab(idir,dims,n_p,n_s,transpose_params)
+  subroutine init_transpose_slab(idir,nhi,nho,dims,n_p,n_s,transpose_params)
     implicit none
-    integer, intent(in)                            :: idir
+    integer, intent(in)                            :: idir,nhi,nho
     integer, intent(in), dimension(3)              :: dims,n_p,n_s
     type(alltoallw), intent(out), dimension(:,:)   :: transpose_params
     integer, dimension(3) :: n_i
@@ -924,17 +924,17 @@ module mod_solver
           ii = irank*n_s(1)*eye(1,idir) + 1
           jj = irank*n_s(2)*eye(2,idir) + 1
           kk = irank*n_s(3)*eye(3,idir) + 1
-          transpose_params(irank+1,1)%disps = extent_f(ii,jj,kk,n_p)*ext_rp
+          transpose_params(irank+1,1)%disps = extent_f(ii,jj,kk,n_p+2*nhi)*ext_rp
           ii = i*n_p(1)*(1-eye(1,idir)) + 1
           jj = j*n_p(2)*(1-eye(2,idir)) + 1
           kk = k*n_p(3)*(1-eye(3,idir)) + 1
-          transpose_params(irank+1,2)%disps = extent_f(ii,jj,kk,n_s)*ext_rp
+          transpose_params(irank+1,2)%disps = extent_f(ii,jj,kk,n_s+2*nho)*ext_rp
           irank = irank + 1
         enddo
       enddo
     enddo
-    call MPI_TYPE_CREATE_SUBARRAY(3,n_p,n_i,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_p)
-    call MPI_TYPE_CREATE_SUBARRAY(3,n_s,n_i,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_s)
+    call MPI_TYPE_CREATE_SUBARRAY(3,n_p+2*nhi,n_i,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_p)
+    call MPI_TYPE_CREATE_SUBARRAY(3,n_s+2*nho,n_i,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_s)
     call MPI_TYPE_COMMIT(type_sub_p)
     call MPI_TYPE_COMMIT(type_sub_s)
     transpose_params(:,1)%types = type_sub_p
@@ -970,11 +970,6 @@ module mod_solver
       call MPI_COMM_SPLIT(MPI_COMM_WORLD,icolor,myid,comm)
       if(i >= lo_s_idir .and. i <= hi_s_idir) comms_slab(n) = comm
     enddo
-    !do i=lo_s_idir,hi_s_idir
-    !  n = i-lo_s_idir+1
-    !  ! n.b. -- order of ranks could be set by e.g. memory layout (i-1 + (j-1)*n(1) + (k-1)*n(1)*n(2)*k)
-    !  call MPI_COMM_SPLIT(MPI_COMM_WORLD,i,myid,comms_slab(n))
-    !enddo
   end subroutine init_comm_slab
 #endif
 end module mod_solver

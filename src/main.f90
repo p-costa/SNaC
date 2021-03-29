@@ -141,9 +141,9 @@ program snac
   type(alltoallw), allocatable, dimension(:,:) :: t_params
   integer              , dimension(3)     :: n_s,n_p,lo_s,hi_s
   real(rp), pointer    , dimension(:)     :: dl1_1_g,dl1_2_g,dl2_1_g,dl2_2_g
-  real(rp), allocatable, dimension(:,:,:) :: pp_s,pp_p
+  real(rp), allocatable, dimension(:,:,:) :: pp_s
 #ifdef _IMPDIFF
-  real(rp), allocatable, dimension(:,:,:) :: up_s,vp_s,wp_s,up_p,vp_p,wp_p
+  real(rp), allocatable, dimension(:,:,:) :: up_s,vp_s,wp_s
 #endif
 #endif
 #endif
@@ -286,10 +286,8 @@ program snac
   allocate(t_params(product(dims),2))
   deallocate(po)
   allocate(pp_s(lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
-           po(  lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
-           pp_p(lo(1)  -0:hi(1)  +0,lo(2)  -0:hi(2)  +0,lo(3)  -0:hi(3)  +0))
+           po(  lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0))
   pp_s(:,:,:) = 0._rp
-  pp_p(:,:,:) = 0._rp
 #ifdef _IMPDIFF
   deallocate(uo,vo,wo)
   allocate(up_s(lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
@@ -297,16 +295,10 @@ program snac
            wp_s(lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
            uo(  lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
            vo(  lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
-           wo(  lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
-           up_p(lo(1)  -0:hi(1)  +0,lo(2)  -0:hi(2)  +0,lo(3)  -0:hi(3)  +0), &
-           vp_p(lo(1)  -0:hi(1)  +0,lo(2)  -0:hi(2)  +0,lo(3)  -0:hi(3)  +0), &
-           wp_p(lo(1)  -0:hi(1)  +0,lo(2)  -0:hi(2)  +0,lo(3)  -0:hi(3)  +0))
+           wo(  lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0))
   up_s(:,:,:) = 0._rp
   vp_s(:,:,:) = 0._rp
   wp_s(:,:,:) = 0._rp
-  up_p(:,:,:) = 0._rp
-  vp_p(:,:,:) = 0._rp
-  wp_p(:,:,:) = 0._rp
 #endif
 #endif
 #endif
@@ -554,7 +546,7 @@ program snac
   enddo
   call init_comm_slab(lo(idir),hi(idir),lo_s(idir),hi_s(idir),myid,comms_fft)
   lambda_p_a(:) = lambda_p(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
-  call init_transpose_slab(idir,dims,n_p,n_s,t_params)
+  call init_transpose_slab(idir,1,0,dims,n_p,n_s,t_params)
 #endif
   call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
@@ -691,11 +683,9 @@ program snac
 #ifndef _FFT_USE_SLABS
       call solve_n_helmholtz_2d(usolver_fft,lo(idir),hiu(idir),1,lo(il:iu:iskip),hiu(il:iu:iskip),up,uo)
 #else
-      up_p(:,:,:) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
-      call transpose_slab(0,0,t_params(:,1:2:1 ),comm_block,up_p,up_s)
+      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,up,up_s)
       call solve_n_helmholtz_2d(usolver_fft,lo_a(idir),hiu_a(idir),0,lo_a(il:iu:iskip),hiu_a(il:iu:iskip),up_s,uo)
-      call transpose_slab(0,0,t_params(:,2:1:-1),comm_block,up_s,up_p)
-      up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up_p(:,:,:)
+      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,up_s,up)
 #endif
       call fft(arrplan_u(2),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_u
@@ -721,11 +711,9 @@ program snac
 #ifndef _FFT_USE_SLABS
       call solve_n_helmholtz_2d(vsolver_fft,lo(idir),hiv(idir),1,lo(il:iu:iskip),hiv(il:iu:iskip),vp,vo)
 #else
-      vp_p(:,:,:) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
-      call transpose_slab(0,0,t_params(:,1:2:1 ),comm_block,vp_p,vp_s)
+      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,vp,vp_s)
       call solve_n_helmholtz_2d(vsolver_fft,lo_a(idir),hiv_a(idir),0,lo_a(il:iu:iskip),hiv_a(il:iu:iskip),vp_s,vo)
-      call transpose_slab(0,0,t_params(:,2:1:-1),comm_block,vp_s,vp_p)
-      vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp_p(:,:,:)
+      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,vp_s,vp)
 #endif
       call fft(arrplan_v(2),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_v
@@ -751,11 +739,9 @@ program snac
 #ifndef _FFT_USE_SLABS
       call solve_n_helmholtz_2d(wsolver_fft,lo(idir),hiw(idir),1,lo(il:iu:iskip),hiw(il:iu:iskip),wp,wo)
 #else
-      wp_p(:,:,:) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
-      call transpose_slab(0,0,t_params(:,1:2:1 ),comm_block,wp_p,wp_s)
+      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,wp,wp_s)
       call solve_n_helmholtz_2d(wsolver_fft,lo_a(idir),hiw_a(idir),0,lo_a(il:iu:iskip),hiw_a(il:iu:iskip),wp_s,wo)
-      call transpose_slab(0,0,t_params(:,2:1:-1),comm_block,wp_s,wp_p)
-      wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp_p(:,:,:)
+      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,wp_s,wp)
 #endif
       call fft(arrplan_w(2),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_w
@@ -791,11 +777,9 @@ program snac
 #ifndef _FFT_USE_SLABS
       call solve_n_helmholtz_2d(psolver_fft,lo(idir),hi(idir),1,lo(il:iu:iskip),hi(il:iu:iskip),pp,po)
 #else
-      pp_p(:,:,:) = pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
-      call transpose_slab(0,0,t_params(:,1:2:1 ),comm_block,pp_p,pp_s)
+      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,pp,pp_s)
       call solve_n_helmholtz_2d(psolver_fft,lo_s(idir),hi_s(idir),0,lo_s(il:iu:iskip),hi_s(il:iu:iskip),pp_s,po)
-      call transpose_slab(0,0,t_params(:,2:1:-1),comm_block,pp_s,pp_p)
-      pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = pp_p(:,:,:)
+      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,pp_s,pp)
 #endif
       call fft(arrplan_p(2),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_p
