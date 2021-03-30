@@ -142,6 +142,7 @@ program snac
   integer              , dimension(3)     :: n_s,n_p,lo_s,hi_s
   real(rp), pointer    , dimension(:)     :: dl1_1_g,dl1_2_g,dl2_1_g,dl2_2_g
   real(rp), allocatable, dimension(:,:,:) :: pp_s
+  integer                                 :: nrank_block
 #ifdef _IMPDIFF
   real(rp), allocatable, dimension(:,:,:) :: up_s,vp_s,wp_s
 #endif
@@ -261,14 +262,15 @@ program snac
   lo_a(:) = lo(:)
   hi_a(:) = hi(:)
 #ifdef _FFT_USE_SLABS
-  if(mod((ng(idir)),product(dims)) == 0) then
+  nrank_block = product(dims(:))
+  if(ng(idir) >= nrank_block) then
     n_p = hi(:)-lo(:)+1
 #ifdef _FFT_X
-    n_s = [ng(1)/product(dims),ng(2),ng(3)]
+    n_s = [ng(1)/nrank_block,ng(2),ng(3)]
 #elif  _FFT_Y
-    n_s = [ng(1),ng(2)/product(dims),ng(3)]
+    n_s = [ng(1),ng(2)/nrank_block,ng(3)]
 #elif  _FFT_Z
-    n_s = [ng(1),ng(2),ng(3)/product(dims)]
+    n_s = [ng(1),ng(2),ng(3)/nrank_block]
 #endif
   else
     if(myid == 0) write(stderr,*) 'ERROR: homogeneous direction needs to be divisable by the number of tasks in each block.'
@@ -277,13 +279,25 @@ program snac
     call MPI_FINALIZE()
     stop
   endif
+  !
+  ! WIP: distribute slab subdomains as evenly as possible
+  !
+  irk = mod(ng(idir),nrank_block)
+  if(myid_block+1 <= irk) n_s(idir) = n_s(idir) + 1
   lo_s(:) = lo_g(:)
   hi_s(:) = hi_g(:)
   lo_s(idir) = (myid_block*n_s(idir)   + 1) - (lo_g(idir) - 1)
   hi_s(idir) = lo_s(idir) + n_s(idir) - 1
+  if(myid_block+1 > irk) then
+    lo_s(idir) = lo_s(idir) + irk
+    hi_s(idir) = hi_s(idir) + irk
+  endif
+  !
+  ! end of WIP
+  !
   lo_a(:) = lo_s(:)
   hi_a(:) = hi_s(:)
-  allocate(t_params(product(dims),2))
+  allocate(t_params(nrank_block,2))
   deallocate(po)
   allocate(pp_s(lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
            po(  lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0))
@@ -344,35 +358,53 @@ program snac
   call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),is_periodic(3),lo_min(3),hi_max(3),dzf,dzc)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #ifdef _FFT_USE_SLABS
-  if(cbcpre(0,1) == 'F') then
-    dxc_g(lo(1)-1) = dxc(lo(1)-1)
-    dxf_g(lo(1)-1) = dxf(lo(1)-1)
+  if(lo(1) == lo_g(1)) then
+    dxc_g(lo_g(1)-1) = dxc(lo(1)-1)
+    dxf_g(lo_g(1)-1) = dxf(lo(1)-1)
+    call MPI_BCAST(dxc_g(lo(1)-1),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dxf_g(lo(1)-1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
-  if(cbcpre(1,1) == 'F') then
-    dxc_g(hi(1)  ) = dxc(hi(1)  )
-    dxf_g(hi(1)  ) = dxf(hi(1)  )
-    dxc_g(hi(1)+1) = dxc(hi(1)+1)
-    dxf_g(hi(1)+1) = dxf(hi(1)+1)
+  if(hi(1) == hi_g(1)) then
+    dxc_g(hi_g(1)  ) = dxc(hi(1)  )
+    dxf_g(hi_g(1)  ) = dxf(hi(1)  )
+    dxc_g(hi_g(1)+1) = dxc(hi(1)+1)
+    dxf_g(hi_g(1)+1) = dxf(hi(1)+1)
+    call MPI_BCAST(dxc_g(hi_g(1)  ),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dxf_g(hi_g(1)  ),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dxc_g(hi_g(1)+1),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dxf_g(hi_g(1)+1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
-  if(cbcpre(0,2) == 'F') then
-    dyc_g(lo(2)-1) = dyc(lo(2)-1)
-    dyf_g(lo(2)-1) = dyf(lo(2)-1)
+  if(lo(2) == lo_g(2)) then
+    dyc_g(lo_g(2)-1) = dyc(lo(2)-1)
+    dyf_g(lo_g(2)-1) = dyf(lo(2)-1)
+    call MPI_BCAST(dyc_g(lo_g(2)-1),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dyf_g(lo_g(2)-1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
-  if(cbcpre(1,2) == 'F') then
-    dyc_g(hi(2)  ) = dyc(hi(2)  )
-    dyf_g(hi(2)  ) = dyf(hi(2)  )
-    dyc_g(hi(2)+1) = dyc(hi(2)+1)
-    dyf_g(hi(2)+1) = dyf(hi(2)+1)
+  if(hi(2) == hi_g(2)) then
+    dyc_g(hi_g(2)  ) = dyc(hi(2)  )
+    dyf_g(hi_g(2)  ) = dyf(hi(2)  )
+    dyc_g(hi_g(2)+1) = dyc(hi(2)+1)
+    dyf_g(hi_g(2)+1) = dyf(hi(2)+1)
+    call MPI_BCAST(dyc_g(hi_g(2)  ),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dyf_g(hi_g(2)  ),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dyc_g(hi_g(2)+1),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dyf_g(hi_g(2)+1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
-  if(cbcpre(0,3) == 'F') then
-    dyc_g(lo(3)-1) = dyc(lo(3)-1)
-    dyf_g(lo(3)-1) = dyf(lo(3)-1)
+  if(lo(3) == lo_g(3)) then
+    dzc_g(lo_g(3)-1) = dzc(lo(3)-1)
+    dzf_g(lo_g(3)-1) = dzf(lo(3)-1)
+    call MPI_BCAST(dzc_g(lo_g(3)-1),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dzf_g(lo_g(3)-1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
-  if(cbcpre(1,3) == 'F') then
-    dyc_g(hi(3)  ) = dyc(hi(3)  )
-    dyf_g(hi(3)  ) = dyf(hi(3)  )
-    dyc_g(hi(3)+1) = dyc(hi(3)+1)
-    dyf_g(hi(3)+1) = dyf(hi(3)+1)
+  if(hi(3) == hi_g(3)) then
+    dzc_g(hi_g(3)  ) = dzc(hi(3)  )
+    dzf_g(hi_g(3)  ) = dzf(hi(3)  )
+    dzc_g(hi_g(3)+1) = dzc(hi(3)+1)
+    dzf_g(hi_g(3)+1) = dzf(hi(3)+1)
+    call MPI_BCAST(dzc_g(hi_g(3)  ),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dzf_g(hi_g(3)  ),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dzc_g(hi_g(3)+1),1,MPI_REAL_RP,myid_block,comm_block)
+    call MPI_BCAST(dzf_g(hi_g(3)+1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
 #endif
 #endif
