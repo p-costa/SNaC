@@ -12,7 +12,7 @@ module mod_solver
   public init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers, &
          add_constant_to_n_diagonals,solve_n_helmholtz_2d, &
          finalize_n_matrices,finalize_n_solvers,init_comm_slab, &
-         init_transpose_slab,transpose_slab,alltoallw
+         init_transpose_slab_uneven,transpose_slab,alltoallw
   type alltoallw
     integer            :: counts
     integer            :: disps
@@ -892,6 +892,73 @@ module mod_solver
       call finalize_solver(asolver)
     enddo
   end subroutine solve_n_helmholtz_2d_old
+  subroutine init_transpose_slab_uneven(idir,nhi,nho,dims,lo_p,lo_s,n_p,n_s,comm_block,transpose_params)
+    implicit none
+    integer, intent(in)                            :: idir,nhi,nho
+    integer, intent(in), dimension(3)              :: dims,lo_p,lo_s,n_p,n_s ! n.b. lower bounds wrt [0,0,0]
+    type(MPI_COMM)     , intent(in)                :: comm_block
+    type(alltoallw), intent(out), dimension(:,:,:) :: transpose_params
+    integer, dimension(3) :: n_i
+    type(MPI_DATATYPE) :: type_sub_p,type_sub_s
+    integer(MPI_ADDRESS_KIND) :: lb,ext_rp
+    integer, dimension(3,3) :: eye
+    integer :: i,j,k,ii,jj,kk,irank
+    integer, dimension(3,product(dims)) :: lo_p_a,lo_s_a,n_p_a,n_s_a,n_i_a
+    !
+    eye(:,:) = 0
+    do i=1,3
+      eye(i,i) = 1
+    enddo
+    select case(idir)
+      case(1)
+        n_i(:) = [n_s(1),n_p(2),n_p(3)]
+      case(2)
+        n_i(:) = [n_p(1),n_s(2),n_p(3)]
+      case(3)
+        n_i(:) = [n_p(1),n_p(2),n_s(3)]
+    end select
+    transpose_params(:,:,:)%counts = 1
+    call MPI_ALLGATHER(lo_p,3,MPI_INTEGER,lo_p_a,3,MPI_INTEGER,comm_block)
+    call MPI_ALLGATHER(lo_s,3,MPI_INTEGER,lo_s_a,3,MPI_INTEGER,comm_block)
+    call MPI_ALLGATHER(n_p ,3,MPI_INTEGER,n_p_a ,3,MPI_INTEGER,comm_block)
+    call MPI_ALLGATHER(n_s ,3,MPI_INTEGER,n_s_a ,3,MPI_INTEGER,comm_block)
+    call MPI_ALLGATHER(n_i ,3,MPI_INTEGER,n_i_a ,3,MPI_INTEGER,comm_block)
+    call MPI_TYPE_GET_EXTENT(MPI_REAL_RP,lb,ext_rp)
+    irank = 0
+    do k=0,dims(3)-1
+      do j=0,dims(2)-1
+        do i=0,dims(1)-1
+          ii = lo_s_a(1,irank+1)*eye(1,idir) + 1
+          jj = lo_s_a(2,irank+1)*eye(2,idir) + 1
+          kk = lo_s_a(3,irank+1)*eye(3,idir) + 1
+          transpose_params(irank+1,:,1)%disps = extent_f(ii,jj,kk,n_p_a(:,irank+1)+2*nhi)*ext_rp
+          ii = lo_p_a(1,irank+1)*(1-eye(1,idir)) + 1
+          jj = lo_p_a(2,irank+1)*(1-eye(2,idir)) + 1
+          kk = lo_p_a(3,irank+1)*(1-eye(3,idir)) + 1
+          transpose_params(irank+1,:,2)%disps = extent_f(ii,jj,kk,n_s_a(:,irank+1)+2*nho)*ext_rp
+          !
+          ! pencil-to-slab -- transpose_params(:,1,:)
+          !
+          call MPI_TYPE_CREATE_SUBARRAY(3,n_p(:)          +2*nhi,n_i(:)          ,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_p)
+          call MPI_TYPE_CREATE_SUBARRAY(3,n_s_a(:,irank+1)+2*nho,n_i_a(:,irank+1),[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_s)
+          call MPI_TYPE_COMMIT(type_sub_p)
+          call MPI_TYPE_COMMIT(type_sub_s)
+          transpose_params(irank+1,1,1)%types = type_sub_p
+          transpose_params(irank+1,1,2)%types = type_sub_s
+          !
+          ! slab-to-pencil -- transpose_params(:,2,:)
+          !
+          call MPI_TYPE_CREATE_SUBARRAY(3,n_p_a(:,irank+1)+2*nhi,n_i_a(:,irank+1),[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_p)
+          call MPI_TYPE_CREATE_SUBARRAY(3,n_s(:)          +2*nho,n_i(:)          ,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_s)
+          call MPI_TYPE_COMMIT(type_sub_p)
+          call MPI_TYPE_COMMIT(type_sub_s)
+          transpose_params(irank+1,2,1)%types = type_sub_p
+          transpose_params(irank+1,2,2)%types = type_sub_s
+          irank = irank + 1
+        enddo
+      enddo
+    enddo
+  end subroutine init_transpose_slab_uneven
   subroutine init_transpose_slab(idir,nhi,nho,dims,n_p,n_s,transpose_params)
     implicit none
     integer, intent(in)                            :: idir,nhi,nho
