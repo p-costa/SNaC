@@ -12,7 +12,7 @@ module mod_solver
   public init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers, &
          add_constant_to_n_diagonals,solve_n_helmholtz_2d, &
          finalize_n_matrices,finalize_n_solvers,init_comm_slab, &
-         init_transpose_slab_uneven,transpose_slab,alltoallw
+         init_transpose_slab,transpose_slab,alltoallw
   type alltoallw
     integer            :: counts
     integer            :: disps

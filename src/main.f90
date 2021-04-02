@@ -60,7 +60,7 @@ program snac
   use mod_solver         , only: init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers,solve_n_helmholtz_2d, &
                                  add_constant_to_n_diagonals,finalize_n_solvers,finalize_n_matrices
 #ifdef _FFT_USE_SLABS
-  use mod_solver         , only: alltoallw,init_comm_slab,init_transpose_slab_uneven,transpose_slab
+  use mod_solver         , only: alltoallw,init_comm_slab,init_transpose_slab,transpose_slab
 #endif
   use mod_fft            , only: fft,fftend
   use mod_sanity         , only: test_sanity_fft
@@ -138,7 +138,7 @@ program snac
 #endif
 #ifdef _FFT_USE_SLABS
   target :: dxc_g,dxf_g,dyc_g,dyf_g,dzc_g,dzf_g
-  type(alltoallw), allocatable, dimension(:,:,:) :: t_params
+  type(alltoallw), allocatable, dimension(:,:) :: t_params
   integer              , dimension(3)     :: n_s,n_p,lo_s,hi_s
   real(rp), pointer    , dimension(:)     :: dl1_1_g,dl1_2_g,dl2_1_g,dl2_2_g
   real(rp), allocatable, dimension(:,:,:) :: pp_s
@@ -297,7 +297,7 @@ program snac
   !
   lo_a(:) = lo_s(:)
   hi_a(:) = hi_s(:)
-  allocate(t_params(nrank_block,2,2))
+  allocate(t_params(nrank_block,2))
   deallocate(po)
   allocate(pp_s(lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
            po(  lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0))
@@ -364,8 +364,8 @@ program snac
     dxc_g(lo_g(1)-1) = dxc(lo(1)-1)
     dxf_g(lo_g(1)-1) = dxf(lo(1)-1)
   endif
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(lo_g(1)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dxf_g(lo_g(1)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(lo_g(1)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxf_g(lo_g(1)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
   dxc_g(hi_g(1)  ) = 0._rp 
   dxf_g(hi_g(1)  ) = 0._rp
   dxc_g(hi_g(1)+1) = 0._rp
@@ -376,18 +376,18 @@ program snac
     dxc_g(hi_g(1)+1) = dxc(hi(1)+1)
     dxf_g(hi_g(1)+1) = dxf(hi(1)+1)
   endif
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(hi_g(1)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dxf_g(hi_g(1)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(hi_g(1)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dxf_g(hi_g(1)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(hi_g(1)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxf_g(hi_g(1)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(hi_g(1)+1),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxf_g(hi_g(1)+1),1,MPI_REAL_RP,MPI_MAX,comm_block)
   dyc_g(lo_g(2)-1) = 0._rp
   dyf_g(lo_g(2)-1) = 0._rp
   if(lo(2) == lo_g(2)) then
     dyc_g(lo_g(2)-1) = dyc(lo(2)-1)
     dyf_g(lo_g(2)-1) = dyf(lo(2)-1)
   endif
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(lo_g(2)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dyf_g(lo_g(2)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(lo_g(2)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyf_g(lo_g(2)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
   dyc_g(hi_g(2)  ) = 0._rp
   dyf_g(hi_g(2)  ) = 0._rp
   dyc_g(hi_g(2)+1) = 0._rp
@@ -398,18 +398,18 @@ program snac
     dyc_g(hi_g(2)+1) = dyc(hi(2)+1)
     dyf_g(hi_g(2)+1) = dyf(hi(2)+1)
   endif
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(hi_g(2)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dyf_g(hi_g(2)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(hi_g(2)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dyf_g(hi_g(2)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(hi_g(2)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyf_g(hi_g(2)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(hi_g(2)+1),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyf_g(hi_g(2)+1),1,MPI_REAL_RP,MPI_MAX,comm_block)
     dzc_g(lo_g(3)-1) = 0._rp
     dzf_g(lo_g(3)-1) = 0._rp
   if(lo(3) == lo_g(3)) then
     dzc_g(lo_g(3)-1) = dzc(lo(3)-1)
     dzf_g(lo_g(3)-1) = dzf(lo(3)-1)
   endif
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(lo_g(3)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(lo_g(3)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(lo_g(3)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(lo_g(3)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
   dzc_g(hi_g(3)  ) = 0._rp
   dzf_g(hi_g(3)  ) = 0._rp
   dzc_g(hi_g(3)+1) = 0._rp
@@ -420,10 +420,10 @@ program snac
     dzc_g(hi_g(3)+1) = dzc(hi(3)+1)
     dzf_g(hi_g(3)+1) = dzf(hi(3)+1)
   endif
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(hi_g(3)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(hi_g(3)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(hi_g(3)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
-  call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(hi_g(3)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(hi_g(3)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(hi_g(3)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(hi_g(3)+1),1,MPI_REAL_RP,MPI_MAX,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(hi_g(3)+1),1,MPI_REAL_RP,MPI_MAX,comm_block)
 #endif
 #endif
   is_uniform_grid = all(dzf(:) == dzf(lo(3))) .and. &
@@ -596,7 +596,7 @@ program snac
   enddo
   call init_comm_slab(lo(idir),hi(idir),lo_s(idir),hi_s(idir),myid,comms_fft)
   lambda_p_a(:) = lambda_p(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
-  call init_transpose_slab_uneven(idir,1,0,dims,lo_1-1,lo_s-1,n_p,n_s,comm_block,t_params)
+  call init_transpose_slab(idir,1,0,dims,n_p,n_s,t_params)
 #endif
   call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
@@ -733,9 +733,9 @@ program snac
 #ifndef _FFT_USE_SLABS
       call solve_n_helmholtz_2d(usolver_fft,lo(idir),hiu(idir),1,lo(il:iu:iskip),hiu(il:iu:iskip),up,uo)
 #else
-      call transpose_slab(1,0,t_params(:,1,1:2:1 ),comm_block,up,up_s)
+      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,up,up_s)
       call solve_n_helmholtz_2d(usolver_fft,lo_a(idir),hiu_a(idir),0,lo_a(il:iu:iskip),hiu_a(il:iu:iskip),up_s,uo)
-      call transpose_slab(0,1,t_params(:,2,2:1:-1),comm_block,up_s,up)
+      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,up_s,up)
 #endif
       call fft(arrplan_u(2),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_u
@@ -761,9 +761,9 @@ program snac
 #ifndef _FFT_USE_SLABS
       call solve_n_helmholtz_2d(vsolver_fft,lo(idir),hiv(idir),1,lo(il:iu:iskip),hiv(il:iu:iskip),vp,vo)
 #else
-      call transpose_slab(1,0,t_params(:,1,1:2:1 ),comm_block,vp,vp_s)
+      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,vp,vp_s)
       call solve_n_helmholtz_2d(vsolver_fft,lo_a(idir),hiv_a(idir),0,lo_a(il:iu:iskip),hiv_a(il:iu:iskip),vp_s,vo)
-      call transpose_slab(0,1,t_params(:,2,2:1:-1),comm_block,vp_s,vp)
+      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,vp_s,vp)
 #endif
       call fft(arrplan_v(2),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_v
@@ -789,9 +789,9 @@ program snac
 #ifndef _FFT_USE_SLABS
       call solve_n_helmholtz_2d(wsolver_fft,lo(idir),hiw(idir),1,lo(il:iu:iskip),hiw(il:iu:iskip),wp,wo)
 #else
-      call transpose_slab(1,0,t_params(:,1,1:2:1 ),comm_block,wp,wp_s)
+      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,wp,wp_s)
       call solve_n_helmholtz_2d(wsolver_fft,lo_a(idir),hiw_a(idir),0,lo_a(il:iu:iskip),hiw_a(il:iu:iskip),wp_s,wo)
-      call transpose_slab(0,1,t_params(:,2,2:1:-1),comm_block,wp_s,wp)
+      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,wp_s,wp)
 #endif
       call fft(arrplan_w(2),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_w
@@ -827,9 +827,9 @@ program snac
 #ifndef _FFT_USE_SLABS
       call solve_n_helmholtz_2d(psolver_fft,lo(idir),hi(idir),1,lo(il:iu:iskip),hi(il:iu:iskip),pp,po)
 #else
-      call transpose_slab(1,0,t_params(:,1,1:2:1 ),comm_block,pp,pp_s)
+      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,pp,pp_s)
       call solve_n_helmholtz_2d(psolver_fft,lo_s(idir),hi_s(idir),0,lo_s(il:iu:iskip),hi_s(il:iu:iskip),pp_s,po)
-      call transpose_slab(0,1,t_params(:,2,2:1:-1),comm_block,pp_s,pp)
+      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,pp_s,pp)
 #endif
       call fft(arrplan_p(2),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_p
