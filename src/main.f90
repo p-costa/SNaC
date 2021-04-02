@@ -60,7 +60,7 @@ program snac
   use mod_solver         , only: init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers,solve_n_helmholtz_2d, &
                                  add_constant_to_n_diagonals,finalize_n_solvers,finalize_n_matrices
 #ifdef _FFT_USE_SLABS
-  use mod_solver         , only: alltoallw,init_comm_slab,init_transpose_slab,transpose_slab
+  use mod_solver         , only: alltoallw,init_comm_slab,init_transpose_slab_uneven,transpose_slab
 #endif
   use mod_fft            , only: fft,fftend
   use mod_sanity         , only: test_sanity_fft
@@ -596,7 +596,7 @@ program snac
   enddo
   call init_comm_slab(lo(idir),hi(idir),lo_s(idir),hi_s(idir),myid,comms_fft)
   lambda_p_a(:) = lambda_p(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
-  call init_transpose_slab(idir,1,0,dims,n_p,n_s,t_params)
+  call init_transpose_slab_uneven(idir,1,0,dims,lo_1-1,lo_s-1,n_p,n_s,comm_block,t_params)
 #endif
   call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
