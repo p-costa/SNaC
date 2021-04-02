@@ -358,54 +358,72 @@ program snac
   call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),is_periodic(3),lo_min(3),hi_max(3),dzf,dzc)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #ifdef _FFT_USE_SLABS
+  dxc_g(lo_g(1)-1) = 0._rp
+  dxf_g(lo_g(1)-1) = 0._rp
   if(lo(1) == lo_g(1)) then
     dxc_g(lo_g(1)-1) = dxc(lo(1)-1)
     dxf_g(lo_g(1)-1) = dxf(lo(1)-1)
-    call MPI_BCAST(dxc_g(lo(1)-1),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dxf_g(lo(1)-1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(lo_g(1)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxf_g(lo_g(1)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  dxc_g(hi_g(1)  ) = 0._rp 
+  dxf_g(hi_g(1)  ) = 0._rp
+  dxc_g(hi_g(1)+1) = 0._rp
+  dxf_g(hi_g(1)+1) = 0._rp
   if(hi(1) == hi_g(1)) then
     dxc_g(hi_g(1)  ) = dxc(hi(1)  )
     dxf_g(hi_g(1)  ) = dxf(hi(1)  )
     dxc_g(hi_g(1)+1) = dxc(hi(1)+1)
     dxf_g(hi_g(1)+1) = dxf(hi(1)+1)
-    call MPI_BCAST(dxc_g(hi_g(1)  ),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dxf_g(hi_g(1)  ),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dxc_g(hi_g(1)+1),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dxf_g(hi_g(1)+1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(hi_g(1)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxf_g(hi_g(1)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(hi_g(1)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dxf_g(hi_g(1)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  dyc_g(lo_g(2)-1) = 0._rp
+  dyf_g(lo_g(2)-1) = 0._rp
   if(lo(2) == lo_g(2)) then
     dyc_g(lo_g(2)-1) = dyc(lo(2)-1)
     dyf_g(lo_g(2)-1) = dyf(lo(2)-1)
-    call MPI_BCAST(dyc_g(lo_g(2)-1),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dyf_g(lo_g(2)-1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(lo_g(2)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyf_g(lo_g(2)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  dyc_g(hi_g(2)  ) = 0._rp
+  dyf_g(hi_g(2)  ) = 0._rp
+  dyc_g(hi_g(2)+1) = 0._rp
+  dyf_g(hi_g(2)+1) = 0._rp
   if(hi(2) == hi_g(2)) then
     dyc_g(hi_g(2)  ) = dyc(hi(2)  )
     dyf_g(hi_g(2)  ) = dyf(hi(2)  )
     dyc_g(hi_g(2)+1) = dyc(hi(2)+1)
     dyf_g(hi_g(2)+1) = dyf(hi(2)+1)
-    call MPI_BCAST(dyc_g(hi_g(2)  ),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dyf_g(hi_g(2)  ),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dyc_g(hi_g(2)+1),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dyf_g(hi_g(2)+1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(hi_g(2)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyf_g(hi_g(2)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(hi_g(2)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dyf_g(hi_g(2)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+    dzc_g(lo_g(3)-1) = 0._rp
+    dzf_g(lo_g(3)-1) = 0._rp
   if(lo(3) == lo_g(3)) then
     dzc_g(lo_g(3)-1) = dzc(lo(3)-1)
     dzf_g(lo_g(3)-1) = dzf(lo(3)-1)
-    call MPI_BCAST(dzc_g(lo_g(3)-1),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dzf_g(lo_g(3)-1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(lo_g(3)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(lo_g(3)-1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  dzc_g(hi_g(3)  ) = 0._rp
+  dzf_g(hi_g(3)  ) = 0._rp
+  dzc_g(hi_g(3)+1) = 0._rp
+  dzf_g(hi_g(3)+1) = 0._rp
   if(hi(3) == hi_g(3)) then
     dzc_g(hi_g(3)  ) = dzc(hi(3)  )
     dzf_g(hi_g(3)  ) = dzf(hi(3)  )
     dzc_g(hi_g(3)+1) = dzc(hi(3)+1)
     dzf_g(hi_g(3)+1) = dzf(hi(3)+1)
-    call MPI_BCAST(dzc_g(hi_g(3)  ),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dzf_g(hi_g(3)  ),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dzc_g(hi_g(3)+1),1,MPI_REAL_RP,myid_block,comm_block)
-    call MPI_BCAST(dzf_g(hi_g(3)+1),1,MPI_REAL_RP,myid_block,comm_block)
   endif
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(hi_g(3)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(hi_g(3)  ),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(hi_g(3)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
+  call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(hi_g(3)+1),1,MPI_REAL_RP,MPI_SUM,comm_block)
 #endif
 #endif
   is_uniform_grid = all(dzf(:) == dzf(lo(3))) .and. &
