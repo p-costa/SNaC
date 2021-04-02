@@ -436,7 +436,9 @@ program snac
 #elif  _FFT_Z
                     dyf(lo(2)) == dzf(lo(3))
 #else
-                    dxf(lo(1)) == dyf(lo(2)) .and. dyf(lo(2)) == dzf(lo(3))
+                    dxf(lo(1)) == dyf(lo(2)) .and. &
+                    dxf(lo(1)) == dzf(lo(3)) .and. &
+                    dyf(lo(2)) == dzf(lo(3))
 #endif
   call mpi_allreduce(MPI_IN_PLACE,is_uniform_grid,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
   !
