@@ -1,4 +1,4 @@
-# about `dns.in` and `geo/block.???` files
+# about `dns.in` and `geo/block.{???}` files
 
 Setting up a multi-block simulation involves two input files:
 
@@ -231,14 +231,14 @@ The following options are available:
 * `D` Dirichlet;
 * `N` Neumann.
 
-The **last four rows** follow the same logic, but now for the BC **values**. For a `F` BC, the BC value corresponds to the *friend* block this block is connected to, in the direction in question. A periodicity boundary condition is naturally set if the blocks are cyclicly connected with `F` boundary conditions.
+The **last four rows** follow the same logic, but now for the BC **values**. For a `F` BC, the BC value corresponds to the *friend* block this block is connected to, in the direction in question. A periodicity boundary condition is naturally set if the blocks are cyclically connected with `F` boundary conditions.
 
 ---
 
 ~~~
 0 0  0 0  0 0            !  is_inflow(0:1,1:3)
 ~~~
-These lines set an inflow boundary condition for the block in question. Right now, if `is_inflow > 0` *and* a Dirichlet BC for the velocity is emplyed in that direction, a Poiseuille-type inflow of the kind `vel(x1,x2) = velref*(vel1(x1)**p1)*(vel2(x2)**p2)`, where `vel1` and `vel2` are Poiseuille profiles with unit mean, `velref` the Dirichlet BC set for the velocity above, and the exponent `p1` (`p2`) is set to `0` if the direction of coordinate `x1` (`x2`) is periodic, and `1` otherwise. Finally, `is_inflow <= 0` and a Dirichlet BC for the velocity is employed in that direction, SNaC will simply prescribe that BC, i.e. enforce a constant inflow velocity.
+These lines set an inflow boundary condition for the block in question. Right now, if `is_inflow > 0` *and* a Dirichlet BC for the velocity is employed in that direction, a Poiseuille-type inflow of the kind `vel(x1,x2) = velref*(vel1(x1)**p1)*(vel2(x2)**p2)`, where `vel1` and `vel2` are Poiseuille profiles with unit mean, `velref` the Dirichlet BC set for the velocity above, and the exponent `p1` (`p2`) is set to `0` if the direction of coordinate `x1` (`x2`) is periodic, and `1` otherwise. Finally, `is_inflow <= 0` and a Dirichlet BC for the velocity is employed in that direction, SNaC will simply prescribe that BC, i.e. enforce a constant inflow velocity.
 
 ---
 
@@ -266,8 +266,8 @@ See `initflow.f90` for more details.
 1                        ! id
 ~~~
 
-Finally, this line defines the **ID of the block**. However, the line is currently not used. Instead, the ID of the block is determined from the extension of the block file. For the example shown here, block \#1 is recognized as the block defined in file `geo/block.001`, and dito for blocks \#2 and \#3.
+Finally, this line defines the **ID of the block**. However, the line is currently not used. Instead, the ID of the block is determined from the extension of the block file. For the example shown here, block \#1 is recognized as the block defined in file `geo/block.001`, and ditto for blocks \#2 and \#3.
 
 ## A note on the connectivity between blocks
 
-A requirement of the present implementation is that connected blocks **must share the same boundaries**. This requirement holds not only for the definition of the geometry itself, but also for the domain decomposition: **the computational subdomains must share the same boundaries**, and therefore the value of *dims* must be set with this restriction in mind. If these conditions are not met, the code should return a runtime error.
+It is required that connected blocks **are congruent at the boundary**. This requirement holds not only for the definition of the geometry, but also for the domain decomposition and computational grid: **neighboring subdomains must share the same boundary, and the computational setup correspond to a regular rectilinear structured grid**. Hence, the value of `dims`, and parameters `gr` and `gt` must be set with this in mind. If these conditions are not met, the code will return a runtime error.
