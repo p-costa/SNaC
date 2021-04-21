@@ -31,7 +31,7 @@ The fluid flow is solved with a second-order finite-volume pressure correction s
 
 ### Input file
 
-The input file `dns.in` sets the physical and computational parameters. In the `examples/` folder are examples of input files for several canonical flows. See `src/INFO_INPUT.md` for a detailed description of the input file.
+The input file `dns.in` sets the physical and computational parameters. In the `examples/` folder are examples of input files for several canonical flows. See [`src/INFO_INPUT.md`](src/INFO_INPUT.md) for a detailed description of the input file.
 
 For the *multi-block* implementation in branches [`multi_block`](https://github.com/p-costa/SNaC/tree/multi_block) and [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block), the block files in `geo/block.???` setup the flow geometry.
 
