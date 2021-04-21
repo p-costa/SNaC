@@ -1,12 +1,10 @@
 ## Synopsis
 
-**SNaC** is [**CaNS**](https://github.com/p-costa/CaNS) spelled backwards, and is a code for massively-parallel direct numerical simulations (DNS) of fluid flows. *SNaC* is an alias for a longer and somewhat malevolent name: *Slow CaNS*. But what this tool loses in terms of speed compared to CaNS, it gains in versatility.
+**SNaC** is [**CaNS**](https://github.com/p-costa/CaNS) spelled backwards, and is a code for massively-parallel direct numerical simulations (DNS) of fluid flows. *SNaC* aims at combining the versatility of a multi-block DNS solver, with the FFT-based acceleration used in CaNS.
 
 Indeed, a **multi-block** implementation of *SNaC* has been recently developed in branch [`multi_block`](https://github.com/p-costa/SNaC/tree/multi_block). Moreover, if the geometry has one homogeneous direction with constant grid spacing, branch [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block) implements a very fast solver that exploits FFTs in this direction. This is SNaC's *warp drive* :rocket:, as yields a huge speedup in wall-clock time per time step.
 
 ## News
-
-A **multi-block** implementation of *SNaC* has been developed in branch [`multi_block`](https://github.com/p-costa/SNaC/tree/multi_block) (and more recently [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block)).
 
 ## Features
 
