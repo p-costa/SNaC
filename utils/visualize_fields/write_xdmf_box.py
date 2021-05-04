@@ -12,12 +12,12 @@ non_uniform_grid = True
 # define data type and
 # read saved data log
 #
-dtype_saves = np.dtype([                                                         \
-                        ('file' , 'U100'), ('variable', 'U100'),                 \
+dtype_saves = np.dtype([                                                \
+                        ('file' , 'U100'), ('variable', 'U100'),        \
                         ('imin' , int), ('jmin' , int), ('kmin' , int), \
                         ('imax' , int), ('jmax' , int), ('kmax' , int), \
                         ('istep', int), ('jstep', int), ('kstep', int), \
-                        ('time', float), ('isave', int)                    \
+                        ('time', float), ('isave', int)                 \
                        ])
 geofiles  = "geometry_b_???.out"
 nblocks = np.size(glob.glob(geofiles))
