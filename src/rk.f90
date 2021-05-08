@@ -35,13 +35,19 @@ module mod_rk
     dvdtrk(:,:,:) = 0._rp
     dwdtrk(:,:,:) = 0._rp
     !$OMP END WORKSHARE
+#ifndef _IMPDIFF
     call momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudtrk)
     call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrk)
     call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrk)
-#ifdef _IMPDIFF
-    dudtrkd(:,:,:) = dudtrk(:,:,:)
-    dvdtrkd(:,:,:) = dvdtrk(:,:,:)
-    dwdtrkd(:,:,:) = dwdtrk(:,:,:)
+#else
+    !$OMP WORKSHARE
+    dudtrkd(:,:,:) = 0._rp
+    dvdtrkd(:,:,:) = 0._rp
+    dwdtrkd(:,:,:) = 0._rp
+    !$OMP END WORKSHARE
+    call momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudtrkd)
+    call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrkd)
+    call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrkd)
 #endif
     call momx_a(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudtrk)
     call momy_a(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdtrk)
@@ -56,6 +62,11 @@ module mod_rk
           up(i,j,k) = u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k)
           vp(i,j,k) = v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k)
           wp(i,j,k) = w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k)
+#ifdef _IMPDIFF
+          up(i,j,k) = u(i,j,k) + factor12*dudtrkd(i,j,k)
+          vp(i,j,k) = v(i,j,k) + factor12*dvdtrkd(i,j,k)
+          wp(i,j,k) = w(i,j,k) + factor12*dwdtrkd(i,j,k)
+#endif
           dudtrko(i,j,k) = dudtrk(i,j,k)
           dvdtrko(i,j,k) = dvdtrk(i,j,k)
           dwdtrko(i,j,k) = dwdtrk(i,j,k)
