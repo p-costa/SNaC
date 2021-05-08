@@ -40,9 +40,13 @@ module mod_rk
     dwdtrk(:,:,:) = 0._rp
     !$OMP END WORKSHARE
 #ifndef _NON_NEWTONIAN
+#ifndef _IMPDIFF
     call momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudtrk)
     call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrk)
     call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrk)
+#else
+    error stop "ERROR: implicit diffusion not supported for variable viscosity; aborting..."
+#endif
 #else
     if(present(mu)) then
       call momx_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu,u,v,w,dudtrk)
@@ -52,14 +56,19 @@ module mod_rk
       error stop "ERROR: variable viscosity field not provided; aborting..."
     endif
 #endif
-#ifdef _IMPDIFF
-    dudtrkd(:,:,:) = dudtrk(:,:,:)
-    dvdtrkd(:,:,:) = dvdtrk(:,:,:)
-    dwdtrkd(:,:,:) = dwdtrk(:,:,:)
-#endif
     call momx_a(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudtrk)
     call momy_a(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdtrk)
     call momz_a(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdtrk)
+#ifdef _IMPDIFF
+    !$OMP WORKSHARE
+    dudtrkd(:,:,:) = 0._rp
+    dvdtrkd(:,:,:) = 0._rp
+    dwdtrkd(:,:,:) = 0._rp
+    !$OMP END WORKSHARE
+    call momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudtrkd)
+    call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrkd)
+    call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrkd)
+#endif
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,factor1,factor2,u,v,w,up,vp,wp,dudtrk,dvdtrk,dwdtrk,dudtrko,dvdtrko,dwdtrko)
@@ -70,6 +79,11 @@ module mod_rk
           up(i,j,k) = u(i,j,k) + factor1*dudtrk(i,j,k) + factor2*dudtrko(i,j,k)
           vp(i,j,k) = v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k)
           wp(i,j,k) = w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k)
+#ifdef _IMPDIFF
+          up(i,j,k) = u(i,j,k) + factor12*dudtrkd(i,j,k)
+          vp(i,j,k) = v(i,j,k) + factor12*dvdtrkd(i,j,k)
+          wp(i,j,k) = w(i,j,k) + factor12*dwdtrkd(i,j,k)
+#endif
           dudtrko(i,j,k) = dudtrk(i,j,k)
           dvdtrko(i,j,k) = dvdtrk(i,j,k)
           dwdtrko(i,j,k) = dwdtrk(i,j,k)
