@@ -71,6 +71,9 @@ module mod_rk
 #endif
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
+#ifdef _IMPDIFF
+    !$OMP SHARED(factor12,dudtrkd,dvdtrkd,dwdtrkd) &
+#endif
     !$OMP SHARED(lo,hi,factor1,factor2,u,v,w,up,vp,wp,dudtrk,dvdtrk,dwdtrk,dudtrko,dvdtrko,dwdtrko)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
