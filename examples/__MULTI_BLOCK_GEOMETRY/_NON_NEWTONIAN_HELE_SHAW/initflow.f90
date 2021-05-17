@@ -11,7 +11,8 @@ module mod_initflow
 #endif
   contains
   subroutine initflow(inivel,is_wallturb,lo,hi,lo_g,hi_g,l,uref,lref,visc,bforce, &
-                      xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
+                      xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p, &
+                      lmin,lmax,rn,dpdl,tauy)
     !
     ! computes initial conditions for the velocity field
     !
@@ -25,6 +26,7 @@ module mod_initflow
     real(rp), intent(in), dimension(lo(1)-1:) :: xc,xf,dxc,dxf
     real(rp), intent(in), dimension(lo(2)-1:) :: yc,yf,dyc,dyf
     real(rp), intent(in), dimension(lo(3)-1:) :: zc,zf,dzc,dzf
+    real(rp), intent(in), optional :: lmin(3),lmax(3),rn,dpdl,tauy
     real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(out) :: u,v,w,p
     real(rp), allocatable, dimension(:) :: u1d
     integer  :: i,j,k
@@ -42,6 +44,12 @@ module mod_initflow
     case('poi')
       call poiseuille(lo(3),hi(3),zc,l(3),uref,u1d)
       is_mean=.true.
+#ifdef _NON_NEWTONIAN
+      is_mean=.false.
+      do k=lo(3),hi(3)
+        u1d(k) = inflow_herschel_bulkley(zc(k),lmin(3),lmax(3),rn,dpdl,visc,tauy)
+      enddo
+#endif
     case('zer')
       u1d(:) = 0._rp
     case('log')
