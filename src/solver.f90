@@ -12,7 +12,8 @@ module mod_solver
   public init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers, &
          add_constant_to_n_diagonals,solve_n_helmholtz_2d, &
          finalize_n_matrices,finalize_n_solvers,init_comm_slab, &
-         init_transpose_slab_uneven,transpose_slab,alltoallw
+         init_transpose_slab_uneven,transpose_slab,alltoallw, &
+         init_n_3d_matrices,solve_n_helmholtz_3d
   type alltoallw
     integer            :: counts
     integer            :: disps
@@ -701,6 +702,62 @@ module mod_solver
 #endif
     enddo
   end subroutine solve_n_helmholtz_2d
+  subroutine solve_n_helmholtz_3d(asolver,nslice,lo_sp,hi_sp,nh,lo,hi,p,po)
+    implicit none
+    type(hypre_solver), target, intent(inout), dimension(:) :: asolver
+    integer           ,         intent(in   )               :: nslice
+    integer           ,         intent(in   ), dimension(3,nslice) :: lo_sp,hi_sp
+    integer           ,         intent(in   )               :: nh
+    integer           ,         intent(in   ), dimension(3) :: lo,hi
+    real(rp)          ,         intent(inout), dimension(lo(1)-nh:,lo(2)-nh:,lo(3)-nh:) :: p,po
+    integer(8), pointer :: solver,mat,rhs,sol
+    integer   , pointer :: stype
+    integer, dimension(3) :: lo_s,hi_s
+    integer :: q
+    do q=1,nslice
+      solver  => asolver(q)%solver
+      mat     => asolver(q)%mat
+      rhs     => asolver(q)%rhs
+      sol     => asolver(q)%sol
+      stype   => asolver(q)%stype
+      lo_s(:) = lo_sp(:,q)
+      hi_s(:) = hi_sp(:,q)
+      !
+      ! setup soluction and rhs vectors
+      !
+      call HYPRE_StructVectorSetBoxValues(rhs,lo_s,hi_s, p(lo_s(1):hi_s(1),lo_s(2):hi_s(2),lo_s(3):hi_s(3)),ierr)
+      call HYPRE_StructVectorSetBoxValues(sol,lo_s,hi_s,po(lo_s(1):hi_s(1),lo_s(2):hi_s(2),lo_s(3):hi_s(3)),ierr)
+      call HYPRE_StructVectorAssemble(rhs,ierr)
+      call HYPRE_StructVectorAssemble(sol,ierr)
+      !
+      ! setup solver, and solve
+      !
+      ! note: this part was based on the the Paris Simulator code
+      !       freely available under a GPL license; see:
+      !       http://www.ida.upmc.fr/~zaleski/paris/
+      !
+      if ( stype == HYPRESolverSMG ) then
+        call HYPRE_StructSMGSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructSMGGetNumIterations(solver,num_iterations,ierr)
+      elseif ( stype == HYPRESolverPFMG ) then
+        call HYPRE_StructPFMGSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructPFMGGetNumIterations(solver,num_iterations,ierr)
+      elseif (stype == HYPRESolverGMRES) then
+        call HYPRE_StructGMRESSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructGMRESGetNumIterations(solver, num_iterations,ierr)
+      elseif (stype == HYPRESolverBiCGSTAB) then
+        call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructBiCGSTABGetNumIterations(solver, num_iterations,ierr)
+      endif ! stype
+      !
+      ! end of part based on the Paris Simulator code
+      !
+      ! fecth results
+      !
+      call HYPRE_StructVectorGetBoxValues(sol,lo_s,hi_s,p(lo_s(1):hi_s(1),lo_s(2):hi_s(2),lo_s(3):hi_s(3)),ierr)
+      po(lo_s(1):hi_s(1),lo_s(2):hi_s(2),lo_s(3):hi_s(3)) = p(lo_s(1):hi_s(1),lo_s(2):hi_S(2),lo_s(3):hi_s(3))
+    enddo
+  end subroutine solve_n_helmholtz_3d
   subroutine init_n_2d_matrices(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_out,hi_out,lo,hi,periods, &
                                 dl1_1,dl1_2,dl2_1,dl2_2,lambda,comm,asolver)
     character(len=1)  , intent(in   ), dimension(0:1,2) :: cbc
@@ -727,6 +784,34 @@ module mod_solver
       asolver(q) = asolver_aux
     enddo
   end subroutine init_n_2d_matrices
+  subroutine init_n_3d_matrices(idir,nslice,cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,periods, &
+                                lo_sp,hi_sp,dl1_1,dl1_2,dl2_1,dl2_2,dl3_1,dl3_2,lambda,asolver)
+    integer           , intent(in   )                   :: idir,nslice
+    character(len=1)  , intent(in   ), dimension(0:1,3) :: cbc
+    real(rp)          , intent(in   ), dimension(0:1,3) ::  bc
+    real(rp)          , intent(in   ), dimension(0:1,3) ::  dl
+    logical           , intent(in   )                   ::  is_uniform_grid
+    logical           , intent(in   ), dimension(0:1,3) ::  is_bound
+    logical           , intent(in   ), dimension(    3) ::  is_centered
+    integer           , intent(in   ), dimension(    3) :: lo,periods
+    integer           , intent(in   ), dimension(:,:  ) :: lo_sp,hi_sp
+    real(rp)          , intent(in   ), target, dimension(lo(1)-1:) :: dl1_1,dl1_2
+    real(rp)          , intent(in   ), target, dimension(lo(2)-1:) :: dl2_1,dl2_2
+    real(rp)          , intent(in   ), target, dimension(lo(3)-1:) :: dl3_1,dl3_2
+    real(rp)          , intent(in   ), dimension(:) :: lambda
+    type(hypre_solver), intent(inout), dimension(:) :: asolver
+    type(hypre_solver) :: asolver_aux
+    integer :: q
+    do q=1,nslice
+      asolver_aux = asolver(q)
+      call init_matrix_3d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_sp(:,q),hi_sp(:,q),periods, &
+                          dl1_1(lo_sp(1,q)-1:hi_sp(1,q)+1),dl1_2(lo_sp(1,q)-1:hi_sp(1,q)+1), &
+                          dl2_1(lo_sp(2,q)-1:hi_sp(2,q)+1),dl2_2(lo_sp(2,q)-1:hi_sp(2,q)+1), &
+                          dl3_1(lo_sp(3,q)-1:hi_sp(3,q)+1),dl3_2(lo_sp(3,q)-1:hi_sp(3,q)+1), &
+                          asolver_aux,lambda(lo_sp(idir,q)-lo(idir)+1:hi_sp(idir,q)-lo(idir)+1))
+      asolver(q) = asolver_aux
+    enddo
+  end subroutine init_n_3d_matrices
   subroutine create_n_solvers(n,maxiter,maxerror,stype,asolver)
     integer           , intent(   in) :: n
     integer           , intent(   in) :: maxiter

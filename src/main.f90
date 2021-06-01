@@ -58,6 +58,7 @@ program snac
                                  hypre_solver,HYPRESolverPFMG
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   use mod_solver         , only: init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers,solve_n_helmholtz_2d, &
+                                 init_n_3d_matrices,solve_n_helmholtz_3d, &
                                  add_constant_to_n_diagonals,finalize_n_solvers,finalize_n_matrices
 #ifdef _FFT_USE_SLABS
   use mod_solver         , only: alltoallw,init_comm_slab,init_transpose_slab_uneven,transpose_slab
@@ -120,6 +121,7 @@ program snac
   real(rp)                            :: alpha_lambda_p
   type(hypre_solver), allocatable, dimension(:) :: psolver_fft
   type(MPI_COMM)    , allocatable, dimension(:) :: comms_fft
+  integer                             :: npsolvers
 #ifdef _IMPDIFF
   integer , dimension(    3) :: hiu_a,hiv_a,hiw_a
   real(rp), pointer, dimension(:)     :: dlu1_1,dlu1_2,dlu2_1,dlu2_2, &
@@ -146,6 +148,14 @@ program snac
 #ifdef _IMPDIFF
   real(rp), allocatable, dimension(:,:,:) :: up_s,vp_s,wp_s
 #endif
+#endif
+#ifdef _FFT_USE_SLICED_PENCILS
+  integer, parameter :: nslices = 4
+  integer            :: q
+#ifndef _FFT_USE_SLABS
+  integer             , dimension(3  ) :: n_s,lo_s,hi_s
+#endif
+  integer, allocatable, dimension(:,:) :: lo_sp,hi_sp
 #endif
 #endif
   !
@@ -185,7 +195,7 @@ program snac
 #else
   if(myid == 0) write(stderr,*) 'ERROR: there can be only one FFT direction; check the pre-processor flags.'
   if(myid == 0) write(stderr,*) 'Aborting...'
-  call MPI_FINALIZE(ierr)
+  call MPI_FINALIZE
   error stop
 #endif
   call test_sanity_fft(dims(idir),lo(idir),hi(idir),lmin(idir),lmax(idir),gr(idir))
@@ -259,6 +269,18 @@ program snac
            rhsw%z(lo(1):hi(1),lo(2):hi(2),0:1))
 #endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+#ifdef _FFT_USE_SLICED_PENCILS
+#if defined(_IMPDIFF) || defined(_FFT_USE_SLABS)
+#if   defined(_IMPDIFF)
+  if(myid == 0) write(stderr,*) 'ERROR: implicit diffusion not yet supported with "_FFT_USE_SLICED_PENCILS".'
+#elif defined(_FFT_USE_SLABS)
+  if(myid == 0) write(stderr,*) 'ERROR: cannot select both "_FFT_USE_SLICED_PENCILS" and "_FFT_USE_SLABS".'
+#endif
+  if(myid == 0) write(stderr,*) 'Aborting...'
+  call MPI_FINALIZE()
+  error stop
+#endif
+#endif
   lo_a(:) = lo(:)
   hi_a(:) = hi(:)
 #ifdef _FFT_USE_SLABS
@@ -273,14 +295,14 @@ program snac
     n_s = [ng(1),ng(2),ng(3)/nrank_block]
 #endif
   else
-    if(myid == 0) write(stderr,*) 'ERROR: homogeneous direction needs to be divisable by the number of tasks in each block.'
-    if(myid == 0) write(stderr,*) 'Error triggered for block ', my_block, '.'
-    if(myid == 0) write(stderr,*) 'Aborting...'
+    write(stderr,*) 'ERROR: number of tasks in block', my_block, 'exceeds the number of grid points along direction', idir,':'
+    write(stderr,*) nrank_block, ' > ', ng(idir)
+    write(stderr,*) 'Aborting...'
     call MPI_FINALIZE()
     stop
   endif
   !
-  ! WIP: distribute slab subdomains as evenly as possible
+  ! distribute slab subdomains as evenly as possible
   !
   irk = mod(ng(idir),nrank_block)
   if(myid_block+1 <= irk) n_s(idir) = n_s(idir) + 1
@@ -292,8 +314,6 @@ program snac
     lo_s(idir) = lo_s(idir) + irk
     hi_s(idir) = hi_s(idir) + irk
   endif
-  !
-  ! end of WIP
   !
   lo_a(:) = lo_s(:)
   hi_a(:) = hi_s(:)
@@ -314,6 +334,30 @@ program snac
   vp_s(:,:,:) = 0._rp
   wp_s(:,:,:) = 0._rp
 #endif
+#endif
+  npsolvers = hi_a(idir)-lo_a(idir)+1
+#ifdef _FFT_USE_SLICED_PENCILS
+  !
+  ! distribute sliced pencils as evenly as possible
+  !
+  allocate(lo_sp(3,nslices),hi_sp(3,nslices))
+  do q=1,nslices
+    n_s(:) = ng(:)
+    n_s(idir) = ng(idir)/nslices
+    irk = mod(ng(idir),nslices)
+    if(q <= irk) n_s(idir) = n_s(idir) + 1
+    lo_s(:) = lo(:)
+    hi_s(:) = hi(:)
+    lo_s(idir) = lo(idir) + (q-1)*(n_s(idir))
+    hi_s(idir) = lo_s(idir) + n_s(idir) - 1
+    if(q > irk) then
+      lo_s(idir) = lo_s(idir) + irk
+      hi_s(idir) = hi_s(idir) + irk
+    endif
+    lo_sp(:,q) = lo_s(:)
+    hi_sp(:,q) = hi_s(:)
+  enddo
+  npsolvers = nslices
 #endif
 #endif
   !
@@ -584,7 +628,7 @@ program snac
   allocate(lambda_p(hi(idir)-lo(idir)+1))
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcpre(:,idir),.true.,dl(0,idir),arrplan_p,normfft_p,lambda_p)
   alpha_lambda_p = 0._rp
-  allocate(psolver_fft(hi_a(idir)-lo_a(idir)+1))
+  allocate(psolver_fft(npsolvers))
   allocate(comms_fft(hi_a(idir)-lo_a(idir)+1))
   allocate(lambda_p_a(hi_a(idir)-lo_a(idir)+1))
   is_bound_a(:,:) = is_bound(:,:)
@@ -600,12 +644,17 @@ program snac
   lambda_p_a(:) = lambda_p(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
   call init_transpose_slab_uneven(idir,1,0,dims,lo_1-1,lo_s-1,n_p,n_s,comm_block,t_params)
 #endif
+#ifndef _FFT_USE_SLICED_PENCILS
   call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hi_a(idir),lo_a(il:iu:iskip),hi_a(il:iu:iskip),periods(il:iu:iskip), &
                           dl1_1,dl1_2,dl2_1,dl2_2,lambda_p_a,comms_fft,psolver_fft)
-  call create_n_solvers(hi_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver_fft)
-  call setup_n_solvers(hi_a(idir)-lo_a(idir)+1,psolver_fft)
+#else
+  call init_n_3d_matrices(idir,nslices,cbcpre,bcpre,dl,is_uniform_grid,is_bound,is_centered,lo,periods, &
+                          lo_sp,hi_sp,dxc,dxf,dyc,dyf,dzc,dzf,lambda_p_a,psolver_fft)
+#endif
+  call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver_fft)
+  call setup_n_solvers(npsolvers,psolver_fft)
 #else
   call init_matrix_3d(cbcpre,bcpre,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
                       dxc,dxf,dyc,dyf,dzc,dzf,psolver)
@@ -827,7 +876,11 @@ program snac
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call fft(arrplan_p(1),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
 #ifndef _FFT_USE_SLABS
+#ifdef _FFT_USE_SLICED_PENCILS
+      call solve_n_helmholtz_3d(psolver_fft,nslices,lo_sp,hi_sp,1,lo,hi,pp,po)
+#else
       call solve_n_helmholtz_2d(psolver_fft,lo(idir),hi(idir),1,lo(il:iu:iskip),hi(il:iu:iskip),pp,po)
+#endif
 #else
       call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,pp,pp_s)
       call solve_n_helmholtz_2d(psolver_fft,lo_s(idir),hi_s(idir),0,lo_s(il:iu:iskip),hi_s(il:iu:iskip),pp_s,po)
@@ -927,9 +980,9 @@ program snac
 #endif
   enddo
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  call finalize_n_matrices(hi_a(idir)-lo_a(idir)+1,psolver_fft)
+  call finalize_n_matrices(npsolvers,psolver_fft)
+  call finalize_n_solvers(npsolvers,psolver_fft)
   call fftend(arrplan_p)
-  call finalize_n_solvers(hi_a(idir)-lo_a(idir)+1,psolver_fft)
 #else
   call finalize_matrix(psolver)
   call finalize_solver(psolver)
