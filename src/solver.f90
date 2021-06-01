@@ -702,11 +702,11 @@ module mod_solver
 #endif
     enddo
   end subroutine solve_n_helmholtz_2d
-  subroutine solve_n_helmholtz_3d(asolver,nslice,lo_sp,hi_sp,nh,lo,hi,p,po)
+  subroutine solve_n_helmholtz_3d(asolver,nslices,lo_sp,hi_sp,nh,lo,hi,p,po)
     implicit none
     type(hypre_solver), target, intent(inout), dimension(:) :: asolver
-    integer           ,         intent(in   )               :: nslice
-    integer           ,         intent(in   ), dimension(3,nslice) :: lo_sp,hi_sp
+    integer           ,         intent(in   )               :: nslices
+    integer           ,         intent(in   ), dimension(3,nslices) :: lo_sp,hi_sp
     integer           ,         intent(in   )               :: nh
     integer           ,         intent(in   ), dimension(3) :: lo,hi
     real(rp)          ,         intent(inout), dimension(lo(1)-nh:,lo(2)-nh:,lo(3)-nh:) :: p,po
@@ -714,7 +714,7 @@ module mod_solver
     integer   , pointer :: stype
     integer, dimension(3) :: lo_s,hi_s
     integer :: q
-    do q=1,nslice
+    do q=1,nslices
       solver  => asolver(q)%solver
       mat     => asolver(q)%mat
       rhs     => asolver(q)%rhs
