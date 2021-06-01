@@ -150,8 +150,8 @@ program snac
 #endif
 #endif
 #ifdef _FFT_USE_SLICED_PENCILS
-  integer, parameter :: nslices = 4
-  integer            :: q
+  integer :: nslices
+  integer :: q
 #ifndef _FFT_USE_SLABS
   integer             , dimension(3  ) :: n_s,lo_s,hi_s
 #endif
@@ -270,6 +270,7 @@ program snac
 #endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #ifdef _FFT_USE_SLICED_PENCILS
+nslices = max(16,ng(idir))
 if(nslices > ng(idir)) then
   if(myid == 0) write(stderr,*) 'ERROR: implicit diffusion not yet supported with "_FFT_USE_SLICED_PENCILS".'
   call MPI_FINALIZE()
