@@ -270,6 +270,11 @@ program snac
 #endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #ifdef _FFT_USE_SLICED_PENCILS
+if(nslices > ng(idir)) then
+  if(myid == 0) write(stderr,*) 'ERROR: implicit diffusion not yet supported with "_FFT_USE_SLICED_PENCILS".'
+  call MPI_FINALIZE()
+  error stop
+endif
 #if defined(_IMPDIFF) || defined(_FFT_USE_SLABS)
 #if   defined(_IMPDIFF)
   if(myid == 0) write(stderr,*) 'ERROR: implicit diffusion not yet supported with "_FFT_USE_SLICED_PENCILS".'
