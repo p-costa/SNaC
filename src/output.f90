@@ -5,7 +5,7 @@ module mod_output
   use mod_types
   implicit none
   private
-  public out0d,out1d,out3d,write_log_output,write_visu_3d
+  public out0d,out1d,out2d,out3d,write_log_output,write_visu_3d
   contains
   subroutine out0d(fname,n,var)
     !
@@ -36,9 +36,7 @@ module mod_output
     ! writes the profile of a variable averaged over two domain directions
     !
     ! fname       -> name of the file
-    ! lo  ,hi     -> local lower and upper bounds of input array 
-    !                in global coordinates
-    ! lo_g,hi_g   -> local lower and upper bounds of input array 
+    ! lo  ,hi     -> local lower and upper bounds of input array
     !                containing all the points of the block
     ! idir        -> direction of the profile
     ! l           -> domain dimensions
@@ -125,6 +123,106 @@ module mod_output
     end select
     deallocate(p1d)
   end subroutine out1d
+  !
+  subroutine out2d(fname,lo,hi,lo_g,hi_g,idir,l,dx,dy,dz,x_g,y_g,z_g,comm,myrank,p)
+    !
+    ! writes the profile of a variable averaged over two domain directions
+    !
+    ! fname       -> name of the file
+    ! lo  ,hi     -> local lower and upper bounds of input array
+    !                containing all the points of the block
+    ! idir        -> direction along which the field is averaged
+    ! l           -> domain dimensions
+    ! dx,dy,dz    -> grid spacings
+    ! x_g,y_g,z_g -> coodinates of grid points for the entire block
+    ! mpi_comm    -> communicator pertaining to the group of tasks of each block
+    ! p           -> 3D input scalar field
+    !
+    implicit none
+    character(len=*), intent(in) :: fname
+    integer , intent(in), dimension(3) :: lo,hi,lo_g,hi_g
+    integer , intent(in) :: idir
+    real(rp), intent(in), dimension(3) :: l
+    real(rp), intent(in), dimension(lo(1)-1:  ) :: dx
+    real(rp), intent(in), dimension(lo(2)-1:  ) :: dy
+    real(rp), intent(in), dimension(lo(3)-1:  ) :: dz
+    real(rp), intent(in), dimension(lo_g(1)-1:) :: x_g
+    real(rp), intent(in), dimension(lo_g(2)-1:) :: y_g
+    real(rp), intent(in), dimension(lo_g(3)-1:) :: z_g
+    type(MPI_COMM), intent(in)                  :: comm
+    integer , intent(in)                        :: myrank
+    real(rp), intent(in), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
+    real(rp), allocatable, dimension(:,:) :: p2d
+    integer, dimension(3) :: ng
+    integer :: i,j,k
+    integer :: iunit
+    !
+    ng(:) = hi_g(:)-lo_g(:) + 1
+    select case(idir)
+    case(1)
+      allocate(p2d(lo_g(2):hi_g(2),lo_g(3):hi_g(3)))
+      p2d(:,:) = 0._rp
+      do k=lo(3),hi(3)
+        do j=lo(2),hi(2)
+          p2d(:,:) = 0._rp
+          do i=lo(idir),hi(idir)
+            p2d(j,k) = p2d(j,k) + p(i,j,k)*dx(i)/l(idir)
+          enddo
+        enddo
+      enddo
+      call mpi_allreduce(MPI_IN_PLACE,p2d,ng(2)*ng(3),MPI_REAL_RP,MPI_SUM,comm)
+      if(myrank == 0) then
+        open(newunit=iunit,file=fname)
+        do k=lo_g(3),hi_g(3)
+          do j=lo_g(2),hi_g(2)
+            write(iunit,'(3E15.7)') y_g(j),z_g(k),p2d(j,k)
+          enddo
+        enddo
+        close(iunit)
+      endif
+    case(2)
+      allocate(p2d(lo_g(1):hi_g(1),lo_g(3):hi_g(3)))
+      p2d(:,:) = 0._rp
+      do k=lo(3),hi(3)
+        do i=lo(1),hi(1)
+          do j=lo(idir),hi(idir)
+            p2d(i,k) = p2d(i,k) + p(i,j,k)*dy(j)/l(idir)
+          enddo
+        enddo
+      enddo
+      call mpi_allreduce(MPI_IN_PLACE,p2d,ng(1)*ng(3),MPI_REAL_RP,MPI_SUM,comm)
+      if(myrank == 0) then
+        open(newunit=iunit,file=fname)
+        do k=lo(3),hi(3)
+          do i=lo(1),hi(1)
+            write(iunit,'(3E15.7)') x_g(i),z_g(k),p2d(i,k)
+          enddo
+        enddo
+        close(iunit)
+      endif
+    case(3)
+      allocate(p2d(lo_g(1):hi_g(1),lo_g(2):hi_g(2)))
+      p2d(:,:) = 0._rp
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+          do k=lo(idir),hi(idir)
+            p2d(i,j) = p2d(i,j) + p(i,j,k)*dz(k)/l(idir)
+          enddo
+        enddo
+      enddo
+      call mpi_allreduce(MPI_IN_PLACE,p2d,ng(1)*ng(2),MPI_REAL_RP,MPI_SUM,comm)
+      if(myrank == 0) then
+        open(newunit=iunit,file=fname)
+        do j=lo_g(2),hi_g(2)
+          do i=lo_g(1),hi_g(1)
+            write(iunit,'(3E15.7)') x_g(i),y_g(j),p2d(i,j)
+          enddo
+        enddo
+        close(iunit)
+      endif
+    end select
+    deallocate(p2d)
+  end subroutine out2d
   !
   subroutine out3d(fname,comm,lo,hi,ng,nskip,p)
     !
