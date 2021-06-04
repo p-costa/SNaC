@@ -1,42 +1,43 @@
-# how to visualize the output binary files form *CaNS*
+# how to visualize the output binary files form *SNaC*
 
-## \[*NEW*\] the easy way
-
-in addition to the binary files for visualization, *CaNS* now generates a log file that contains information about the saved data (see `out2d.h90` and `out3d.h90` for more details); this new approach uses that log file to generate the `Xdmf` visualization file.
+in addition to the binary files for visualization, *SNaC* generates a log file that contains information about the saved data; this information is then used to generate a single `Xdmf` metadata file for visualizing field data as a time series.
 
 the steps are as follows:
 
-1. after the simulation has run, copy the contents of `utils/visualize_fields/gen_xdmf_easy/write_xdmf.py` to the simulation `data` folder;
-2. run the file with `python write_xdmf.py`.
+1. after the simulation has run, copy the contents of `utils/visualize_fields/write_xdmf_all.py` to the simulation `data` folder;
+2. run the file with `python write_xdmf_all.py`.
 3. load the generated Xdmf (`*.xmf`) file using paraview/visit or other visualization software.
 
 ## example: how to visualize the default binary output
 
 ### 3D fields
 
-when running the script `write_xdmf.py` we get the following prompts:
+when running the script `write_xdmf_all.py` we get the following prompts:
 
 ~~~
- $ python write_xdmf.py
- Name of the log file written by CaNS [log_visu_3d.out]:
- Name to be appended to the grid files to prevent overwriting []:
+ $ python write_xdmf_all.py
+ Block # 001
+ Name of the log file written by CaNS [log_visu_3d_b_001.out]:
+ Name to be appended to the grid files to prevent overwriting [_b_001]:
+ Block # 002
+ Name of the log file written by CaNS [log_visu_3d_b_002.out]:
+ Name to be appended to the grid files to prevent overwriting [_b_002]:
+ Block # 003
+ Name of the log file written by CaNS [log_visu_3d_b_003.out]:
+ Name to be appended to the grid files to prevent overwriting [_b_003]:
  Name of the output file [viewfld_DNS.xmf]:
 ~~~
 
-* the first value is the name of the file that logged the saved data;
-* the second is a name to append to the grid files that are generated, which should change for different log files to prevent conflicts;
-* the third is the name of the visualization file.
+* the first input is the name of the file that logged the saved data (per block);
+* the second is a name to append to the grid files that are generated, which should change for different log files to prevent conflicts (per block);
+* the last is the name of the visualization file.
 
-by pressing <kbd>enter</kbd> three times, the default values in the square brackets are assumed by the script; these correspond to the default steps required for visualizing 3D field data.
+by pressing <kbd>enter</kbd> after each prompt, the default values in the square brackets are assumed by the script; these correspond to the default steps required for visualizing 3D field data; the data can then be visualized with, e.g., `$ paraview viewfld_DNS.xmf`.
 
 ### checkpoint files
 
-A similar script also located in `utils/visualize_fields/gen_xdmf_easy/`, named `write_xdmf_restart.py`, can be used to generate metadata that allows to visualize the field data contained in all saved checkpoint files:
+a similar script also located in `utils/visualize_fields/`, named `write_xdmf_restart.py`, can be used to generate metadata that allows to visualize the field data contained in saved checkpoint files.
 
-~~~
- $ python write_xdmf_restart.py
- Name of the pattern of the restart files to be visualized [fld?*.bin]:
- Names of stored variables [VEX VEY VEZ PRE]:
- Name to be appended to the grid files to prevent overwriting [_fld]:
- Name of the output file [viewfld_DNS_fld.xmf]:
-~~~
+### read binary data for post-processing
+
+under `utils/read_bindary_data` are MATLAB and python scripts which may be used to load binary field data for post-processing; see `tests/lid_driven_cavity/test.py` for an example use of the python script.

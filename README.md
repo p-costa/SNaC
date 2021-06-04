@@ -2,7 +2,7 @@
 
 **SNaC** is [**CaNS**](https://github.com/p-costa/CaNS) spelled backwards, and is a code for massively-parallel direct numerical simulations (DNS) of fluid flows. *SNaC* aims at combining the versatility of a multi-block DNS solver, with the FFT-based acceleration used in CaNS.
 
-Indeed, a **multi-block** implementation of *SNaC* has been recently developed in branch [`multi_block`](https://github.com/p-costa/SNaC/tree/multi_block). Moreover, if the geometry has one homogeneous direction with constant grid spacing, branch [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block) implements a very fast solver that exploits FFTs in this direction. This is SNaC's *warp drive* :rocket:, as yields a huge speedup in wall-clock time per time step.
+The solver is able to simulate the flow in any three-dimensional multi-block structured Cartesian grid. However,  if the geometry has one homogeneous, 'extruded' direction with constant grid spacing, SNaC can use a very fast solver that exploits FFTs in this direction. This is SNaC's *warp drive* :rocket:, as it yields a huge speedup in wall-clock time per time step.
 
 ## News
 
@@ -10,46 +10,44 @@ Indeed, a **multi-block** implementation of *SNaC* has been recently developed i
 
 Some features are:
 
- * Block-structured three-dimensional parallelization
+ * Multi-block, three-dimensional parallelization
  * Hybrid MPI/OpenMP parallelization
+ * FFT-based synthesis of the Poissonn equation along one direction
  * HYPRE library used to solve Poisson/Helmholtz equations
- * Parallel I/O using MPI I/O 
+ * Parallel I/O using MPI I/O
  * A different canonical flow can be simulated just by changing the input files
- * Simple implementation with no dependencies on external libraries other than HYPRE and MPI
 
 ## Motivation
 
-This code for canonical fluid flows will eventually serve as base for a multi-block DNS code for multiphase flows with adaptive mesh refinement.
+*SNaC* is meant to serve as a multi-block DNS code for fast, massively-parallel simulations of single-phase flows, and as a solid base solver on top of which more complex phenomena can be implemented, such as numerical methods for multiphase flows.
 
 ## Method
 
-The fluid flow is solved with a second-order finite-volume pressure correction scheme, discretized in a MAC grid arrangement. Time is advanced with a three-step low storage Runge-Kutta scheme. Optionally, for increased stability at low Reynolds numbers, at the price of higher computational demand, the diffusion term can be treated implicitly.
+The fluid flow is solved with a standard second-order finite-difference/-volume pressure correction scheme. Time is advanced with a three-step low storage Runge-Kutta scheme. Optionally, for increased stability at low Reynolds numbers, at the price of higher computational demand, the diffusion term can be treated implicitly.
 
 ## Usage
 
-### Input file
+### Input files
 
-The input file `dns.in` sets the physical and computational parameters. In the `examples/` folder are examples of input files for several canonical flows. See [`src/INFO_INPUT.md`](src/INFO_INPUT.md) for a detailed description of the input file.
+The input files `dns.in` sets the physical and computational parameters, while the block files `geo/block.???` setup block-specific parameters. In the `examples/` folder are examples of input files for several canonical flows. See [`src/INFO_INPUT.md`](src/INFO_INPUT.md) for a detailed description of the input files.
 
-For the *multi-block* implementation in branches [`multi_block`](https://github.com/p-costa/SNaC/tree/multi_block) and [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block), the block files in `geo/block.???` setup the flow geometry.
+Files `out1d.h90`, `out2d.h90` and `out3d.h90` in `src/` set which data are written in 1-, 2-, and 3-dimensional output files, respectively. *The code should be recompiled after editing out?d.h90 files*.
 
-Files `out1d.h90` and `out3d.h90` in `src/` set which data are written in 1- and 3-dimensional output files, respectively. *The code should be recompiled after editing out?d.h90 files*.
-
-### Compilation
+### Build
 
 The code should be compiled in `src/`. The prerequisites are the following:
 
  * MPI
- * [HYPRE](https://github.com/hypre-space/hypre)
+ * [*HYPRE*](https://github.com/hypre-space/hypre)
  * OpenMP (optional)
- * FFTW (optional, for branch [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block))
+ * *FFTW* (optional, in case FFT acceleration is used)
 
 The Makefile in `src/` should be modified in agreement to the installation paths of each library. Also, the following preprocessor options are available:
 
  * `-D_TIMING`           : wall-clock time per time step is computed
  * `-D_IMPDIFF`          : diffusion term of the N-S equations is integrated in time with an implicit discretization (thereby improving the stability of the numerical algorithm for viscous-dominated flows)
  * `-D_SINGLE_PRECISION` : calculation will be carried out in single precision (the default precision is double)
- * `-D_FFT_?`, with  `?` being `X`, `Y` or `Z`: will use FFTs to solve the Poisson equation in the direction in question. This option is only valid for the multi-block implementation in branch [`multi_block_fft`](https://github.com/p-costa/SNaC/tree/multi_block)).
+ * `-D_FFT_?`, with  `?` being `X`, `Y` or `Z`: will use FFTs to solve the Poisson equation in the direction in question.
 
 Typing `make run` will compile the code and copy the executable `cans` and input file `dns.in` to a `run/` folder.
 

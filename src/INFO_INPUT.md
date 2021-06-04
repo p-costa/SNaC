@@ -2,8 +2,8 @@
 
 Setting up a multi-block simulation involves two input files:
 
-1. `dns.in`    which sets up the governing parameters that are common to all blocks, *block-independent parameters*.
-2. `block.???` files located in the `geo/` folder, which set up *block-dependent parameters*.
+1. `dns.in`,    which sets up the governing parameters that are common to all blocks, *global parameters*.
+2. `block.???`, files located in the `geo/` folder, which set up *block-specific parameters*.
 
 ---
 ---
@@ -92,7 +92,7 @@ These lines set the frequency of time step checking and output:
 0. 0. 0.                 ! bforce(1:3)
 ~~~
 
-`bforce`, is a constant **body force density term** in the direction in question (e.g. the negative of a constant pressure gradient) that can be added to the right-hand-side of the momentum equation. The three values correspond to three domain directions. NOTE: in a pressure-driven wall-bounded flow, only one type of flow forcing should be selected (bulk velocity or pressure gradient). If the streamwise bulk velocity is forced (by setting the is_forced parameter below `T`), bforce should be zero, and vice-versa.
+`bforce`, is a constant **body force density term** in the direction in question (e.g. the negative of a constant pressure gradient) that can be added to the right-hand side of the momentum equation. The three values correspond to three domain directions. NOTE: in a pressure-driven wall-bounded flow, only one type of flow forcing should be selected (bulk velocity or pressure gradient). If the streamwise bulk velocity is forced (by setting the is_forced parameter below `T`), bforce should be zero, and vice-versa.
 
 ---
 
