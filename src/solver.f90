@@ -11,8 +11,23 @@ module mod_solver
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   public init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers, &
          add_constant_to_n_diagonals,solve_n_helmholtz_2d, &
-         finalize_n_matrices,finalize_n_solvers
+         finalize_n_matrices,finalize_n_solvers,init_comm_slab, &
+         init_transpose_slab_uneven,transpose_slab,alltoallw, &
+         init_n_3d_matrices,solve_n_helmholtz_3d
+  type alltoallw
+    integer            :: counts
+    integer            :: disps
+    type(MPI_DATATYPE) :: types
+  end type alltoallw
 #endif
+!  ! parameterized derived types like below would make more sense but
+!  ! they are very well supported yet
+!  type alltoallw(n) ! Parameterized derived types are not working so well yet!
+!    integer, len :: n
+!    integer           , dimension(n) :: counts
+!    integer           , dimension(n) :: disps
+!    type(MPI_DATATYPE), dimension(n) :: types
+!  end type alltoallw
   integer, parameter :: HYPRESolverSMG      = 1, &
                         HYPRESolverPFMG     = 2, &
                         HYPRESolverGMRES    = 3, &
@@ -485,7 +500,7 @@ module mod_solver
   end subroutine finalize_matrix
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   subroutine init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                            dl1_1,dl1_2,dl2_1,dl2_2,asolver)
+                            dl1_1,dl1_2,dl2_1,dl2_2,comm,asolver)
     !
     ! description
     !
@@ -500,6 +515,7 @@ module mod_solver
     integer           , intent(in ), dimension(    2) :: lo,hi,periods
     real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dl1_1,dl1_2
     real(rp)          , intent(in ), target, dimension(lo(2)-1:) :: dl2_1,dl2_2
+    type(MPI_COMM)    , intent(in )                   :: comm
     type(hypre_solver), intent(out)                              :: asolver
     integer, dimension(2         ) :: qqq
     integer, dimension(2,nstencil) :: offsets
@@ -510,7 +526,7 @@ module mod_solver
     real(rp) :: cc,c1m,c1p,c2m,c2p
     integer            :: comm_hypre
     !
-    comm_hypre = MPI_COMM_WORLD%MPI_VAL
+    comm_hypre = comm%MPI_VAL
     !
     qqq(:) = 0
     where(.not.is_centered(:)) qqq(:) = 1
@@ -612,21 +628,21 @@ module mod_solver
     asolver%sol        = sol
     asolver%comm_hypre = comm_hypre
   end subroutine init_matrix_2d
-  subroutine solve_n_helmholtz_2d(asolver,lo_out,hi_out,lo,hi,p,po)
+  subroutine solve_n_helmholtz_2d(asolver,lo_out,hi_out,nh,lo,hi,p,po)
     implicit none
     type(hypre_solver), target, intent(inout), dimension(:) :: asolver
-    integer           ,         intent(in   )               :: lo_out,hi_out
+    integer           ,         intent(in   )               :: lo_out,hi_out,nh
     integer           ,         intent(in   ), dimension(2) :: lo,hi
 #ifdef _FFT_Z
-    real(rp)          ,         intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo_out-1:) :: p,po
+    real(rp)          ,         intent(inout), dimension(lo(1)-nh:,lo(2)-nh:,lo_out-nh:) :: p,po
 #elif  _FFT_Y
-    real(rp)          ,         intent(inout), dimension(lo(1)-1:,lo_out-1:,lo(2)-1:) :: p,po
+    real(rp)          ,         intent(inout), dimension(lo(1)-nh:,lo_out-nh:,lo(2)-nh:) :: p,po
 #elif  _FFT_X
-    real(rp)          ,         intent(inout), dimension(lo_out-1:,lo(1)-1:,lo(2)-1:) :: p,po
+    real(rp)          ,         intent(inout), dimension(lo_out-nh:,lo(1)-nh:,lo(2)-nh:) :: p,po
 #endif
     integer(8), pointer :: solver,mat,rhs,sol
     integer   , pointer :: stype
-    integer :: i_out,ii,i1,i2,n
+    integer :: i_out,n
     do i_out=lo_out,hi_out
       n = i_out-lo_out+1 
       solver  => asolver(n)%solver
@@ -686,8 +702,64 @@ module mod_solver
 #endif
     enddo
   end subroutine solve_n_helmholtz_2d
+  subroutine solve_n_helmholtz_3d(asolver,nslices,lo_sp,hi_sp,nh,lo,hi,p,po)
+    implicit none
+    type(hypre_solver), target, intent(inout), dimension(:) :: asolver
+    integer           ,         intent(in   )               :: nslices
+    integer           ,         intent(in   ), dimension(3,nslices) :: lo_sp,hi_sp
+    integer           ,         intent(in   )               :: nh
+    integer           ,         intent(in   ), dimension(3) :: lo,hi
+    real(rp)          ,         intent(inout), dimension(lo(1)-nh:,lo(2)-nh:,lo(3)-nh:) :: p,po
+    integer(8), pointer :: solver,mat,rhs,sol
+    integer   , pointer :: stype
+    integer, dimension(3) :: lo_s,hi_s
+    integer :: q
+    do q=1,nslices
+      solver  => asolver(q)%solver
+      mat     => asolver(q)%mat
+      rhs     => asolver(q)%rhs
+      sol     => asolver(q)%sol
+      stype   => asolver(q)%stype
+      lo_s(:) = lo_sp(:,q)
+      hi_s(:) = hi_sp(:,q)
+      !
+      ! setup soluction and rhs vectors
+      !
+      call HYPRE_StructVectorSetBoxValues(rhs,lo_s,hi_s, p(lo_s(1):hi_s(1),lo_s(2):hi_s(2),lo_s(3):hi_s(3)),ierr)
+      call HYPRE_StructVectorSetBoxValues(sol,lo_s,hi_s,po(lo_s(1):hi_s(1),lo_s(2):hi_s(2),lo_s(3):hi_s(3)),ierr)
+      call HYPRE_StructVectorAssemble(rhs,ierr)
+      call HYPRE_StructVectorAssemble(sol,ierr)
+      !
+      ! setup solver, and solve
+      !
+      ! note: this part was based on the the Paris Simulator code
+      !       freely available under a GPL license; see:
+      !       http://www.ida.upmc.fr/~zaleski/paris/
+      !
+      if ( stype == HYPRESolverSMG ) then
+        call HYPRE_StructSMGSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructSMGGetNumIterations(solver,num_iterations,ierr)
+      elseif ( stype == HYPRESolverPFMG ) then
+        call HYPRE_StructPFMGSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructPFMGGetNumIterations(solver,num_iterations,ierr)
+      elseif (stype == HYPRESolverGMRES) then
+        call HYPRE_StructGMRESSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructGMRESGetNumIterations(solver, num_iterations,ierr)
+      elseif (stype == HYPRESolverBiCGSTAB) then
+        call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
+        !call HYPRE_StructBiCGSTABGetNumIterations(solver, num_iterations,ierr)
+      endif ! stype
+      !
+      ! end of part based on the Paris Simulator code
+      !
+      ! fecth results
+      !
+      call HYPRE_StructVectorGetBoxValues(sol,lo_s,hi_s,p(lo_s(1):hi_s(1),lo_s(2):hi_s(2),lo_s(3):hi_s(3)),ierr)
+      po(lo_s(1):hi_s(1),lo_s(2):hi_s(2),lo_s(3):hi_s(3)) = p(lo_s(1):hi_s(1),lo_s(2):hi_S(2),lo_s(3):hi_s(3))
+    enddo
+  end subroutine solve_n_helmholtz_3d
   subroutine init_n_2d_matrices(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_out,hi_out,lo,hi,periods, &
-                                dl1_1,dl1_2,dl2_1,dl2_2,lambda,asolver)
+                                dl1_1,dl1_2,dl2_1,dl2_2,lambda,comm,asolver)
     character(len=1)  , intent(in   ), dimension(0:1,2) :: cbc
     real(rp)          , intent(in   ), dimension(0:1,2) ::  bc
     real(rp)          , intent(in   ), dimension(0:1,2) ::  dl
@@ -699,6 +771,7 @@ module mod_solver
     real(rp)          , intent(in   ), target, dimension(lo(1)-1:) :: dl1_1,dl1_2
     real(rp)          , intent(in   ), target, dimension(lo(2)-1:) :: dl2_1,dl2_2
     real(rp)          , intent(in   ), dimension(:) :: lambda
+    type(MPI_COMM)    , intent(in   ), dimension(:) :: comm
     type(hypre_solver), intent(inout), dimension(:) :: asolver
     type(hypre_solver) :: asolver_aux
     integer :: i_out,q
@@ -706,11 +779,39 @@ module mod_solver
       q = i_out-lo_out+1
       asolver_aux = asolver(q)
       call init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                          dl1_1,dl1_2,dl2_1,dl2_2,asolver_aux)
+                          dl1_1,dl1_2,dl2_1,dl2_2,comm(q),asolver_aux)
       call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],lambda(q),asolver_aux%mat)
       asolver(q) = asolver_aux
     enddo
   end subroutine init_n_2d_matrices
+  subroutine init_n_3d_matrices(idir,nslice,cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,periods, &
+                                lo_sp,hi_sp,dl1_1,dl1_2,dl2_1,dl2_2,dl3_1,dl3_2,lambda,asolver)
+    integer           , intent(in   )                   :: idir,nslice
+    character(len=1)  , intent(in   ), dimension(0:1,3) :: cbc
+    real(rp)          , intent(in   ), dimension(0:1,3) ::  bc
+    real(rp)          , intent(in   ), dimension(0:1,3) ::  dl
+    logical           , intent(in   )                   ::  is_uniform_grid
+    logical           , intent(in   ), dimension(0:1,3) ::  is_bound
+    logical           , intent(in   ), dimension(    3) ::  is_centered
+    integer           , intent(in   ), dimension(    3) :: lo,periods
+    integer           , intent(in   ), dimension(:,:  ) :: lo_sp,hi_sp
+    real(rp)          , intent(in   ), target, dimension(lo(1)-1:) :: dl1_1,dl1_2
+    real(rp)          , intent(in   ), target, dimension(lo(2)-1:) :: dl2_1,dl2_2
+    real(rp)          , intent(in   ), target, dimension(lo(3)-1:) :: dl3_1,dl3_2
+    real(rp)          , intent(in   ), dimension(:) :: lambda
+    type(hypre_solver), intent(inout), dimension(:) :: asolver
+    type(hypre_solver) :: asolver_aux
+    integer :: q
+    do q=1,nslice
+      asolver_aux = asolver(q)
+      call init_matrix_3d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_sp(:,q),hi_sp(:,q),periods, &
+                          dl1_1(lo_sp(1,q)-1:hi_sp(1,q)+1),dl1_2(lo_sp(1,q)-1:hi_sp(1,q)+1), &
+                          dl2_1(lo_sp(2,q)-1:hi_sp(2,q)+1),dl2_2(lo_sp(2,q)-1:hi_sp(2,q)+1), &
+                          dl3_1(lo_sp(3,q)-1:hi_sp(3,q)+1),dl3_2(lo_sp(3,q)-1:hi_sp(3,q)+1), &
+                          asolver_aux,lambda(lo_sp(idir,q)-lo(idir)+1:hi_sp(idir,q)-lo(idir)+1))
+      asolver(q) = asolver_aux
+    enddo
+  end subroutine init_n_3d_matrices
   subroutine create_n_solvers(n,maxiter,maxerror,stype,asolver)
     integer           , intent(   in) :: n
     integer           , intent(   in) :: maxiter
@@ -876,5 +977,133 @@ module mod_solver
       call finalize_solver(asolver)
     enddo
   end subroutine solve_n_helmholtz_2d_old
+  subroutine init_transpose_slab_uneven(idir,nhi,nho,dims,lo_p,lo_s,n_p,n_s,comm_block,transpose_params)
+    implicit none
+    integer, intent(in)                            :: idir,nhi,nho
+    integer, intent(in), dimension(3)              :: dims,lo_p,lo_s,n_p,n_s ! n.b. lower bounds wrt [0,0,0]
+    type(MPI_COMM)     , intent(in)                :: comm_block
+    type(alltoallw), intent(out), dimension(:,:) :: transpose_params
+    integer, dimension(3) :: n_i
+    type(MPI_DATATYPE) :: type_sub_p,type_sub_s
+    integer(MPI_ADDRESS_KIND) :: lb,ext_rp
+    integer, dimension(3,3) :: eye
+    integer :: i,j,k,ii,jj,kk,irank
+    integer, dimension(3,product(dims)) :: lo_p_a,lo_s_a,n_p_a,n_s_a,n_i_a
+    !
+    eye(:,:) = 0
+    do i=1,3
+      eye(i,i) = 1
+    enddo
+    call MPI_ALLGATHER(lo_p,3,MPI_INTEGER,lo_p_a,3,MPI_INTEGER,comm_block)
+    call MPI_ALLGATHER(lo_s,3,MPI_INTEGER,lo_s_a,3,MPI_INTEGER,comm_block)
+    call MPI_ALLGATHER(n_p ,3,MPI_INTEGER,n_p_a ,3,MPI_INTEGER,comm_block)
+    call MPI_ALLGATHER(n_s ,3,MPI_INTEGER,n_s_a ,3,MPI_INTEGER,comm_block)
+    transpose_params(:,:)%counts = 1
+    call MPI_TYPE_GET_EXTENT(MPI_REAL_RP,lb,ext_rp)
+    irank = 0
+    do k=0,dims(3)-1
+      do j=0,dims(2)-1
+        do i=0,dims(1)-1
+          ii = lo_s_a(1,irank+1)*eye(1,idir) + 1
+          jj = lo_s_a(2,irank+1)*eye(2,idir) + 1
+          kk = lo_s_a(3,irank+1)*eye(3,idir) + 1
+          transpose_params(irank+1,1)%disps = extent_f(ii,jj,kk,n_p(:)+2*nhi)*ext_rp
+          ii = lo_p_a(1,irank+1)*(1-eye(1,idir)) + 1
+          jj = lo_p_a(2,irank+1)*(1-eye(2,idir)) + 1
+          kk = lo_p_a(3,irank+1)*(1-eye(3,idir)) + 1
+          transpose_params(irank+1,2)%disps = extent_f(ii,jj,kk,n_s(:)+2*nho)*ext_rp
+          !
+          n_i(:) = n_s_a(:,irank+1)*(eye(:,idir)) + n_p(:)*(1-eye(:,idir))
+          call MPI_TYPE_CREATE_SUBARRAY(3,n_p(:)+2*nhi,n_i(:),[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_p)
+          n_i(:) = n_s(:)*(eye(:,idir)) + n_p_a(:,irank+1)*(1-eye(:,idir))
+          call MPI_TYPE_CREATE_SUBARRAY(3,n_s(:)+2*nho,n_i(:),[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_s)
+          call MPI_TYPE_COMMIT(type_sub_p)
+          call MPI_TYPE_COMMIT(type_sub_s)
+          transpose_params(irank+1,1)%types = type_sub_p
+          transpose_params(irank+1,2)%types = type_sub_s
+          irank = irank + 1
+        enddo
+      enddo
+    enddo
+  end subroutine init_transpose_slab_uneven
+  subroutine init_transpose_slab(idir,nhi,nho,dims,n_p,n_s,transpose_params)
+    implicit none
+    integer, intent(in)                            :: idir,nhi,nho
+    integer, intent(in), dimension(3)              :: dims,n_p,n_s
+    type(alltoallw), intent(out), dimension(:,:)   :: transpose_params
+    integer, dimension(3) :: n_i
+    type(MPI_DATATYPE) :: type_sub_p,type_sub_s
+    integer(MPI_ADDRESS_KIND) :: lb,ext_rp
+    integer, dimension(3,3) :: eye
+    integer :: i,j,k,ii,jj,kk,irank
+    !
+    eye(:,:) = 0
+    do i=1,3
+      eye(i,i) = 1
+    enddo
+    select case(idir)
+      case(1)
+        n_i(:) = [n_s(1),n_p(2),n_p(3)]
+      case(2)
+        n_i(:) = [n_p(1),n_s(2),n_p(3)]
+      case(3)
+        n_i(:) = [n_p(1),n_p(2),n_s(3)]
+    end select
+    transpose_params(:,:)%counts = 1
+    call MPI_TYPE_GET_EXTENT(MPI_REAL_RP,lb,ext_rp)
+    irank = 0
+    do k=0,dims(3)-1
+      do j=0,dims(2)-1
+        do i=0,dims(1)-1
+          ii = irank*n_s(1)*eye(1,idir) + 1
+          jj = irank*n_s(2)*eye(2,idir) + 1
+          kk = irank*n_s(3)*eye(3,idir) + 1
+          transpose_params(irank+1,1)%disps = extent_f(ii,jj,kk,n_p+2*nhi)*ext_rp
+          ii = i*n_p(1)*(1-eye(1,idir)) + 1
+          jj = j*n_p(2)*(1-eye(2,idir)) + 1
+          kk = k*n_p(3)*(1-eye(3,idir)) + 1
+          transpose_params(irank+1,2)%disps = extent_f(ii,jj,kk,n_s+2*nho)*ext_rp
+          irank = irank + 1
+        enddo
+      enddo
+    enddo
+    call MPI_TYPE_CREATE_SUBARRAY(3,n_p+2*nhi,n_i,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_p)
+    call MPI_TYPE_CREATE_SUBARRAY(3,n_s+2*nho,n_i,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_s)
+    call MPI_TYPE_COMMIT(type_sub_p)
+    call MPI_TYPE_COMMIT(type_sub_s)
+    transpose_params(:,1)%types = type_sub_p
+    transpose_params(:,2)%types = type_sub_s
+  end subroutine init_transpose_slab
+  pure integer function extent_f(i,j,k,n) ! memory position of array with point i,j,k assuming Fortran ordering
+     implicit none
+     integer, intent(in) :: i,j,k,n(3)
+     extent_f = (i-1) + (j-1)*n(1) + (k-1)*n(1)*n(2)
+  end function extent_f
+  subroutine transpose_slab(nhi,nho,t_param,comm_block,arr_in,arr_out)
+    implicit none
+    integer, intent(in)                            :: nhi,nho
+    type(alltoallw), dimension(:,:), intent(in)    :: t_param
+    type(MPI_COMM), intent(in)                     :: comm_block
+    real(rp), intent(in ), dimension(1-nhi:,1-nhi:,1-nhi:) :: arr_in
+    real(rp), intent(out), dimension(1-nho:,1-nho:,1-nho:) :: arr_out
+    call MPI_ALLTOALLW(arr_in( 1,1,1),t_param(:,1)%counts,t_param(:,1)%disps,t_param(:,1)%types, &
+                       arr_out(1,1,1),t_param(:,2)%counts,t_param(:,2)%disps,t_param(:,2)%types, &
+                       comm_block)
+  end subroutine transpose_slab
+  subroutine init_comm_slab(lo_idir,hi_idir,lo_s_idir,hi_s_idir,myid,comms_slab)
+    implicit none
+    integer, intent(in) :: lo_idir,hi_idir,lo_s_idir,hi_s_idir,myid
+    type(MPI_COMM), dimension(hi_s_idir-lo_s_idir+1), intent(out) :: comms_slab
+    type(MPI_COMM) :: comm
+    integer :: i,n,icolor
+    do i=lo_idir,hi_idir
+      n = i-lo_s_idir+1
+      icolor = MPI_UNDEFINED
+      if( i >= lo_s_idir .and. i <= hi_s_idir) icolor=i
+      ! n.b. -- order of ranks could be set by e.g. memory layout (i-1 + (j-1)*n(1) + (k-1)*n(1)*n(2)*k)
+      call MPI_COMM_SPLIT(MPI_COMM_WORLD,icolor,myid,comm)
+      if(i >= lo_s_idir .and. i <= hi_s_idir) comms_slab(n) = comm
+    enddo
+  end subroutine init_comm_slab
 #endif
 end module mod_solver
