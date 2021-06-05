@@ -23,9 +23,11 @@ class block:
         self.gridfiles = gridfiles
         self.n         = n
 blocks = []
+block_suffix = '_b_'
+logfile_prefix = input("Name of the log file written by SNaC (excluding the block-specific suffix) [log_visu_3d]: ") or "log_visu_3d"
+grid_prefix = input("Name to be appended to the grid files to prevent overwriting [""]: ") or ""
 for iblock in range(1,nblocks+1):
-    print('Block # {:3}'.format(str(iblock).zfill(3)))
-    blockname = "_b_{:3}".format(str(iblock).zfill(3))
+    blockname = block_suffix+"{:3}".format(str(iblock).zfill(3))
     #
     # define data type and
     # read saved data log
@@ -38,8 +40,8 @@ for iblock in range(1,nblocks+1):
                             ('time', float), ('isave', int)                 \
                            ])
     geofile  = "geometry"+blockname+".out"
-    logfile  = input("Name of the log file written by CaNS [log_visu_3d"+blockname+".out]: ") or "log_visu_3d"+blockname+".out"
-    gridname = input("Name to be appended to the grid files to prevent overwriting ["+blockname+"]: ") or "" + blockname
+    logfile  = logfile_prefix+blockname+".out"
+    gridname = grid_prefix+blockname
     xgridfile = "x"+gridname+'.bin'
     ygridfile = "y"+gridname+'.bin'
     zgridfile = "z"+gridname+'.bin'
@@ -111,6 +113,7 @@ for iblock in range(1,nblocks+1):
     y[nmin[1]-1:nmax[1]:nstep[1]].astype('float64').tofile(ygridfile)
     z[nmin[2]-1:nmax[2]:nstep[2]].astype('float64').tofile(zgridfile)
     blocks.append(block(iblock,blockname,saves,nsaves,nflds,np.array([xgridfile,ygridfile,zgridfile]),n))
+    print('Block # {:3} log files parsed and grid files generated.'.format(str(iblock).zfill(3)))
 #
 # small sanity check
 #

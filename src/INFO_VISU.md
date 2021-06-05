@@ -16,20 +16,16 @@ when running the script `write_xdmf_all.py` we get the following prompts:
 
 ~~~
  $ python write_xdmf_all.py
- Block # 001
- Name of the log file written by CaNS [log_visu_3d_b_001.out]:
- Name to be appended to the grid files to prevent overwriting [_b_001]:
- Block # 002
- Name of the log file written by CaNS [log_visu_3d_b_002.out]:
- Name to be appended to the grid files to prevent overwriting [_b_002]:
- Block # 003
- Name of the log file written by CaNS [log_visu_3d_b_003.out]:
- Name to be appended to the grid files to prevent overwriting [_b_003]:
+ Name of the log file written by SNaC (excluding the block-specific suffix) [log_visu_3d]:
+ Name to be appended to the grid files to prevent overwriting []:
+ Block # 001 log files parsed and grid files generated.
+ Block # 002 log files parsed and grid files generated.
+ Block # 003 log files parsed and grid files generated.
  Name of the output file [viewfld_DNS.xmf]:
 ~~~
 
-* the first input is the name of the file that logged the saved data (per block);
-* the second is a name to append to the grid files that are generated, which should change for different log files to prevent conflicts (per block);
+* the first input is the name of the file that logged the saved data;
+* the second is a name to append to the grid files that are generated, which should change for different log files to prevent conflicts;
 * the last is the name of the visualization file.
 
 by pressing <kbd>enter</kbd> after each prompt, the default values in the square brackets are assumed by the script; these correspond to the default steps required for visualizing 3D field data; the data can then be visualized with, e.g., `$ paraview viewfld_DNS.xmf`.
