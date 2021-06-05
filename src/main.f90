@@ -15,7 +15,7 @@
 ! S:::::::::::::::SS N::::::N        N::::::N a::::::::::aa:::a    CCC::::::::::::C
 !  SSSSSSSSSSSSSSS   NNNNNNNN         NNNNNNN  aaaaaaaaaa  aaaa       CCCCCCCCCCCCC
 !-----------------------------------------------------------------------------------
-! **SNaC**, also known as *Slow CaNS*
+! **SNaC**
 ! Pedro Costa (p.simoes.costa@gmail.com)
 !-----------------------------------------------------------------------------------
 program snac
