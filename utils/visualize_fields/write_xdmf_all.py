@@ -4,7 +4,7 @@ import glob
 #
 # define some custom parameters, not defined in the DNS code
 #
-iseek      = 0              # number of bytes to skip relative to the origin of the binary file (0 for CaNS)
+iseek      = 0              # number of bytes to skip relative to the origin of the binary file (0 for SNaC)
 iprecision = 8              # precision of real-valued data
 r0_g = np.array([0.,0.,0.]) # domain origin
 non_uniform_grid = True

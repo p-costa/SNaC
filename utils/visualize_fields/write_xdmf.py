@@ -4,7 +4,7 @@ import glob
 #
 # define some custom parameters, not defined in the DNS code
 #
-iseek      = 0              # number of bytes to skip relative to the origin of the binary file (0 for CaNS)
+iseek      = 0              # number of bytes to skip relative to the origin of the binary file (0 for SNaC)
 iprecision = 8              # precision of real-valued data
 r0_g = np.array([0.,0.,0.]) # domain origin
 non_uniform_grid = True
@@ -28,7 +28,7 @@ for iblock in range(1,nblocks+1):
                             ('time', float), ('isave', int)                 \
                            ])
     geofile  = "geometry"+blockname+".out"
-    logfile  = input("Name of the log file written by CaNS [log_visu_3d"+blockname+".out]: ") or "log_visu_3d"+blockname+".out"
+    logfile  = input("Name of the log file written by SNaC [log_visu_3d"+blockname+".out]: ") or "log_visu_3d"+blockname+".out"
     gridname = input("Name to be appended to the grid files to prevent overwriting ["+blockname+"]: ") or "" + blockname
     xgridfile = "x"+gridname+'.bin'
     ygridfile = "y"+gridname+'.bin'

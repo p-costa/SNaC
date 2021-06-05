@@ -1,5 +1,5 @@
 #
-# this python script can be used to visualize directly field from the checkpoint files of CaNS
+# this python script can be used to visualize directly field from the checkpoint files of SNaC
 #
 import numpy as np
 import os
