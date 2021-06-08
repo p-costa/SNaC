@@ -359,8 +359,8 @@ module mod_initflow
     where(periods(:) /= 0) q(:) = 0
     do i2 = lo(2)-1,hi(2)+1
       do i1 = lo(1)-1,hi(1)+1
-        vel(i1,i2) = inflow_herschel_bulkley(x1c(i1),lmin(1),lmax(1),rn,dpdl,kappa,tauy)**q(1) * &
-                     inflow_herschel_bulkley(x2c(i2),lmin(2),lmax(2),rn,dpdl,kappa,tauy)**q(2)
+        vel(i1,i2) = inflow_herschel_bulkley(x1c(i1),lmin(1),lmin(1)+(lmax(1)-lmin(1))*2._rp,rn,dpdl,kappa,tauy)**0 * & !q(1) * &
+                     inflow_herschel_bulkley(x2c(i2),lmin(2),lmin(2)+(lmax(2)-lmin(2))*2._rp,rn,dpdl,kappa,tauy)**q(2)
       enddo
     enddo
   end subroutine init_inflow_nn
