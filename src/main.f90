@@ -382,6 +382,7 @@ program snac
     enddo
   enddo
 #endif
+  call inflow(is_bound_inflow,lo,hi,velin_x,velin_y,velin_z,u,v,w)
   up(:,:,:)      = 0._rp
   vp(:,:,:)      = 0._rp
   wp(:,:,:)      = 0._rp
