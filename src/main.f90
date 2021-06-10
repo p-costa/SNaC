@@ -685,6 +685,7 @@ endif
   allocate(usolver_fft(hi_a(idir)-lo_a(idir)+1))
 #ifndef _FFT_USE_SLABS
   lambda_u_a(:) = lambda_u(:)
+  hiu_a(:) = hiu(:)
 #else
   lambda_u_a(:) = lambda_u(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
   hiu_a(:) = hi_s(:)
@@ -714,6 +715,7 @@ endif
   allocate(vsolver_fft(hi_a(idir)-lo_a(idir)+1))
 #ifndef _FFT_USE_SLABS
   lambda_v_a(:) = lambda_v(:)
+  hiv_a(:) = hiv(:)
 #else
   lambda_v_a(:) = lambda_v(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
   hiv_a(:) = hi_s(:)
@@ -743,6 +745,7 @@ endif
   allocate(wsolver_fft(hi_a(idir)-lo_a(idir)+1))
 #ifndef _FFT_USE_SLABS
   lambda_w_a(:) = lambda_w(:)
+  hiw_a(:) = hiw(:)
 #else
   lambda_w_a(:) = lambda_w(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
   hiw_a(:) = hi_s(:)
