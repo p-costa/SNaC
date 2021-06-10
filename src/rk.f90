@@ -40,9 +40,11 @@ module mod_rk
     dwdtrk(:,:,:) = 0._rp
     !$OMP END WORKSHARE
 #ifndef _NON_NEWTONIAN
+#ifndef _IMPDIFF
     call momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudtrk)
     call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrk)
     call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrk)
+#endif
 #else
 #ifndef _IMPDIFF
     if(present(mu)) then
@@ -52,8 +54,6 @@ module mod_rk
     else
       error stop "ERROR: variable viscosity field not provided; aborting..."
     endif
-#else
-    error stop "ERROR: implicit diffusion not supported for variable viscosity; aborting..."
 #endif
 #endif
     call momx_a(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudtrk)
@@ -65,9 +65,15 @@ module mod_rk
     dvdtrkd(:,:,:) = 0._rp
     dwdtrkd(:,:,:) = 0._rp
     !$OMP END WORKSHARE
+#ifndef _NON_NEWTONIAN
     call momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudtrkd)
     call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrkd)
     call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrkd)
+#else
+    call momx_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu,u,v,w,dudtrkd)
+    call momy_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu,u,v,w,dvdtrkd)
+    call momz_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu,u,v,w,dwdtrkd)
+#endif
 #endif
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &

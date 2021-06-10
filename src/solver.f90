@@ -13,6 +13,9 @@ module mod_solver
          add_constant_to_n_diagonals,solve_n_helmholtz_2d, &
          finalize_n_matrices,finalize_n_solvers
 #endif
+#if defined(_NON_NEWTONIAN) && defined(_IMPDIFF)
+  public init_matrix_3d_vc
+#endif
   integer, parameter :: HYPRESolverSMG      = 1, &
                         HYPRESolverPFMG     = 2, &
                         HYPRESolverGMRES    = 3, &
@@ -876,5 +879,188 @@ module mod_solver
       call finalize_solver(asolver)
     enddo
   end subroutine solve_n_helmholtz_2d_old
+#endif
+#ifdef _NON_NEWTONIAN
+  subroutine init_matrix_3d_vc(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
+                               dx1,dx2,dy1,dy2,dz1,dz2,asolver,idir,alpha,alpha_const)
+    !
+    ! description
+    !
+    implicit none
+    integer, parameter :: nstencil = 7
+    character(len=1)  , intent(in ), dimension(0:1,3) :: cbc
+    real(rp)          , intent(in ), dimension(0:1,3) ::  bc
+    real(rp)          , intent(in ), dimension(0:1,3) ::  dl
+    logical           , intent(in ), dimension(0:1,3) ::  is_bound
+    logical           , intent(in )                   ::  is_uniform_grid
+    logical           , intent(in ), dimension(    3) ::  is_centered
+    integer           , intent(in ), dimension(    3) :: lo,hi,periods
+    real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dx1,dx2
+    real(rp)          , intent(in ), target, dimension(lo(2)-1:) :: dy1,dy2
+    real(rp)          , intent(in ), target, dimension(lo(3)-1:) :: dz1,dz2
+    type(hypre_solver), intent(out)                              :: asolver
+    integer           , intent(in ) :: idir
+    real(rp)          , intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: alpha
+    real(rp)          , intent(in )                                        :: alpha_const
+    integer, dimension(3         ) :: qqq
+    integer, dimension(3,nstencil) :: offsets
+    real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
+    real(rp), dimension(0:1,3) :: factor,sgn
+    integer(8) :: grid,stencil,mat,rhs,sol
+    integer :: i,j,k,q,qq
+    real(rp) :: cc,cxm,cxp,cym,cyp,czm,czp
+    real(rp) :: alphaxm,alphaxp,alphaym,alphayp,alphazm,alphazp
+    integer            :: comm_hypre
+    !
+    comm_hypre = MPI_COMM_WORLD%MPI_VAL
+    qqq(:) = 0
+    where(.not.is_centered(:)) qqq(:) = 1
+    factor(:,:) = 0._rp
+    sgn(   :,:) = 0._rp
+    do q=1,3
+      do qq=0,1
+        if(is_bound(qq,q)) then
+          select case(cbc(qq,q))
+          case('N')
+            factor(qq,q) = 1._rp*dl(qq,q)*bc(qq,q)
+            if(qq == 1) factor(qq,q) = -factor(qq,q)
+            sgn(   qq,q) = 1._rp
+          case('D')
+            if(is_centered(q)) then
+              factor(qq,q) = -2._rp*bc(qq,q)
+              sgn(   qq,q) = -1._rp
+            else
+              factor(qq,q) = -1._rp*bc(qq,q)
+              sgn(   qq,q) =  0._rp
+            endif
+          end select
+        endif
+      enddo
+    enddo
+    !
+    ! create 3D grid object
+    !
+    call HYPRE_StructGridCreate(comm_hypre,3,grid,ierr)
+    call HYPRE_StructGridSetPeriodic(grid,periods,ierr)
+    call HYPRE_StructGridSetExtents(grid,lo,hi,ierr)
+    call HYPRE_StructGridAssemble(grid,ierr)
+    !
+    ! setup the finite-difference stencil
+    !
+    call HYPRE_StructStencilCreate(3,nstencil,stencil,ierr)
+    offsets = reshape([ 0, 0, 0, &
+                       -1, 0, 0, &
+                        1, 0, 0, &
+                        0,-1, 0, &
+                        0, 1, 0, &
+                        0, 0,-1, &
+                        0, 0, 1 ],shape(offsets))
+    do q=1,nstencil
+      call HYPRE_StructStencilSetElement(stencil,q-1,offsets(:,q),ierr)
+    enddo
+    !
+    ! create coefficient matrix, and solution & right-hand-side vectors
+    !
+    call HYPRE_StructMatrixCreate(comm_hypre,grid,stencil,mat,ierr)
+    if(is_uniform_grid) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
+    call HYPRE_StructMatrixInitialize(mat,ierr)
+    call HYPRE_StructVectorCreate(comm_hypre,grid,sol,ierr)
+    call HYPRE_StructVectorInitialize(sol,ierr)
+    call HYPRE_StructVectorCreate(comm_hypre,grid,rhs,ierr)
+    call HYPRE_StructVectorInitialize(rhs,ierr)
+    q = 0
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+          q = q + 1
+          select case(idir)
+          case(1)
+            alphaxp = alpha(i+1,j,k)
+            alphaxm = alpha(i  ,j,k)
+            alphayp = 0.25_rp*(alpha(i,j,k)+alpha(i,j+1,k)+alpha(i+1,j+1,k)+alpha(i+1,j,k))
+            alphaym = 0.25_rp*(alpha(i,j,k)+alpha(i,j-1,k)+alpha(i+1,j-1,k)+alpha(i+1,j,k))
+            alphazp = 0.25_rp*(alpha(i,j,k)+alpha(i,j,k+1)+alpha(i+1,j,k+1)+alpha(i+1,j,k))
+            alphazm = 0.25_rp*(alpha(i,j,k)+alpha(i,j,k-1)+alpha(i+1,j,k-1)+alpha(i+1,j,k))
+          case(2)
+            alphaxp = 0.25_rp*(alpha(i,j,k)+alpha(i+1,j,k)+alpha(i+1,j+1,k)+alpha(i,j+1,k))
+            alphaxm = 0.25_rp*(alpha(i,j,k)+alpha(i-1,j,k)+alpha(i-1,j+1,k)+alpha(i,j+1,k))
+            alphayp = alpha(i,j+1,k)
+            alphaym = alpha(i,j  ,k)
+            alphazp = 0.25_rp*(alpha(i,j,k)+alpha(i,j+1,k)+alpha(i,j+1,k+1)+alpha(i,j,k+1))
+            alphazm = 0.25_rp*(alpha(i,j,k)+alpha(i,j+1,k)+alpha(i,j+1,k-1)+alpha(i,j,k-1))
+          case(3)
+            alphaxp = 0.25_rp*(alpha(i,j,k)+alpha(i,j,k+1)+alpha(i+1,j,k+1)+alpha(i+1,j,k))
+            alphaxm = 0.25_rp*(alpha(i,j,k)+alpha(i,j,k+1)+alpha(i-1,j,k+1)+alpha(i-1,j,k))
+            alphayp = 0.25_rp*(alpha(i,j,k)+alpha(i,j,k+1)+alpha(i,j+1,k+1)+alpha(i,j+1,k))
+            alphaym = 0.25_rp*(alpha(i,j,k)+alpha(i,j,k+1)+alpha(i,j-1,k+1)+alpha(i,j-1,k))
+            alphazp = alpha(i,j,k+1)
+            alphazm = alpha(i,j,k  )
+          case default
+            alphaxp = 0.50_rp*(alpha(i,j,k)+alpha(i+1,j,k))
+            alphaxm = 0.50_rp*(alpha(i,j,k)+alpha(i-1,j,k))
+            alphayp = 0.50_rp*(alpha(i,j,k)+alpha(i,j+1,k))
+            alphaym = 0.50_rp*(alpha(i,j,k)+alpha(i,j-1,k))
+            alphazp = 0.50_rp*(alpha(i,j,k)+alpha(i,j,k+1))
+            alphazm = 0.50_rp*(alpha(i,j,k)+alpha(i,j,k-1))
+          end select
+          !
+          cxm = 1._rp/(dx1(i-1+qqq(1))*dx2(i))*alphaxm*alpha_const
+          cxp = 1._rp/(dx1(i  +qqq(1))*dx2(i))*alphaxp*alpha_const
+          cym = 1._rp/(dy1(j-1+qqq(2))*dy2(j))*alphaym*alpha_const
+          cyp = 1._rp/(dy1(j  +qqq(2))*dy2(j))*alphayp*alpha_const
+          czm = 1._rp/(dz1(k-1+qqq(3))*dz2(k))*alphazm*alpha_const
+          czp = 1._rp/(dz1(k  +qqq(3))*dz2(k))*alphazp*alpha_const
+          cc  = -(cxm+cxp+cym+cyp+czm+czp)
+          if(periods(1) == 0) then
+            if(is_bound(0,1).and.i == lo(1)) then
+              cc = cc + sgn(0,1)*cxm
+              cxm = 0._rp
+            endif
+            if(is_bound(1,1).and.i == hi(1)) then
+              cc = cc + sgn(1,1)*cxp
+              cxp = 0._rp
+            endif
+          endif
+          if(periods(2) == 0) then
+            if(is_bound(0,2).and.j == lo(2)) then
+              cc = cc + sgn(0,2)*cym
+              cym = 0._rp
+            endif
+            if(is_bound(1,2).and.j == hi(2)) then
+              cc = cc + sgn(1,2)*cyp
+              cyp = 0._rp
+            endif
+          endif
+          if(periods(3) == 0) then
+            if(is_bound(0,3).and.k == lo(3)) then
+              cc = cc + sgn(0,3)*czm
+              czm = 0._rp
+            endif
+            if(is_bound(1,3).and.k == hi(3)) then
+              cc = cc + sgn(1,3)*czp
+              czp = 0._rp
+            endif
+          endif
+          qq = (q-1)*nstencil
+          matvalues(qq+1) = cc
+          matvalues(qq+2) = cxm
+          matvalues(qq+3) = cxp
+          matvalues(qq+4) = cym
+          matvalues(qq+5) = cyp
+          matvalues(qq+6) = czm
+          matvalues(qq+7) = czp
+        enddo
+      enddo
+    enddo
+    call HYPRE_StructMatrixSetBoxValues(mat,lo,hi,nstencil, &
+                                        [0,1,2,3,4,5,6],matvalues,ierr)
+    call HYPRE_StructMatrixAssemble(mat,ierr)
+    asolver%grid       = grid
+    asolver%stencil    = stencil
+    asolver%mat        = mat
+    asolver%rhs        = rhs
+    asolver%sol        = sol
+    asolver%comm_hypre = comm_hypre
+  end subroutine init_matrix_3d_vc
 #endif
 end module mod_solver
