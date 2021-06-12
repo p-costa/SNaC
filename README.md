@@ -4,6 +4,10 @@
 
 The solver is able to simulate the flow in any three-dimensional multi-block structured Cartesian grid. However,  if the geometry has one homogeneous, 'extruded' direction with constant grid spacing, SNaC can use a very fast solver that exploits FFTs in this direction. This is SNaC's *warp drive* :rocket:, as it yields a huge speedup in wall-clock time per time step.
 
+**Reference**
+
+P. Costa. *A FFT-accelerated multi-block finite-difference solver for massively parallel simulations of incompressible flows*. [*arXiv:2106.03583*](https://arxiv.org/pdf/2106.03583.pdf) (2021).
+
 ## News
 
 ## Features
