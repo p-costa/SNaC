@@ -195,7 +195,7 @@ module mod_solver
     ! create coefficient matrix, and solution & right-hand-side vectors
     !
     call HYPRE_StructMatrixCreate(comm_hypre,grid,stencil,mat,ierr)
-    if(is_uniform_grid) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
+    !if(is_uniform_grid) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
     call HYPRE_StructMatrixInitialize(mat,ierr)
     call HYPRE_StructVectorCreate(comm_hypre,grid,sol,ierr)
     call HYPRE_StructVectorInitialize(sol,ierr)
@@ -882,7 +882,7 @@ module mod_solver
 #endif
 #ifdef _NON_NEWTONIAN
   subroutine init_matrix_3d_vc(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                               dx1,dx2,dy1,dy2,dz1,dz2,asolver,idir,alpha,alpha_const)
+                               dx1,dx2,dy1,dy2,dz1,dz2,asolver,idir,alpha,alpha_const,diag)
     !
     ! description
     !
@@ -901,7 +901,7 @@ module mod_solver
     type(hypre_solver), intent(out)                              :: asolver
     integer           , intent(in ) :: idir
     real(rp)          , intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: alpha
-    real(rp)          , intent(in )                                        :: alpha_const
+    real(rp)          , intent(in )                                        :: alpha_const,diag
     integer, dimension(3         ) :: qqq
     integer, dimension(3,nstencil) :: offsets
     real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
@@ -962,7 +962,7 @@ module mod_solver
     ! create coefficient matrix, and solution & right-hand-side vectors
     !
     call HYPRE_StructMatrixCreate(comm_hypre,grid,stencil,mat,ierr)
-    if(is_uniform_grid) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
+    !if(is_uniform_grid) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
     call HYPRE_StructMatrixInitialize(mat,ierr)
     call HYPRE_StructVectorCreate(comm_hypre,grid,sol,ierr)
     call HYPRE_StructVectorInitialize(sol,ierr)
@@ -1010,7 +1010,7 @@ module mod_solver
           cyp = 1._rp/(dy1(j  +qqq(2))*dy2(j))*alphayp*alpha_const
           czm = 1._rp/(dz1(k-1+qqq(3))*dz2(k))*alphazm*alpha_const
           czp = 1._rp/(dz1(k  +qqq(3))*dz2(k))*alphazp*alpha_const
-          cc  = -(cxm+cxp+cym+cyp+czm+czp)
+          cc  = -(cxm+cxp+cym+cyp+czm+czp) + diag
           if(periods(1) == 0) then
             if(is_bound(0,1).and.i == lo(1)) then
               cc = cc + sgn(0,1)*cxm

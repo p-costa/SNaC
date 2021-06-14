@@ -586,19 +586,22 @@ program snac
       call finalize_n_solvers(hiu(idir)-lo(idir)+1,usolver_fft)
 #else
 #ifdef _NON_NEWTONIAN
-      call init_matrix_3d_vc(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,is_centered,lo,hiu,periods, &
-                             dxf,dxc,dyc,dyf,dzc,dzf,usolver,1,mu,alpha/visc)
+      dl = reshape([dxf_g(lo_g(1)-0),dxf_g(hi_g(1)), &
+                    dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
+                    dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
+      call init_matrix_3d_vc(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,[.false.,.true.,.true.],lo,hiu,periods, &
+                             dxf,dxc,dyc,dyf,dzc,dzf,usolver,1,mu,alpha/visc,1._rp)
       call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,usolver)
       call setup_solver(usolver)
       call solve_helmholtz(usolver,lo,hiu,up,uo)
       call finalize_solver(usolver)
+      call finalize_matrix(usolver)
 #else
       call add_constant_to_diagonal(lo,hiu,alphai-alphaoi,usolver%mat) ! correct diagonal term
       call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,usolver)
       call setup_solver(usolver)
       call solve_helmholtz(usolver,lo,hiu,up,uo)
       call finalize_solver(usolver)
-      call finalize_matrix(usolver)
 #endif
 #endif
       !
@@ -620,19 +623,22 @@ program snac
       call finalize_n_solvers(hiv(idir)-lo(idir)+1,vsolver_fft)
 #else
 #ifdef _NON_NEWTONIAN
-      call init_matrix_3d_vc(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,is_centered,lo,hiv,periods, &
-                          dxc,dxf,dyf,dyc,dzc,dzf,vsolver,2,mu,alpha/visc)
+      dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
+                    dyf_g(lo_g(2)-0),dyf_g(hi_g(2)), &
+                    dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
+      call init_matrix_3d_vc(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,[.true.,.false.,.true.],lo,hiv,periods, &
+                          dxc,dxf,dyf,dyc,dzc,dzf,vsolver,2,mu,alpha/visc,1._rp)
       call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,vsolver)
       call setup_solver(vsolver)
       call solve_helmholtz(vsolver,lo,hiv,vp,vo)
       call finalize_solver(vsolver)
+      call finalize_matrix(vsolver)
 #else
       call add_constant_to_diagonal(lo,hiv,alphai-alphaoi,vsolver%mat) ! correct diagonal term
       call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,vsolver)
       call setup_solver(vsolver)
       call solve_helmholtz(vsolver,lo,hiv,vp,vo)
       call finalize_solver(vsolver)
-      call finalize_matrix(vsolver)
 #endif
 #endif
       !
@@ -654,8 +660,11 @@ program snac
       call finalize_n_solvers(hiw(idir)-lo(idir)+1,wsolver_fft)
 #else
 #ifdef _NON_NEWTONIAN
-      call init_matrix_3d_vc(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,is_centered,lo,hiw,periods, &
-                             dxc,dxf,dyc,dyf,dzf,dzc,wsolver,3,mu,alpha/visc)
+      dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
+                    dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
+                    dzf_g(lo_g(3)-0),dzf_g(hi_g(3))],shape(dl))
+      call init_matrix_3d_vc(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,[.true.,.true.,.false.],lo,hiw,periods, &
+                             dxc,dxf,dyc,dyf,dzf,dzc,wsolver,3,mu,alpha/visc,1._rp)
       call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,wsolver)
       call setup_solver(wsolver)
       call solve_helmholtz(wsolver,lo,hiw,wp,wo)

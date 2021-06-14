@@ -89,9 +89,9 @@ module mod_rk
           vp(i,j,k) = v(i,j,k) + factor1*dvdtrk(i,j,k) + factor2*dvdtrko(i,j,k)
           wp(i,j,k) = w(i,j,k) + factor1*dwdtrk(i,j,k) + factor2*dwdtrko(i,j,k)
 #ifdef _IMPDIFF
-          up(i,j,k) = u(i,j,k) + factor12*dudtrkd(i,j,k)
-          vp(i,j,k) = v(i,j,k) + factor12*dvdtrkd(i,j,k)
-          wp(i,j,k) = w(i,j,k) + factor12*dwdtrkd(i,j,k)
+          up(i,j,k) = up(i,j,k) + factor12*dudtrkd(i,j,k)
+          vp(i,j,k) = vp(i,j,k) + factor12*dvdtrkd(i,j,k)
+          wp(i,j,k) = wp(i,j,k) + factor12*dwdtrkd(i,j,k)
 #endif
           dudtrko(i,j,k) = dudtrk(i,j,k)
           dvdtrko(i,j,k) = dvdtrk(i,j,k)
