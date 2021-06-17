@@ -738,6 +738,7 @@ program snac
       call MPI_ALLREDUCE(MPI_IN_PLACE,visc,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD)
 #endif
       call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
+      visc = kappa
       dt = min(cfl*dtmax,dtmin)
       if(myid == 0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
       if(dtmax < small) then

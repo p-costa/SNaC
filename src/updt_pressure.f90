@@ -50,10 +50,10 @@ module mod_updt_pressure
           p(i,j,k) = p(i,j,k) + & 
                       alpha*( (alphaxp*(pp(i+1,j,k)-pp(i  ,j,k))/dxc(i  ) - &
                                alphaxm*(pp(i  ,j,k)-pp(i-1,j,k))/dxc(i-1))/dxf(i) + &
-                              (alphaym*(pp(i,j+1,k)-pp(i,j  ,k))/dyc(j  ) - &
-                               alphayp*(pp(i,j  ,k)-pp(i,j-1,k))/dyc(j-1))/dyf(j) + &
-                              (alphazm*(pp(i,j,k+1)-pp(i,j,k  ))/dzc(k  ) - &
-                               alphazp*(pp(i,j,k  )-pp(i,j,k-1))/dzc(k-1))/dzf(k) )
+                              (alphayp*(pp(i,j+1,k)-pp(i,j  ,k))/dyc(j  ) - &
+                               alphaym*(pp(i,j  ,k)-pp(i,j-1,k))/dyc(j-1))/dyf(j) + &
+                              (alphazp*(pp(i,j,k+1)-pp(i,j,k  ))/dzc(k  ) - &
+                               alphazm*(pp(i,j,k  )-pp(i,j,k-1))/dzc(k-1))/dzf(k) )
 #else
           p(i,j,k) = p(i,j,k) + & 
                       alpha*( ((pp(i+1,j,k)-pp(i  ,j,k))/dxc(i  ) - &
