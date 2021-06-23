@@ -12,8 +12,12 @@ real(rp), parameter, dimension(2,3) :: rkcoeff = reshape( [32._rp/60._rp,  0._rp
                                                            25._rp/60._rp, -17._rp/60._rp, &
                                                            45._rp/60._rp, -25._rp/60._rp], shape(rkcoeff))
 real(rp), parameter, dimension(3)   :: rkcoeff12 = rkcoeff(1,:)+rkcoeff(2,:)
-real(rp), parameter :: hypre_tol     = real(1.e-4,rp)
-integer , parameter :: hypre_maxiter = 100
+integer , parameter :: hypre_solver_i_default  = 2
+real(rp), parameter :: hypre_tol_default     = real(1.e-4,rp)
+integer , parameter :: hypre_maxiter_default = 50
+integer  :: hypre_solver_i
+real(rp) :: hypre_tol
+integer  :: hypre_maxiter
 !
 ! parameters to be determined from the input file 'dns.in'
 !
@@ -169,5 +173,43 @@ contains
       l_periodic(:) = 0._rp
       periods(:)    = 0
     end where
+    !
+    ! read iterative solver parameter file hypre.in, if it exists
+    !
+    inquire(file='hypre.in', exist = exists)
+    if(exists) then
+      open(newunit=iunit,file='hypre.in',status='old',action='read',iostat=ierr)
+        if( ierr == 0 ) then
+          read(iunit,*) hypre_solver_i,hypre_tol,hypre_maxiter
+          if(hypre_solver_i < 1 .or. hypre_solver_i > 4) then
+            if(myid == 0) write(stderr,*) '*** Error: invalid solver choice [1-4] *** '
+            if(myid == 0) write(stderr,*) 'Reverting to the default (2 -> PFMG)...'
+            hypre_solver_i = hypre_solver_i_default
+          endif
+          if(hypre_tol > 1._rp .or. hypre_tol < 0._rp) then
+            if(myid == 0) write(stderr,*) '*** Error: iterative error tolerance is too high or negative *** '
+            if(myid == 0) write(stderr,*) 'Reverting to the default (1.e-4)...'
+            hypre_tol     = hypre_tol_default
+          endif
+          if(hypre_maxiter < 0) then
+            if(myid == 0) write(stderr,*) '*** Error: maximum number of iterations needs to be > 0 *** '
+            if(myid == 0) write(stderr,*) 'Reverting to the default (50)...'
+            hypre_maxiter = hypre_maxiter_default
+          endif
+        else
+          if(myid == 0) write(stderr,*) '*** Error reading the input file *** '
+          if(myid == 0) write(stderr,*) 'Aborting...'
+          call MPI_FINALIZE()
+          error stop
+        endif
+      close(iunit)
+    else
+      !
+      ! defaults
+      !
+      hypre_solver_i = hypre_solver_i_default
+      hypre_tol      = hypre_tol_default
+      hypre_maxiter  = hypre_maxiter_default
+    endif
   end subroutine read_input
 end module mod_param

@@ -49,13 +49,13 @@ program snac
                                  vol_all,my_block,id_first,nblocks,nrank,  &
                                  is_periodic,l_periodic,                   &
                                  lmax_max,lmin_min,lo_min,hi_max,          &
-                                 hypre_tol,hypre_maxiter
+                                 hypre_tol,hypre_maxiter,hypre_solver_i
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
   use mod_solver         , only: init_bc_rhs,init_matrix_3d,create_solver,setup_solver, & 
                                  add_constant_to_diagonal,solve_helmholtz,finalize_solver,finalize_matrix, &
-                                 hypre_solver,HYPRESolverPFMG
+                                 hypre_solver
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   use mod_solver         , only: init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers,solve_n_helmholtz_2d, &
                                  init_n_3d_matrices,solve_n_helmholtz_3d, &
@@ -660,12 +660,12 @@ endif
   call init_n_3d_matrices(idir,nslices,cbcpre,bcpre,dl,is_uniform_grid,is_bound,is_centered,lo,periods, &
                           lo_sp,hi_sp,dxc,dxf,dyc,dyf,dzc,dzf,lambda_p_a,psolver_fft)
 #endif
-  call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver_fft)
+  call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,hypre_solver_i,psolver_fft)
   call setup_n_solvers(npsolvers,psolver_fft)
 #else
   call init_matrix_3d(cbcpre,bcpre,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
                       dxc,dxf,dyc,dyf,dzc,dzf,psolver)
-  call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,psolver)
+  call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,psolver)
   call setup_solver(psolver)
 #endif
 #ifdef _IMPDIFF
@@ -788,7 +788,7 @@ endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiu_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiu_a(il:iu:iskip), &
                                        alphai-alphaoi,usolver_fft(:)%mat) ! correct diagonal term
-      call create_n_solvers(hiu_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,usolver_fft)
+      call create_n_solvers(hiu_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,hypre_solver_i,usolver_fft)
       call setup_n_solvers(hiu_a(idir)-lo_a(idir)+1,usolver_fft)
       call fft(arrplan_u(1),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
 #ifndef _FFT_USE_SLABS
@@ -803,7 +803,7 @@ endif
       call finalize_n_solvers(hiu_a(idir)-lo_a(idir)+1,usolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiu,alphai-alphaoi,usolver%mat) ! correct diagonal term
-      call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,usolver)
+      call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,usolver)
       call setup_solver(usolver)
       call solve_helmholtz(usolver,lo,hiu,up,uo)
       call finalize_solver(usolver)
@@ -816,7 +816,7 @@ endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiv_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiv_a(il:iu:iskip), &
                                        alphai-alphaoi,vsolver_fft(:)%mat) ! correct diagonal term
-      call create_n_solvers(hiv_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,vsolver_fft)
+      call create_n_solvers(hiv_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,hypre_solver_i,vsolver_fft)
       call setup_n_solvers(hiv_a(idir)-lo_a(idir)+1,vsolver_fft)
       call fft(arrplan_v(1),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
 #ifndef _FFT_USE_SLABS
@@ -831,7 +831,7 @@ endif
       call finalize_n_solvers(hiv_a(idir)-lo_a(idir)+1,vsolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiv,alphai-alphaoi,vsolver%mat) ! correct diagonal term
-      call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,vsolver)
+      call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,vsolver)
       call setup_solver(vsolver)
       call solve_helmholtz(vsolver,lo,hiv,vp,vo)
       call finalize_solver(vsolver)
@@ -844,7 +844,7 @@ endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiw_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiw_a(il:iu:iskip), &
                                        alphai-alphaoi,wsolver_fft(:)%mat) ! correct diagonal term
-      call create_n_solvers(hiw_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,HYPRESolverPFMG,wsolver_fft)
+      call create_n_solvers(hiw_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,hypre_solver_i,wsolver_fft)
       call setup_n_solvers(hiw_a(idir)-lo_a(idir)+1,wsolver_fft)
       call fft(arrplan_w(1),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
 #ifndef _FFT_USE_SLABS
@@ -859,7 +859,7 @@ endif
       call finalize_n_solvers(hiw_a(idir)-lo_a(idir)+1,wsolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiw,alphai-alphaoi,wsolver%mat) ! correct diagonal term
-      call create_solver(hypre_maxiter,hypre_tol,HYPRESolverPFMG,wsolver)
+      call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,wsolver)
       call setup_solver(wsolver)
       call solve_helmholtz(wsolver,lo,hiw,wp,wo)
       call finalize_solver(wsolver)
