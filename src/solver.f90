@@ -439,13 +439,13 @@ module mod_solver
       !call HYPRE_StructSMGGetNumIterations(solver,num_iterations,ierr)
     elseif ( stype == HYPRESolverPFMG ) then  
       call HYPRE_StructPFMGSolve(solver,mat,rhs,sol,ierr)
-      !call HYPRE_StructPFMGGetNumIterations(solver,num_iterations,ierr)
+      !call HYPRE_StructPFMGGetNumIteration(solver,num_iterations,ierr)
     elseif (stype == HYPRESolverGMRES) then 
       call HYPRE_StructGMRESSolve(solver,mat,rhs,sol,ierr)
-      !call HYPRE_StructGMRESGetNumIterations(solver, num_iterations,ierr)
+      !call HYPRE_StructGMRESGetNumIteratio(solver, num_iterations,ierr)
     elseif (stype == HYPRESolverBiCGSTAB) then 
       call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
-      !call HYPRE_StructBiCGSTABGetNumIterations(solver, num_iterations,ierr)
+      !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
     endif ! stype
     !
     ! end of part based on the Paris Simulator code
@@ -677,13 +677,13 @@ module mod_solver
         !call HYPRE_StructSMGGetNumIterations(solver,num_iterations,ierr)
       elseif ( stype == HYPRESolverPFMG ) then
         call HYPRE_StructPFMGSolve(solver,mat,rhs,sol,ierr)
-        !call HYPRE_StructPFMGGetNumIterations(solver,num_iterations,ierr)
+        !call HYPRE_StructPFMGGetNumIteration(solver,num_iterations,ierr)
       elseif (stype == HYPRESolverGMRES) then
         call HYPRE_StructGMRESSolve(solver,mat,rhs,sol,ierr)
-        !call HYPRE_StructGMRESGetNumIterations(solver, num_iterations,ierr)
+        !call HYPRE_StructGMRESGetNumIteratio(solver, num_iterations,ierr)
       elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
-        !call HYPRE_StructBiCGSTABGetNumIterations(solver, num_iterations,ierr)
+        !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
       endif ! stype
       !
       ! end of part based on the Paris Simulator code
@@ -741,13 +741,13 @@ module mod_solver
         !call HYPRE_StructSMGGetNumIterations(solver,num_iterations,ierr)
       elseif ( stype == HYPRESolverPFMG ) then
         call HYPRE_StructPFMGSolve(solver,mat,rhs,sol,ierr)
-        !call HYPRE_StructPFMGGetNumIterations(solver,num_iterations,ierr)
+        !call HYPRE_StructPFMGGetNumIteration(solver,num_iterations,ierr)
       elseif (stype == HYPRESolverGMRES) then
         call HYPRE_StructGMRESSolve(solver,mat,rhs,sol,ierr)
-        !call HYPRE_StructGMRESGetNumIterations(solver, num_iterations,ierr)
+        !call HYPRE_StructGMRESGetNumIteratio(solver, num_iterations,ierr)
       elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
-        !call HYPRE_StructBiCGSTABGetNumIterations(solver, num_iterations,ierr)
+        !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
       endif ! stype
       !
       ! end of part based on the Paris Simulator code
@@ -944,13 +944,13 @@ module mod_solver
         !call HYPRE_StructSMGGetNumIterations(solver,num_iterations,ierr)
       elseif ( stype == HYPRESolverPFMG ) then
         call HYPRE_StructPFMGSolve(solver,mat,rhs,sol,ierr)
-        !call HYPRE_StructPFMGGetNumIterations(solver,num_iterations,ierr)
+        !call HYPRE_StructPFMGGetNumIteration(solver,num_iterations,ierr)
       elseif (stype == HYPRESolverGMRES) then
         call HYPRE_StructGMRESSolve(solver,mat,rhs,sol,ierr)
-        !call HYPRE_StructGMRESGetNumIterations(solver, num_iterations,ierr)
+        !call HYPRE_StructGMRESGetNumIteratio(solver, num_iterations,ierr)
       elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
-        !call HYPRE_StructBiCGSTABGetNumIterations(solver, num_iterations,ierr)
+        !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
       endif ! stype
       !
       ! end of part based on the Paris Simulator code
