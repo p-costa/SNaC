@@ -8,6 +8,7 @@ iseek      = 0              # number of bytes to skip relative to the origin of 
 iprecision = 8              # precision of real-valued data
 r0_g = np.array([0.,0.,0.]) # domain origin
 non_uniform_grid = True
+iskip      = 1
 #
 # retrieve number of blocks from the number of geo files
 #
@@ -139,8 +140,8 @@ domain = SubElement(Xdmf, "Domain")
 for iblock in range(nblocks):
     blockname = blocks[iblock].name
     n = blocks[iblock].n
-    topology = SubElement(domain,"Topology", attrib = {"name": "TOPO"+blockname, "TopologyType": "3DRectMesh", "Dimensions" : "{} {} {}".format(n[2], n[1], n[0])})
-    geometry = SubElement(domain,"Geometry", attrib = {"name": "GEO" +blockname, "GeometryType": "VXVYVZ"})
+    topology = SubElement(domain, "Topology", attrib = {"name": "TOPO"+blockname, "TopologyType": "3DRectMesh", "Dimensions" : "{} {} {}".format(n[2], n[1], n[0])})
+    geometry = SubElement(domain, "Geometry", attrib = {"name": "GEO" +blockname, "GeometryType": "VXVYVZ"})
     dataitem = SubElement(geometry, "DataItem", attrib = {"Format": "Binary", "DataType": "Float", "Precision": "{}".format(iprecision), "Endian": "Native", "Dimensions": "{}".format(n[0])})
     dataitem.text = blocks[iblock].gridfiles[0]
     dataitem = SubElement(geometry, "DataItem", attrib = {"Format": "Binary", "DataType": "Float", "Precision": "{}".format(iprecision), "Endian": "Native", "Dimensions": "{}".format(n[1])})
@@ -153,13 +154,13 @@ grid = SubElement(domain, "Grid", attrib = {"Name": "TimeSeries", "GridType": "C
 #dataitem.text = ""
 #for ii in range(nsaves):
     #dataitem.text += "{:15.6E}".format(times[ii*nflds]) + " "
-for ii in range(nsaves):
-    grid_blk = SubElement(grid,"Grid", attrib = {"Name": "T{:7}".format(str(blocks[iblock-1].saves['isave'][ii*nflds]).zfill(7))+"_ALL", "GridType": "Collection", "CollectionType": "Spatial"})
-    time_blk = SubElement(grid_blk,"Time", attrib = {"Value": "{:15.6E}".format(times[ii*nflds])})
+for ii in range(0, nsaves, iskip):
+    grid_blk = SubElement(grid, "Grid", attrib = {"Name": "T{:7}".format(str(blocks[iblock-1].saves['isave'][ii*nflds]).zfill(7))+"_ALL", "GridType": "Collection", "CollectionType": "Spatial"})
+    time_blk = SubElement(grid_blk, "Time", attrib = {"Value": "{:15.6E}".format(times[ii*nflds])})
     for iblock in range(nblocks):
         blockname = blocks[iblock].name
         n = blocks[iblock].n
-        grid_fld = SubElement(grid_blk,"Grid", attrib = {"Name": "T{:7}".format(str(blocks[iblock-1].saves['isave'][ii*nflds]).zfill(7))+blockname, "GridType": "Uniform"})
+        grid_fld = SubElement(grid_blk, "Grid", attrib = {"Name": "T{:7}".format(str(blocks[iblock-1].saves['isave'][ii*nflds]).zfill(7))+blockname, "GridType": "Uniform"})
         topology = SubElement(grid_fld, "Topology", attrib = {"Reference": "/Xdmf/Domain/Topology[{}]".format(iblock+1)})
         geometry = SubElement(grid_fld, "Geometry", attrib = {"Reference": "/Xdmf/Domain/Geometry[{}]".format(iblock+1)})
         for jj in range(nflds):
