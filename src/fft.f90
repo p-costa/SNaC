@@ -12,7 +12,7 @@ module mod_fft
     integer         , intent(in )                 :: idir
     integer         , intent(in ), dimension(3  ) :: n
     character(len=1), intent(in ), dimension(0:1) :: bc
-    logical         , intent(in )                 :: is_centered 
+    logical         , intent(in )                 :: is_centered
     type(C_PTR)     , intent(out), dimension(2  ) :: arrplan
     real(rp)        , intent(out)                 :: normfft
     real(rp), dimension(n(1),n(2),n(3)) :: arr
@@ -84,7 +84,7 @@ module mod_fft
   !
   subroutine fft(plan,arr)
     implicit none
-    type(C_PTR), intent(in   )                   :: plan 
+    type(C_PTR), intent(in   )                   :: plan
     real(rp)   , intent(inout), dimension(:,:,:) :: arr
 #ifdef _SINGLE_PRECISION
     call sfftw_execute_r2r(plan,arr,arr)
@@ -96,7 +96,7 @@ module mod_fft
   subroutine find_fft(bc,is_centered,kind_fwd,kind_bwd,norm)
   implicit none
   character(len=1), intent(in ), dimension(0:1) :: bc
-  logical         , intent(in )                 :: is_centered 
+  logical         , intent(in )                 :: is_centered
   integer         , intent(out)                 :: kind_fwd,kind_bwd
   real(rp)        , intent(out), dimension(2  ) :: norm
   if(is_centered) then
