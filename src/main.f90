@@ -272,7 +272,7 @@ program snac
 #ifdef _FFT_USE_SLICED_PENCILS
 nslices = max(16,ng(idir))
 if(nslices > ng(idir)) then
-  if(myid == 0) write(stderr,*) 'ERROR: implicit diffusion not yet supported with "_FFT_USE_SLICED_PENCILS".'
+  if(myid == 0) write(stderr,*) 'ERROR: number of pencil slices cannot exceed the number of grid points along the FFT direction.'
   call MPI_FINALIZE()
   error stop
 endif
@@ -484,7 +484,7 @@ endif
 #elif  _FFT_Y
                     dxf(lo(1)) == dzf(lo(3))
 #elif  _FFT_Z
-                    dyf(lo(2)) == dzf(lo(3))
+                    dxf(lo(1)) == dyf(lo(2))
 #else
                     dxf(lo(1)) == dyf(lo(2)) .and. &
                     dxf(lo(1)) == dzf(lo(3)) .and. &
