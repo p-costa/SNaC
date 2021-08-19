@@ -22,15 +22,13 @@ module mod_initmpi
     logical         , intent(out  ), dimension(0:1,3) :: is_bound
     type(MPI_DATATYPE), intent(out  ), dimension(    3) :: halos
     integer                 :: nrank
-    integer         , dimension(0:dims(1)-1,0:dims(2)-1,0:dims(3)-1) :: id_grid
     integer , dimension(  3) :: n,start,coords,lo_g,hi_g
     integer , allocatable, dimension(:,:) :: lo_all,hi_all,gt_all,l,lo_g_all,hi_g_allo_g_all,hi_g_all
     real(rp), allocatable, dimension(:,:) :: lmin_all,lmax_all,gr_all
     integer , allocatable, dimension(:) :: blocks_all
     real(rp)        , allocatable, dimension(:,:,:) ::  bc_all
     character(len=1), allocatable, dimension(:,:,:) :: cbc_all
-    integer, dimension(3,3) :: eye
-    integer                 :: i,j,k,idir,iidir,inb,irank,id_coords
+    integer                 :: i,j,k,idir,iidir,inb,irank
     logical                 :: is_nb,found_friend
     integer                 :: ntot,ntot_max,ntot_min,ntot_sum
     !
@@ -46,29 +44,13 @@ module mod_initmpi
     !
     ! determine array extents for possibly uneven data
     !
-    coords(:) = 0
-    id_coords = 0
-    do k=0,dims(3)-1
-      do j=0,dims(2)-1
-        do i=0,dims(1)-1
-          if( myid == id_first + id_coords ) then
-            coords(:) = [i,j,k]
-          endif
-          id_grid(i,j,k) = id_first + id_coords
-          id_coords = id_coords+1
-        enddo
-      enddo
-    enddo
-    eye(:,:) = 0
-    do idir=1,3
-      eye(idir,idir) = 1
-    enddo
+    coords(:) = get_coords(myid-id_first,dims)
     nb(:,:) = MPI_PROC_NULL
     do idir=1,3
       if(coords(idir)-1 >= 0           ) &
-        nb(0,idir) = id_grid(coords(1)-eye(1,idir),coords(2)-eye(2,idir),coords(3)-eye(3,idir))
+        nb(0,idir) = id_first + get_id([coords(1)-eye(1,idir),coords(2)-eye(2,idir),coords(3)-eye(3,idir)],dims(:))
       if(coords(idir)+1 <= dims(idir)-1) &
-        nb(1,idir) = id_grid(coords(1)+eye(1,idir),coords(2)+eye(2,idir),coords(3)+eye(3,idir))
+        nb(1,idir) = id_first + get_id([coords(1)+eye(1,idir),coords(2)+eye(2,idir),coords(3)+eye(3,idir)],dims(:))
     enddo
     n(:) = ng(:)/dims(:)
     where(coords(:)+1 <= mod(ng(:),dims(:))) n(:) = n(:) + 1
@@ -213,4 +195,35 @@ module mod_initmpi
     end select
     call MPI_TYPE_COMMIT(halo)
   end subroutine makehalo
+  function get_id(coords,dims,periods) result(id)
+    use mpi, only: MPI_PROC_NULL
+    implicit none
+    integer :: id
+    integer, intent(in), dimension(3) :: coords,dims
+    logical, intent(in), dimension(3), optional :: periods
+    integer, dimension(3) :: coords_aux,shift
+    coords_aux(:) = coords(:)
+    if(present(periods)) then
+      shift(:) = 0
+      where(periods(:))
+        where(coords_aux(:)>dims(:)-1) shift(:) =   (0        -coords_aux(:))/dims(:)
+        where(coords_aux(:)<0        ) shift(:) =   (dims(:)-1-coords_aux(:))/dims(:)
+        coords_aux(:) = coords_aux(:) + shift(:)*dims(:)
+      end where
+    endif
+    if(all(coords_aux(:)<=dims(:)-1).and.all(coords_aux(:)>=0)) then
+      id = coords_aux(1)+coords_aux(2)*dims(1)+coords_aux(3)*dims(2)
+    else
+      id = MPI_PROC_NULL
+    endif
+  end function get_id
+  function get_coords(id,dims) result(coords)
+    integer :: coords(3)
+    integer, intent(in) :: id, dims(3)
+    coords(:) = [mod(id,dims(1)),mod(id/dims(1),dims(2)),mod(id/(dims(1)*dims(2)),dims(3))]
+  end function get_coords
+  pure integer function eye(i,j)
+    integer, intent(in) :: i,j
+    eye = (i/j)*(j/i)
+  end function eye
 end module mod_initmpi
