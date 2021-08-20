@@ -52,7 +52,7 @@ module mod_rk
     call momx_a(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudtrk)
     call momy_a(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdtrk)
     call momz_a(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdtrk)
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
 #ifdef _IMPDIFF
     !$OMP SHARED(factor12,dudtrkd,dvdtrkd,dwdtrkd) &
@@ -86,7 +86,7 @@ module mod_rk
     call momy_p(lo,hi,dyc,bforce(2),p,dvdtrk)
     call momz_p(lo,hi,dzc,bforce(3),p,dwdtrk) ! we could perform the pressure gradient calculation in the loop below instead, but I
                                               ! decided to have more modular, like this, for simplicity.
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,factor12,u,v,w,up,vp,wp,dudtrk,dvdtrk,dwdtrk)
     do k=lo(3),hi(3)
@@ -103,7 +103,7 @@ module mod_rk
     !
     ! compute rhs of helmholtz equation
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,factor12,factor2,visc,up,vp,wp,dudtrkd,dvdtrkd,dwdtrkd)
     do k=lo(3),hi(3)
@@ -143,7 +143,7 @@ module mod_rk
     dsdtrk(:,:,:) = 0._rp
     call scal_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,s,dsdtrk)
     call scal_a(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdtrk)
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,factor1,factor2,s,dsdtrk,dsdtrko)
     do k=lo(3),hi(3)

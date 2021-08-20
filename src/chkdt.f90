@@ -22,7 +22,7 @@ module mod_chkdt
     integer :: i,j,k
     !
     dti = 0._rp
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,u,v,w,dxc,dxf,dyc,dyf,dzc,dzf) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(ux,uy,uz,vx,vy,vz,wx,wy,wz,dtix,dtiy,dtiz) &

@@ -18,7 +18,7 @@ module mod_correc
     real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
     integer :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,dt,dxc,u,up,p) &
     !$OMP PRIVATE(i,j,k)
     do k=lo(3)-1,hi(3)+1
@@ -29,7 +29,7 @@ module mod_correc
       enddo
     enddo
     !$OMP END PARALLEL DO
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,dt,dyc,v,vp,p) &
     !$OMP PRIVATE(i,j,k)
     do k=lo(3)-1,hi(3)+1
@@ -40,7 +40,7 @@ module mod_correc
       enddo
     enddo
     !$OMP END PARALLEL DO
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,dt,dzc,w,wp,p) &
     !$OMP PRIVATE(i,j,k)
     do k=lo(3)-1,hi(3)

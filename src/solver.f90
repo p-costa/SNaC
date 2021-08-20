@@ -453,7 +453,9 @@ module mod_solver
     ! fecth results
     !
     call HYPRE_StructVectorGetBoxValues(sol,lo,hi,p(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)),ierr)
+    !$OMP WORKSHARE
     po(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = p(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))
+    !$OMP END WORKSHARE
   end subroutine solve_helmholtz
   subroutine finalize_solver(asolver)
     implicit none
@@ -692,13 +694,19 @@ module mod_solver
       !
 #ifdef _FFT_Z
       call HYPRE_StructVectorGetBoxValues(sol,lo,hi,p(lo(1):hi(1),lo(2):hi(2),i_out),ierr)
+      !$OMP WORKSHARE
       po(lo(1):hi(1),lo(2):hi(2),i_out) = p(lo(1):hi(1),lo(2):hi(2),i_out)
+      !$OMP END WORKSHARE
 #elif  _FFT_Y
       call HYPRE_StructVectorGetBoxValues(sol,lo,hi,p(lo(1):hi(1),i_out,lo(2):hi(2)),ierr)
+      !$OMP WORKSHARE
       po(lo(1):hi(1),i_out,lo(2):hi(2)) = p(lo(1):hi(1),i_out,lo(2):hi(2))
+      !$OMP END WORKSHARE
 #elif  _FFT_X
       call HYPRE_StructVectorGetBoxValues(sol,lo,hi,p(i_out,lo(1):hi(1),lo(2):hi(2)),ierr)
+      !$OMP WORKSHARE
       po(i_out,lo(1):hi(1),lo(2):hi(2)) = p(i_out,lo(1):hi(1),lo(2):hi(2))
+      !$OMP END WORKSHARE
 #endif
     enddo
   end subroutine solve_n_helmholtz_2d
@@ -755,7 +763,9 @@ module mod_solver
       ! fecth results
       !
       call HYPRE_StructVectorGetBoxValues(sol,lo_s,hi_s,p(lo_s(1):hi_s(1),lo_s(2):hi_s(2),lo_s(3):hi_s(3)),ierr)
+      !$OMP WORKSHARE
       po(lo_s(1):hi_s(1),lo_s(2):hi_s(2),lo_s(3):hi_s(3)) = p(lo_s(1):hi_s(1),lo_s(2):hi_S(2),lo_s(3):hi_s(3))
+      !$OMP END WORKSHARE
     enddo
   end subroutine solve_n_helmholtz_3d
   subroutine init_n_2d_matrices(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_out,hi_out,lo,hi,periods, &

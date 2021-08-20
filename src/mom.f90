@@ -15,7 +15,7 @@ module mod_mom
     real(rp) :: uuip,uuim,uvjp,uvjm,uwkp,uwkm
     integer  :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uuip,uuim,uvjp,uvjm,uwkp,uwkm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudt)
@@ -52,7 +52,7 @@ module mod_mom
     real(rp) :: uvip,uvim,vvjp,vvjm,wvkp,wvkm
     integer  :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uvip,uvim,vvjp,vvjm,wvkp,wvkm) &
     !$OMP SHARED(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdt)
@@ -89,7 +89,7 @@ module mod_mom
     real(rp) :: uwip,uwim,vwjp,vwjm,wwkp,wwkm
     integer  :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uwip,uwim,vwjp,vwjm,wwkp,wwkm) &
     !$OMP SHARED(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdt)
@@ -126,7 +126,7 @@ module mod_mom
     real(rp) :: uuip,uuim,uvjp,uvjm,uwkp,uwkm
     integer  :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uuip,uuim,uvjp,uvjm,uwkp,uwkm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudt)
@@ -164,7 +164,7 @@ module mod_mom
     real(rp) :: uvip,uvim,vvjp,vvjm,wvkp,wvkm
     integer  :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uvip,uvim,vvjp,vvjm,wvkp,wvkm) &
     !$OMP SHARED(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdt)
@@ -203,7 +203,7 @@ module mod_mom
     real(rp) :: uwip,uwim,vwjp,vwjm,wwkp,wwkm
     integer  :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uwip,uwim,vwjp,vwjm,wwkp,wwkm) &
     !$OMP SHARED(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdt)
@@ -242,7 +242,7 @@ module mod_mom
     real(rp) :: dudxp,dudxm,dudyp,dudym,dudzp,dudzm
     integer  :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dudxp,dudxm,dudyp,dudym,dudzp,dudzm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudt)
@@ -280,7 +280,7 @@ module mod_mom
     real(rp) :: dvdxp,dvdxm,dvdyp,dvdym,dvdzp,dvdzm
     integer  :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dvdxp,dvdxm,dvdyp,dvdym,dvdzp,dvdzm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdt)
@@ -318,7 +318,7 @@ module mod_mom
     real(rp) :: dwdxp,dwdxm,dwdyp,dwdym,dwdzp,dwdzm
     integer  :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dwdxp,dwdxm,dwdyp,dwdym,dwdzp,dwdzm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdt)
@@ -352,7 +352,7 @@ module mod_mom
     real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(out) :: dudt
     integer :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,dxc,bforce,p,dudt)
     do k=lo(3),hi(3)
@@ -374,7 +374,7 @@ module mod_mom
     real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(out) :: dvdt
     integer :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,dyc,bforce,p,dvdt)
     do k=lo(3),hi(3)
@@ -396,7 +396,7 @@ module mod_mom
     real(rp), dimension(lo(1):  ,lo(2):  ,lo(3):  ), intent(out) :: dwdt
     integer :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,dzc,bforce,p,dwdt)
     do k=lo(3),hi(3)

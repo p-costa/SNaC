@@ -23,7 +23,7 @@ module mod_chkdiv
     !
     divtot = 0._rp
     divmax = 0._rp
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,u,v,w,dxf,dyf,dzf,vol) &
     !$OMP PRIVATE(i,j,k,div) &
     !$OMP REDUCTION(+:divtot) &

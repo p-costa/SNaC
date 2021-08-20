@@ -21,7 +21,7 @@ module mod_debug
     real(rp), intent(out) :: mean
     integer :: i,j,k
     mean = 0._rp
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,p,dx,dy,dz,vol) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP REDUCTION(+:mean)

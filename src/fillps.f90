@@ -24,7 +24,7 @@ module mod_fillps
     real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     integer :: i,j,k
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,p,up,vp,wp,dt,dxf,dyf,dzf) &
     !$OMP PRIVATE(i,j,k)
     do k=lo(3),hi(3)

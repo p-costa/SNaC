@@ -196,7 +196,7 @@ module mod_initflow
     integer :: i,j,k
     meanold = 0._rp
     !
-    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,l,dx,dy,dz,p) &
     !$OMP PRIVATE(i,j,k) &
     !$OMP REDUCTION(+:meanold)
