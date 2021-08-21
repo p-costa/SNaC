@@ -22,9 +22,8 @@ module mod_chkdt
     integer :: i,j,k
     !
     dti = 0._rp
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,u,v,w,dxc,dxf,dyc,dyf,dzc,dzf) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(ux,uy,uz,vx,vy,vz,wx,wy,wz,dtix,dtiy,dtiz) &
     !$OMP REDUCTION(max:dti)
     do k=lo(3),hi(3)
@@ -46,7 +45,7 @@ module mod_chkdt
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
     call mpi_allreduce(MPI_IN_PLACE,dti,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
     if(dti == 0._rp) dti = 1._rp
     dlmin     = min(minval(dxf),minval(dyf),minval(dzf))

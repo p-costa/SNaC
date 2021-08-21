@@ -16,8 +16,7 @@ module mod_scal
     real(rp) :: dsdxp,dsdxm,dsdyp,dsdym,dsdzp,dsdzm
     integer  :: i,j,k
     !
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(dsdxp,dsdxm,dsdyp,dsdym,dsdzp,dsdzm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,s,dsdt)
     do k=lo(3),hi(3)
@@ -37,7 +36,7 @@ module mod_scal
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
   end subroutine scal_d
   subroutine scal_a(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdt)
     implicit none
@@ -50,8 +49,7 @@ module mod_scal
     real(rp) :: usip,usim,vsjp,vsjm,wskp,wskm
     integer  :: i,j,k
     !
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP PRIVATE(usip,usim,vsjp,vsjm,wskp,wskm) &
     !$OMP SHARED(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdt)
     do k=lo(3),hi(3)
@@ -71,6 +69,6 @@ module mod_scal
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
   end subroutine scal_a
 end module mod_scal

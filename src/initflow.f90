@@ -196,9 +196,8 @@ module mod_initflow
     integer :: i,j,k
     meanold = 0._rp
     !
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,l,dx,dy,dz,p) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP REDUCTION(+:meanold)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -207,7 +206,7 @@ module mod_initflow
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
     call mpi_allreduce(MPI_IN_PLACE,meanold,1,MPI_REAL_RP,MPI_SUM,comm_block)
     if(meanold /= 0._rp) then
       !$OMP WORKSHARE

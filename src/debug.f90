@@ -21,9 +21,8 @@ module mod_debug
     real(rp), intent(out) :: mean
     integer :: i,j,k
     mean = 0._rp
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,p,dx,dy,dz,vol) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP REDUCTION(+:mean)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -32,7 +31,7 @@ module mod_debug
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
     call mpi_allreduce(MPI_IN_PLACE,mean,1,MPI_REAL_RP,MPI_SUM,comm)
   end subroutine chkmean
   subroutine chk_helmholtz(lo,hi,is_centered,dx1,dx2,dy1,dy2,dz1,dz2,alpha,fpp,fp,diffmax)

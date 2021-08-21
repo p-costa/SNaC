@@ -18,8 +18,7 @@ module mod_updt_pressure
     real(rp), intent(inout) , dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     integer :: i,j,k
     !
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,p,pp)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -28,10 +27,9 @@ module mod_updt_pressure
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
 #ifdef _IMPDIFF
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k)            &
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,p,pp,dxc,dxf,dyc,dyf,dzc,dzf,alpha)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -46,7 +44,7 @@ module mod_updt_pressure
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
 #endif
   end subroutine updt_pressure
 end module mod_updt_pressure

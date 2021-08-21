@@ -52,8 +52,7 @@ module mod_rk
     call momx_a(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudtrk)
     call momy_a(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdtrk)
     call momz_a(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdtrk)
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
 #ifdef _IMPDIFF
     !$OMP SHARED(factor12,dudtrkd,dvdtrkd,dwdtrkd) &
 #endif
@@ -76,7 +75,7 @@ module mod_rk
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
     !$OMP WORKSHARE
     dudtrk(:,:,:) = 0._rp
     dvdtrk(:,:,:) = 0._rp
@@ -86,8 +85,7 @@ module mod_rk
     call momy_p(lo,hi,dyc,bforce(2),p,dvdtrk)
     call momz_p(lo,hi,dzc,bforce(3),p,dwdtrk) ! we could perform the pressure gradient calculation in the loop below instead, but I
                                               ! decided to have more modular, like this, for simplicity.
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,factor12,u,v,w,up,vp,wp,dudtrk,dvdtrk,dwdtrk)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -98,13 +96,12 @@ module mod_rk
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
 #ifdef _IMPDIFF
     !
     ! compute rhs of helmholtz equation
     !
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,factor12,factor2,visc,up,vp,wp,dudtrkd,dvdtrkd,dwdtrkd)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -115,7 +112,7 @@ module mod_rk
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
 #endif
   end subroutine rk_mom
   subroutine rk_scal(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,alpha,u,v,w,dsdtrko,s)
@@ -143,8 +140,7 @@ module mod_rk
     dsdtrk(:,:,:) = 0._rp
     call scal_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,s,dsdtrk)
     call scal_a(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdtrk)
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
     !$OMP SHARED(lo,hi,factor1,factor2,s,dsdtrk,dsdtrko)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -154,6 +150,6 @@ module mod_rk
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
   end subroutine rk_scal
 end module mod_rk

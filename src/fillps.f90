@@ -24,9 +24,8 @@ module mod_fillps
     real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     integer :: i,j,k
     !
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP SHARED(lo,hi,p,up,vp,wp,dt,dxf,dyf,dzf) &
-    !$OMP PRIVATE(i,j,k)
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
+    !$OMP SHARED(lo,hi,p,up,vp,wp,dt,dxf,dyf,dzf)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -38,6 +37,6 @@ module mod_fillps
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
   end subroutine fillps
 end module mod_fillps

@@ -18,9 +18,8 @@ module mod_correc
     real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
     integer :: i,j,k
     !
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP SHARED(lo,hi,dt,dxc,u,up,p) &
-    !$OMP PRIVATE(i,j,k)
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
+    !$OMP SHARED(lo,hi,dt,dxc,u,up,p)
     do k=lo(3)-1,hi(3)+1
       do j=lo(2)-1,hi(2)+1
         do i=lo(1)-1,hi(1)
@@ -28,10 +27,9 @@ module mod_correc
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP SHARED(lo,hi,dt,dyc,v,vp,p) &
-    !$OMP PRIVATE(i,j,k)
+    !$OMP END PARALLEL DO SIMD
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
+    !$OMP SHARED(lo,hi,dt,dyc,v,vp,p)
     do k=lo(3)-1,hi(3)+1
       do j=lo(2)-1,hi(2)
         do i=lo(1)-1,hi(1)+1
@@ -39,10 +37,9 @@ module mod_correc
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
-    !$OMP PARALLEL DO COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
-    !$OMP SHARED(lo,hi,dt,dzc,w,wp,p) &
-    !$OMP PRIVATE(i,j,k)
+    !$OMP END PARALLEL DO SIMD
+    !$OMP PARALLEL DO SIMD COLLAPSE(1) SCHEDULE(static) DEFAULT(none) &
+    !$OMP SHARED(lo,hi,dt,dzc,w,wp,p)
     do k=lo(3)-1,hi(3)
       do j=lo(2)-1,hi(2)+1
         do i=lo(1)-1,hi(1)+1
@@ -50,6 +47,6 @@ module mod_correc
         enddo
       enddo
     enddo
-    !$OMP END PARALLEL DO
+    !$OMP END PARALLEL DO SIMD
   end subroutine correc
 end module mod_correc
