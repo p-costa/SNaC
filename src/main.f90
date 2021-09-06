@@ -203,7 +203,7 @@ program snac
   !
   ! initialize MPI/OpenMP
   !
-  !$call omp_set_num_threads(nthreadsmax)
+  !!$call omp_set_num_threads(nthreadsmax) ! ! overwrites the input, disable for now
   call initmpi(my_block,id_first,dims,cbcpre,bcpre,periods,lmin,lmax,gt,gr,lo,hi,ng,nb,is_bound,halos)
   lo_1(:) = lo(:) - lo_g(:) + 1 ! lo(:) with 1 as first index in the begining of each block
   hi_1(:) = hi(:) - lo_g(:) + 1 ! hi(:) with 1 as first index in the begining of each block
@@ -799,7 +799,9 @@ endif
       call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,up_s,up)
 #endif
       call fft(arrplan_u(2),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      !$OMP WORKSHARE
       up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_u
+      !$OMP END WORKSHARE
       call finalize_n_solvers(hiu_a(idir)-lo_a(idir)+1,usolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiu,alphai-alphaoi,usolver%mat) ! correct diagonal term
@@ -827,7 +829,9 @@ endif
       call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,vp_s,vp)
 #endif
       call fft(arrplan_v(2),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      !$OMP WORKSHARE
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_v
+      !$OMP END WORKSHARE
       call finalize_n_solvers(hiv_a(idir)-lo_a(idir)+1,vsolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiv,alphai-alphaoi,vsolver%mat) ! correct diagonal term
@@ -855,7 +859,9 @@ endif
       call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,wp_s,wp)
 #endif
       call fft(arrplan_w(2),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      !$OMP WORKSHARE
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_w
+      !$OMP END WORKSHARE
       call finalize_n_solvers(hiw_a(idir)-lo_a(idir)+1,wsolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiw,alphai-alphaoi,wsolver%mat) ! correct diagonal term
@@ -897,7 +903,9 @@ endif
       call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,pp_s,pp)
 #endif
       call fft(arrplan_p(2),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      !$OMP WORKSHARE
       pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_p
+      !$OMP END WORKSHARE
 #else
       call solve_helmholtz(psolver,lo,hi,pp,po)
 #endif
