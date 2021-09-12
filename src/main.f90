@@ -184,7 +184,7 @@ program snac
   !
   ! check sanity of input file
   !
-  call test_sanity(gr,stop_type,cbcvel,cbcpre)
+  call test_sanity(lo,hi,dims,gr,stop_type,cbcvel,cbcpre)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #if   defined(_FFT_X) && !(defined(_FFT_Y) || defined(_FFT_Z))
   idir = 1

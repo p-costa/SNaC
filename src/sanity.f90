@@ -9,20 +9,22 @@ module mod_sanity
   public test_sanity_fft
 #endif
   contains
-  subroutine test_sanity(gr,stop_type,cbcvel,cbcpre)
+  subroutine test_sanity(lo,hi,dims,gr,stop_type,cbcvel,cbcpre)
     !
     ! performs some a priori checks of the input files before the calculation starts
     !
     implicit none
+    integer         , intent(in), dimension(3      ) :: lo,hi,dims
     real(rp)        , intent(in), dimension(3      ) :: gr
     logical         , intent(in), dimension(3      ) :: stop_type
     character(len=1), intent(in), dimension(0:1,3,3) :: cbcvel
     character(len=1), intent(in), dimension(0:1,3  ) :: cbcpre
     logical :: passed
     !
-    call chk_grid(gr,passed);                    if(.not.passed) call abortit
-    call chk_stop_type(stop_type,passed);        if(.not.passed) call abortit
-    call chk_bc(cbcvel,cbcpre,passed);           if(.not.passed) call abortit
+    call chk_grid(gr,passed);             if(.not.passed) call abortit
+    call chk_stop_type(stop_type,passed); if(.not.passed) call abortit
+    call chk_bc(cbcvel,cbcpre,passed);    if(.not.passed) call abortit
+    call chk_dims(lo,hi,dims,passed);     if(.not.passed) call abortit
   end subroutine test_sanity
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   subroutine test_sanity_fft(dims,lo,hi,lmin,lmax,gr)
@@ -55,6 +57,7 @@ module mod_sanity
     if(.not.passed_loc) & 
       call write_error('grid growth parameter must be positive.')
     passed = passed.and.passed_loc
+    call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
   end subroutine chk_grid
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   subroutine chk_grid_fft(dims,lo,hi,lmin,lmax,gr,passed)
@@ -93,6 +96,7 @@ module mod_sanity
     if(.not.passed_loc) &
       call write_error('grid growth parameter in the FFT direction must be zero.')
     passed = passed.and.passed_loc
+    call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
   end subroutine chk_grid_fft
 #endif
   !
@@ -145,8 +149,19 @@ module mod_sanity
     enddo
     if(.not.passed_loc) call write_error('velocity and pressure BCs not compatible.')
     passed = passed.and.passed_loc
+    call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
     !
   end subroutine chk_bc
+  !
+  subroutine chk_dims(lo,hi,dims,passed)
+    implicit none
+    integer, intent(in), dimension(3) :: lo,hi,dims
+    logical         , intent(out) :: passed
+    passed = .true.
+    passed = passed.and.(all(dims(:) <= hi(:)-lo(:)+1))
+    if(.not.passed) call write_error('MPI task partitions cannot exceed the number of grid points.')
+    call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
+  end subroutine chk_dims
   !
   subroutine abortit
     implicit none
