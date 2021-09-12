@@ -53,7 +53,7 @@ The Makefile in `src/` should be modified in agreement to the installation paths
  * `-D_SINGLE_PRECISION` : calculation will be carried out in single precision (the default precision is double)
  * `-D_FFT_?`, with  `?` being `X`, `Y` or `Z`: will use FFTs to solve the Poisson equation in the direction in question.
 
-Typing `make run` will compile the code and copy the executable `cans` and input file `dns.in` to a `run/` folder.
+Typing `make run` will compile the code and copy the executable `snac` and input file `dns.in` to a `run/` folder.
 
 ### Running the code
 
