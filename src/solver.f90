@@ -2,6 +2,7 @@ module mod_solver
   use mpi_f08
   use mod_common_mpi, only: ierr
   use mod_types
+  use, intrinsic :: iso_c_binding, only: C_PTR
   implicit none
   private
   public init_bc_rhs,init_matrix_3d,create_solver,setup_solver, &
@@ -33,8 +34,8 @@ module mod_solver
                         HYPRESolverGMRES    = 3, &
                         HYPRESolverBiCGSTAB = 4
   type hypre_solver 
-    integer(8) :: grid,stencil,precond,solver,mat,rhs,sol
-    integer    :: stype,comm_hypre
+    type(C_PTR) :: grid,stencil,precond,solver,mat,rhs,sol
+    integer     :: stype,comm_hypre
   end type hypre_solver 
   contains
   subroutine init_bc_rhs(cbc,bc,dl,is_bound,is_centered,lo,hi,periods, &
@@ -152,7 +153,7 @@ module mod_solver
     integer, dimension(3,nstencil) :: offsets
     real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
     real(rp), dimension(0:1,3) :: factor,sgn
-    integer(8) :: grid,stencil,mat,rhs,sol
+    type(C_PTR) :: grid,stencil,mat,rhs,sol
     integer :: i,j,k,q,qq
     real(rp) :: cc,cxm,cxp,cym,cyp,czm,czp
     integer            :: comm_hypre
@@ -298,7 +299,7 @@ module mod_solver
     real(rp)          ,         intent(   in) :: maxerror
     integer           ,         intent(   in) :: stype
     type(hypre_solver), target, intent(inout) :: asolver
-    integer(8) :: solver,precond
+    type(C_PTR) :: solver,precond
     integer :: precond_id
     !
     ! setup solver
@@ -361,8 +362,8 @@ module mod_solver
   subroutine setup_solver(asolver)
     implicit none
     type(hypre_solver), target, intent(inout) :: asolver
-    integer(8), pointer :: solver,mat,rhs,sol
-    integer   , pointer :: stype
+    type(C_PTR), pointer :: solver,mat,rhs,sol
+    integer    , pointer :: stype
     !
     solver => asolver%solver
     stype  => asolver%stype
@@ -391,9 +392,9 @@ module mod_solver
   end subroutine setup_solver
   subroutine add_constant_to_diagonal(lo,hi,alpha,mat)
     implicit none
-    integer   , intent(in   ), dimension(3) :: lo,hi
-    real(rp)  , intent(in   ) :: alpha
-    integer(8), intent(inout) :: mat
+    integer    , intent(in   ), dimension(3) :: lo,hi
+    real(rp)   , intent(in   ) :: alpha
+    type(C_PTR), intent(inout) :: mat
     real(rp), dimension(product(hi(:)-lo(:)+1)) :: matvalues
     integer :: i,j,k,q
     q = 0
@@ -412,8 +413,8 @@ module mod_solver
     type(hypre_solver), target, intent(in   )               :: asolver
     integer           ,         intent(in   ), dimension(3) :: lo,hi
     real(rp)          ,         intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p,po
-    integer(8), pointer :: solver,mat,rhs,sol
-    integer   , pointer :: stype
+    type(C_PTR), pointer :: solver,mat,rhs,sol
+    integer    , pointer :: stype
     solver  => asolver%solver
     mat     => asolver%mat
     rhs     => asolver%rhs
@@ -460,8 +461,8 @@ module mod_solver
   subroutine finalize_solver(asolver)
     implicit none
     type(hypre_solver), target, intent(in) :: asolver
-    integer(8), pointer :: precond,solver
-    integer   , pointer :: stype
+    type(C_PTR), pointer :: precond,solver
+    integer    , pointer :: stype
     !
     precond => asolver%precond
     solver  => asolver%solver
@@ -486,7 +487,7 @@ module mod_solver
   subroutine finalize_matrix(asolver)
     implicit none
     type(hypre_solver), target, intent(in) :: asolver
-    integer(8), pointer :: grid,stencil,mat,rhs,sol
+    type(C_PTR), pointer :: grid,stencil,mat,rhs,sol
     !
     grid    => asolver%grid
     stencil => asolver%stencil
@@ -523,7 +524,7 @@ module mod_solver
     integer, dimension(2,nstencil) :: offsets
     real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
     real(rp), dimension(0:1,2) :: factor,sgn
-    integer(8) :: grid,stencil,mat,rhs,sol
+    type(C_PTR) :: grid,stencil,mat,rhs,sol
     integer :: i1,i2,q,qq
     real(rp) :: cc,c1m,c1p,c2m,c2p
     integer            :: comm_hypre
@@ -642,8 +643,8 @@ module mod_solver
 #elif  _FFT_X
     real(rp)          ,         intent(inout), dimension(lo_out-nh:,lo(1)-nh:,lo(2)-nh:) :: p,po
 #endif
-    integer(8), pointer :: solver,mat,rhs,sol
-    integer   , pointer :: stype
+    type(C_PTR), pointer :: solver,mat,rhs,sol
+    integer    , pointer :: stype
     integer :: i_out,n
     do i_out=lo_out,hi_out
       n = i_out-lo_out+1 
@@ -718,8 +719,8 @@ module mod_solver
     integer           ,         intent(in   )               :: nh
     integer           ,         intent(in   ), dimension(3) :: lo,hi
     real(rp)          ,         intent(inout), dimension(lo(1)-nh:,lo(2)-nh:,lo(3)-nh:) :: p,po
-    integer(8), pointer :: solver,mat,rhs,sol
-    integer   , pointer :: stype
+    type(C_PTR), pointer :: solver,mat,rhs,sol
+    integer    , pointer :: stype
     integer, dimension(3) :: lo_s,hi_s
     integer :: q
     do q=1,nslices
@@ -842,10 +843,10 @@ module mod_solver
     enddo
   end subroutine setup_n_solvers
   subroutine add_constant_to_n_diagonals(n,lo,hi,alpha,mat)
-    integer   , intent(in   )               :: n
-    integer   , intent(in   ), dimension(2) :: lo,hi
-    real(rp)  , intent(in   )               :: alpha
-    integer(8), intent(inout), dimension(:) :: mat
+    integer    , intent(in   )               :: n
+    integer    , intent(in   ), dimension(2) :: lo,hi
+    real(rp)   , intent(in   )               :: alpha
+    type(C_PTR), intent(inout), dimension(:) :: mat
     integer :: q
     do q=1,n
       call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],alpha,mat(q))
@@ -868,7 +869,6 @@ module mod_solver
     enddo
   end subroutine finalize_n_solvers
   subroutine init_fft_reduction(idir,n,bc,is_centered,dl,arrplan,normfft,lambda)
-    use iso_c_binding , only: C_PTR
     use mod_fft       , only: fftini,eigenvalues
     implicit none
     integer         , intent(in )                 :: idir
@@ -899,8 +899,8 @@ module mod_solver
 #elif  _FFT_X
     real(rp)          ,         intent(inout), dimension(lo_out-1:,lo(1)-1:,lo(2)-1:) :: p,po
 #endif
-    integer(8), pointer :: solver,mat,rhs,sol
-    integer   , pointer :: stype
+    type(C_PTR), pointer :: solver,mat,rhs,sol
+    integer    , pointer :: stype
     real(rp), dimension(product(hi(:)-lo(:)+1)) :: solvalues,rhsvalues
     integer :: i_out,ii,i1,i2,q
     real(rp) :: alpha
