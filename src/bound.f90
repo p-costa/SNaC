@@ -344,7 +344,7 @@ module mod_bound
     integer , intent(in), dimension(0:1) :: nb
     integer , intent(in) :: idir
     real(rp), dimension(lo(1)-nh:,lo(2)-nh:,lo(3)-nh:), intent(inout) :: p
-    !integer :: requests(4), statuses(MPI_STATUS_SIZE,4)
+    !type(MPI_REQUEST) :: requests(4)
     !
     !  this subroutine updates the halo that store info
     !  from the neighboring computational sub-domain
@@ -357,15 +357,15 @@ module mod_bound
       call MPI_SENDRECV(p(hi(1)-nh+1,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
                         p(lo(1)-nh  ,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
                         MPI_COMM_WORLD,MPI_STATUS_IGNORE)
-      !call MPI_IRECV( p(lo(1)-nh  ,lo(2)-nh,lo(3)-nh),1,halo,nb(0),1, &
-      !                MPI_COMM_WORLD,requests(1),error)
       !call MPI_IRECV( p(hi(1)+1   ,lo(2)-nh,lo(3)-nh),1,halo,nb(1),0, &
-      !                MPI_COMM_WORLD,requests(2),error)
-      !call MPI_ISSEND(p(hi(1)-nh+1,lo(2)-nh,lo(3)-nh),1,halo,nb(1),1, &
-      !                MPI_COMM_WORLD,requests(3),error)
+      !                MPI_COMM_WORLD,requests(1))
+      !call MPI_IRECV( p(lo(1)-nh  ,lo(2)-nh,lo(3)-nh),1,halo,nb(0),1, &
+      !                MPI_COMM_WORLD,requests(2))
       !call MPI_ISSEND(p(lo(1)     ,lo(2)-nh,lo(3)-nh),1,halo,nb(0),0, &
-      !                MPI_COMM_WORLD,requests(4),error)
-      !call MPI_WAITALL(4, requests, statuses, error)
+      !                MPI_COMM_WORLD,requests(3))
+      !call MPI_ISSEND(p(hi(1)-nh+1,lo(2)-nh,lo(3)-nh),1,halo,nb(1),1, &
+      !                MPI_COMM_WORLD,requests(4))
+      !call MPI_WAITALL(4,requests,MPI_STATUSES_IGNORE)
     case(2) ! y direction
       call MPI_SENDRECV(p(lo(1)-nh,lo(2)     ,lo(3)-nh),1,halo,nb(0),0, &
                         p(lo(1)-nh,hi(2)+1   ,lo(3)-nh),1,halo,nb(1),0, &
@@ -374,14 +374,14 @@ module mod_bound
                         p(lo(1)-nh,lo(2)-nh  ,lo(3)-nh),1,halo,nb(0),0, &
                         MPI_COMM_WORLD,MPI_STATUS_IGNORE)
       !call MPI_IRECV( p(lo(1)-nh,hi(2)+1   ,lo(3)-nh),1,halo,nb(1),0, &
-      !                MPI_COMM_WORLD,requests(1),error)
+      !                MPI_COMM_WORLD,requests(1))
       !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh  ,lo(3)-nh),1,halo,nb(0),1, &
-      !                MPI_COMM_WORLD,requests(2),error)
+      !                MPI_COMM_WORLD,requests(2))
       !call MPI_ISSEND(p(lo(1)-nh,lo(2)     ,lo(3)-nh),1,halo,nb(0),0, &
-      !               MPI_COMM_WORLD,requests(3),error)
+      !                MPI_COMM_WORLD,requests(3))
       !call MPI_ISSEND(p(lo(1)-nh,hi(2)-nh+1,lo(3)-nh),1,halo,nb(1),1, &
-      !               MPI_COMM_WORLD,requests(4),error)
-      !call MPI_WAITALL(4, requests, statuses, error)
+      !                MPI_COMM_WORLD,requests(4))
+      !call MPI_WAITALL(4,requests,MPI_STATUSES_IGNORE)
     case(3) ! z direction
       call MPI_SENDRECV(p(lo(1)-nh,lo(2)-nh,lo(3)     ),1,halo,nb(0),0, &
                         p(lo(1)-nh,lo(2)-nh,hi(3)+1   ),1,halo,nb(1),0, &
@@ -390,14 +390,14 @@ module mod_bound
                         p(lo(1)-nh,lo(2)-nh,lo(3)-nh  ),1,halo,nb(0),0, &
                         MPI_COMM_WORLD,MPI_STATUS_IGNORE)
       !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,hi(3)+1   ),1,halo,nb(1),0, &
-      !                MPI_COMM_WORLD,requests(1),error)
+      !                MPI_COMM_WORLD,requests(1))
       !call MPI_IRECV( p(lo(1)-nh,lo(2)-nh,lo(3)-nh  ),1,halo,nb(0),1, &
-      !                MPI_COMM_WORLD,requests(2),error)
+      !                MPI_COMM_WORLD,requests(2))
       !call MPI_ISSEND(p(lo(1)-nh,lo(2)-nh,lo(3)     ),1,halo,nb(0),0, &
-      !               MPI_COMM_WORLD,requests(3),error)
+      !                MPI_COMM_WORLD,requests(3))
       !call MPI_ISSEND(p(lo(1)-nh,lo(2)-nh,hi(3)-nh+1),1,halo,nb(1),1, &
-      !               MPI_COMM_WORLD,requests(4),error)
-      !call MPI_WAITALL(4, requests, statuses, error)
+      !                MPI_COMM_WORLD,requests(4))
+      !call MPI_WAITALL(4,requests,MPI_STATUSES_IGNORE)
     end select
   end subroutine updthalo
 end module mod_bound
