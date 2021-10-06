@@ -52,6 +52,7 @@ module mod_initmpi
       if(coords(idir)+1 <= dims(idir)-1) &
         nb(1,idir) = id_first + get_id([coords(1)+eye(1,idir),coords(2)+eye(2,idir),coords(3)+eye(3,idir)],dims(:))
     enddo
+    print*,id_first + get_id([coords(1)+eye(1,1),coords(2)+eye(2,1),coords(3)+eye(3,1)],dims(:)),myid
     n(:) = ng(:)/dims(:)
     where(coords(:)+1 <= mod(ng(:),dims(:))) n(:) = n(:) + 1
     lo(:) = lo_g(:)   + (coords(:)  )*n(:)
@@ -212,7 +213,7 @@ module mod_initmpi
       end where
     endif
     if(all(coords_aux(:)<=dims(:)-1).and.all(coords_aux(:)>=0)) then
-      id = coords_aux(1)+coords_aux(2)*dims(1)+coords_aux(3)*dims(2)
+      id = coords_aux(1)+coords_aux(2)*dims(1)+coords_aux(3)*dims(1)*dims(2)
     else
       id = MPI_PROC_NULL
     endif
