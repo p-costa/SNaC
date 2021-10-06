@@ -2,7 +2,7 @@
 
 **SNaC** is [**CaNS**](https://github.com/p-costa/CaNS) spelled backwards, and is a multi-block code for massively parallel direct numerical simulations (DNS) of fluid flows. *SNaC* aims at combining the versatility of a multi-block DNS solver, with the FFT-based acceleration used in CaNS.
 
-The solver is able to simulate the flow in any three-dimensional multi-block structured Cartesian grid. However,  if the geometry has one homogeneous, 'extruded' direction with constant grid spacing, SNaC can use a very fast solver that exploits FFTs in this direction. This is SNaC's *warp drive* :rocket:, as it yields a huge speedup in wall-clock time per time step.
+The solver is able to simulate the flow in any three-dimensional multi-block structured Cartesian grid. However, if the geometry has one homogeneous, 'extruded' direction with constant grid spacing, SNaC can use a very fast solver that exploits FFTs in this direction. This is SNaC's *warp drive* :rocket:, as it yields a huge speedup in wall-clock time per time step.
 
 **Reference**
 
@@ -51,7 +51,7 @@ The Makefile in `src/` should be modified in agreement to the installation paths
  * `-D_TIMING`           : wall-clock time per time step is computed
  * `-D_IMPDIFF`          : diffusion term of the N-S equations is integrated in time with an implicit discretization (thereby improving the stability of the numerical algorithm for viscous-dominated flows)
  * `-D_SINGLE_PRECISION` : calculation will be carried out in single precision (the default precision is double)
- * `-D_FFT_?`, with  `?` being `X`, `Y` or `Z`: will use FFTs to solve the Poisson equation in the direction in question.
+ * `-D_FFT_?`, with `?` being `X`, `Y` or `Z`: will use FFTs to solve the Poisson equation in the direction in question.
 
 Typing `make run` will compile the code and copy the executable `snac` and input file `dns.in` to a `run/` folder.
 
