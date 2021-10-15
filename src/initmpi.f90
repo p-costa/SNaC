@@ -197,7 +197,7 @@ module mod_initmpi
     call MPI_TYPE_COMMIT(halo)
   end subroutine makehalo
   function get_id(coords,dims,periods) result(id)
-    use mpi, only: MPI_PROC_NULL
+    use mpi_f08, only: MPI_PROC_NULL
     implicit none
     integer :: id
     integer, intent(in), dimension(3) :: coords,dims
