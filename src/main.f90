@@ -87,7 +87,7 @@ program snac
   type(rhs_bound) :: rhsp
   real(rp) :: alpha
 #ifdef _IMPDIFF
-  type(rhs_bound) :: rhsu,rhsv,rhsw
+  type(rhs_bound) :: rhsu,rhsv,rhsw,bcu,bcv,bcw
 #endif
   real(rp), dimension(0:1,3) :: dl
 #ifdef _IMPDIFF
@@ -267,6 +267,15 @@ program snac
            rhsw%x(lo(2):hi(2),lo(3):hi(3),0:1), &
            rhsw%y(lo(1):hi(1),lo(3):hi(3),0:1), &
            rhsw%z(lo(1):hi(1),lo(2):hi(2),0:1))
+  allocate( bcu%x(lo(2):hi(2),lo(3):hi(3),0:1), &
+            bcu%y(lo(1):hi(1),lo(3):hi(3),0:1), &
+            bcu%z(lo(1):hi(1),lo(2):hi(2),0:1), &
+            bcv%x(lo(2):hi(2),lo(3):hi(3),0:1), &
+            bcv%y(lo(1):hi(1),lo(3):hi(3),0:1), &
+            bcv%z(lo(1):hi(1),lo(2):hi(2),0:1), &
+            bcw%x(lo(2):hi(2),lo(3):hi(3),0:1), &
+            bcw%y(lo(1):hi(1),lo(3):hi(3),0:1), &
+            bcw%z(lo(1):hi(1),lo(2):hi(2),0:1))
 #endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #ifdef _FFT_USE_SLICED_PENCILS
@@ -514,6 +523,19 @@ endif
   velin_x(:,:,:) = 0._rp
   velin_y(:,:,:) = 0._rp
   velin_z(:,:,:) = 0._rp
+#ifdef _IMPDIFF
+  do ib=0,1
+    bcu%x(:,:,ib) = bcvel(ib,1,1)
+    bcu%y(:,:,ib) = bcvel(ib,2,1)
+    bcu%z(:,:,ib) = bcvel(ib,3,1)
+    bcv%x(:,:,ib) = bcvel(ib,1,2)
+    bcv%y(:,:,ib) = bcvel(ib,2,2)
+    bcv%z(:,:,ib) = bcvel(ib,3,2)
+    bcw%x(:,:,ib) = bcvel(ib,1,3)
+    bcw%y(:,:,ib) = bcvel(ib,2,3)
+    bcw%z(:,:,ib) = bcvel(ib,3,3)
+  enddo
+#endif
   do idir=1,3
     do ib=0,1
       is_bound_inflow(ib,idir) = is_bound(ib,idir).and.inflow_type(ib,idir)>0.and.cbcvel(ib,idir,idir)=='D'
@@ -523,14 +545,23 @@ endif
           il = 2;iu = 3;iskip = 1
           call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                            yc,zc,bcvel(ib,idir,idir),velin_x(:,:,ib))
+#ifdef _IMPDIFF
+  bcu%x(:,:,ib) = velin_x(:,:,ib)
+#endif
         case(2)
           il = 1;iu = 3;iskip = 2
           call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                            xc,zc,bcvel(ib,idir,idir),velin_y(:,:,ib))
+#ifdef _IMPDIFF
+  bcv%y(:,:,ib) = velin_y(:,:,ib)
+#endif
         case(3)
           il = 1;iu = 2;iskip = 1
           call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                            xc,yc,bcvel(ib,idir,idir),velin_z(:,:,ib))
+#ifdef _IMPDIFF
+  bcw%z(:,:,ib) = velin_z(:,:,ib)
+#endif
         end select
       endif
     enddo
@@ -676,7 +707,7 @@ endif
   if(is_bound(1,1)) hiu(:) = hiu(:)-[1,0,0]
   is_centered(:) = [.false.,.true.,.true.]
   call init_bc_rhs(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,is_centered,lo,hiu,periods, &
-                   dxf,dxc,dyc,dyf,dzc,dzf,rhsu%x,rhsu%y,rhsu%z)
+                   dxf,dxc,dyc,dyf,dzc,dzf,rhsu%x,rhsu%y,rhsu%z,bcu%x,bcu%y,bcu%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   allocate(lambda_u(hi(idir)-lo(idir)+1))
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,1),is_centered(idir),dl(0,idir),arrplan_u,normfft_u,lambda_u)
@@ -706,7 +737,7 @@ endif
   if(is_bound(1,2)) hiv(:) = hiv(:)-[0,1,0]
   is_centered(:) = [.true.,.false.,.true.]
   call init_bc_rhs(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,is_centered,lo,hiv,periods, &
-                   dxc,dxf,dyf,dyc,dzc,dzf,rhsv%x,rhsv%y,rhsv%z)
+                   dxc,dxf,dyf,dyc,dzc,dzf,rhsv%x,rhsv%y,rhsv%z,bcv%x,bcv%y,bcv%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   allocate(lambda_v(hi(idir)-lo(idir)+1))
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,2),is_centered(idir),dl(0,idir),arrplan_v,normfft_v,lambda_v)
@@ -736,7 +767,7 @@ endif
   if(is_bound(1,3)) hiw(:) = hiw(:)-[0,0,1]
   is_centered(:) = [.true.,.true.,.false.]
   call init_bc_rhs(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,is_centered,lo,hiw,periods, &
-                   dxc,dxf,dyc,dyf,dzf,dzc,rhsw%x,rhsw%y,rhsw%z)
+                   dxc,dxf,dyc,dyf,dzf,dzc,rhsw%x,rhsw%y,rhsw%z,bcw%x,bcw%y,bcw%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   allocate(lambda_w(hi(idir)-lo(idir)+1))
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,3),is_centered(idir),dl(0,idir),arrplan_w,normfft_w,lambda_w)

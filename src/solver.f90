@@ -39,7 +39,7 @@ module mod_solver
   end type hypre_solver 
   contains
   subroutine init_bc_rhs(cbc,bc,dl,is_bound,is_centered,lo,hi,periods, &
-                         dx1,dx2,dy1,dy2,dz1,dz2,rhsx,rhsy,rhsz)
+                         dx1,dx2,dy1,dy2,dz1,dz2,rhsx,rhsy,rhsz,bcx,bcy,bcz)
     !
     ! description
     !
@@ -56,10 +56,14 @@ module mod_solver
     real(rp)          , intent(out), dimension(lo(2):,lo(3):,0:)    :: rhsx
     real(rp)          , intent(out), dimension(lo(1):,lo(3):,0:)    :: rhsy
     real(rp)          , intent(out), dimension(lo(1):,lo(2):,0:)    :: rhsz
+    real(rp)          , intent(in ), dimension(lo(2):,lo(3):,0:), optional :: bcx
+    real(rp)          , intent(in ), dimension(lo(1):,lo(3):,0:), optional :: bcy
+    real(rp)          , intent(in ), dimension(lo(1):,lo(2):,0:), optional :: bcz
     integer, dimension(3) :: qqq
     real(rp), dimension(0:1,3) :: factor,sgn
     integer :: i,j,k,q,qq,idir,ib
     integer, dimension(3,3) :: eye
+    real(rp) :: rhs
     !
     qqq(:) = 0
     where(.not.is_centered(:)) qqq(:) = 1
@@ -105,24 +109,33 @@ module mod_solver
                 elseif(i == hi(idir)) then
                   ib = 1
                 endif
-                  if(is_bound(ib,idir)) &
-                  rhsx(j,k,ib) = rhsx(j,k,ib) + factor(ib,idir)/(dx1(i-(1-ib)+qqq(idir))*dx2(i))
+                if(is_bound(ib,idir)) then
+                  rhs = factor(ib,idir)/(dx1(i-(1-ib)+qqq(idir))*dx2(i))
+                  if(present(bcx).and.bc(ib,idir)/=0._rp) rhs = rhs*bcx(j,k,ib)/bc(ib,idir)
+                  rhsx(j,k,ib) = rhsx(j,k,ib) + rhs
+                endif
               case(2)
                 if(    j == lo(idir)) then
                   ib = 0
                 elseif(j == hi(idir)) then
                   ib = 1
                 endif
-                  if(is_bound(ib,idir)) &
-                  rhsy(i,k,ib) = rhsy(i,k,ib) + factor(ib,idir)/(dy1(j-(1-ib)+qqq(idir))*dy2(j))
+                if(is_bound(ib,idir)) then
+                  rhs = factor(ib,idir)/(dy1(j-(1-ib)+qqq(idir))*dy2(j))
+                  if(present(bcy).and.bc(ib,idir)/=0._rp) rhs = rhs*bcy(i,k,ib)/bc(ib,idir)
+                  rhsy(i,k,ib) = rhsy(i,k,ib) + rhs
+                endif
               case(3)
                 if(    k == lo(idir)) then
                   ib = 0
                 elseif(k == hi(idir)) then
                   ib = 1
                 endif
-                  if(is_bound(ib,idir)) &
-                  rhsz(i,j,ib) = rhsz(i,j,ib) + factor(ib,idir)/(dz1(k-(1-ib)+qqq(idir))*dz2(k))
+                if(is_bound(ib,idir)) then
+                  rhsz(i,j,ib) = factor(ib,idir)/(dz1(k-(1-ib)+qqq(idir))*dz2(k))
+                  if(present(bcz).and.bc(ib,idir)/=0._rp) rhs = rhs*bcz(i,j,ib)/bc(ib,idir)
+                  rhsz(i,j,ib) = rhsz(i,j,ib) + rhs
+                endif
               end select
             endif
           enddo
