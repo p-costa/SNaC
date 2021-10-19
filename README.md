@@ -6,7 +6,8 @@ The solver is able to simulate the flow in any three-dimensional multi-block str
 
 **Reference**
 
-P. Costa. *A FFT-accelerated multi-block finite-difference solver for massively parallel simulations of incompressible flows*. [*arXiv:2106.03583*](https://arxiv.org/pdf/2106.03583.pdf) (2021).
+P. Costa. *A FFT-accelerated multi-block finite-difference solver for massively parallel simulations of incompressible flows*.
+Comput. Phys. Commun. 271 : 108194 (2022) [[DOI:10.1016/j.cpc.2021.108194]](doi.org/10.1016/j.cpc.2021.108194) [[arXiv:2106.03583]](https://arxiv.org/pdf/2106.03583.pdf).
 
 ## News
 
