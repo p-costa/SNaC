@@ -205,8 +205,8 @@ program snac
   !
   !!$call omp_set_num_threads(nthreadsmax) ! ! overwrites the input, disable for now
   call initmpi(my_block,id_first,dims,cbcpre,bcpre,periods,lmin,lmax,gt,gr,lo,hi,ng,nb,is_bound,halos)
-  lo_1(:) = lo(:) - lo_g(:) + 1 ! lo(:) with 1 as first index in the begining of each block
-  hi_1(:) = hi(:) - lo_g(:) + 1 ! hi(:) with 1 as first index in the begining of each block
+  lo_1(:) = lo(:) - lo_g(:) + 1 ! lo(:) with 1 as first index in the beginning of each block
+  hi_1(:) = hi(:) - lo_g(:) + 1 ! hi(:) with 1 as first index in the beginning of each block
   !
   ! allocate variables
   !
