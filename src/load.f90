@@ -40,7 +40,7 @@ module mod_load
         if(myid_block == 0) write(stderr,*) '    file: ', filename, ' | expected size: ', good, '| actual size: ', filesize
         call MPI_FINALIZE()
         error stop
-      endif
+      end if
       !
       ! read
       !

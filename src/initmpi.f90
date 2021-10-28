@@ -51,7 +51,7 @@ module mod_initmpi
         nb(0,idir) = id_first + get_id([coords(1)-eye(1,idir),coords(2)-eye(2,idir),coords(3)-eye(3,idir)],dims(:))
       if(coords(idir)+1 <= dims(idir)-1) &
         nb(1,idir) = id_first + get_id([coords(1)+eye(1,idir),coords(2)+eye(2,idir),coords(3)+eye(3,idir)],dims(:))
-    enddo
+    end do
     print*,id_first + get_id([coords(1)+eye(1,1),coords(2)+eye(2,1),coords(3)+eye(3,1)],dims(:)),myid
     n(:) = ng(:)/dims(:)
     where(coords(:)+1 <= mod(ng(:),dims(:))) n(:) = n(:) + 1
@@ -84,8 +84,8 @@ module mod_initmpi
             write(stderr,*) 'Block ', nint(bc(inb,idir)), ' does not exist.'
             write(stderr,*) ''
             error stop
-          endif
-        endif
+          end if
+        end if
         if(nb(inb,idir) == MPI_PROC_NULL.and.cbc(inb,idir) == 'F') then
           is_nb = .false.
           do irank=0,nrank-1
@@ -100,8 +100,8 @@ module mod_initmpi
                   lmax(iidir) == lmax_all(iidir,irank).and. &
                   gr(iidir) == gr_all(iidir,irank).and. &
                   gt(iidir) == gt_all(iidir,irank)
-                endif
-              enddo
+                end if
+              end do
               !
               ! these checks are not really needed because we specify the links
               ! in the block file, but they may be useful in future and to trap
@@ -121,8 +121,8 @@ module mod_initmpi
                       write(stderr,*) 'Error when connecting block: ' ,my_block
                       write(stderr,*) ''
                       error stop
-                    endif
-                  endif
+                    end if
+                  end if
                 elseif ( inb == 1 .and. hi(idir) == hi_g(idir)) then
                   if(    hi(idir) == lo_all(idir,irank)-1) then
                     nb(inb,idir) = irank
@@ -136,19 +136,19 @@ module mod_initmpi
                       write(stderr,*) 'Error when connecting block: ' ,my_block
                       write(stderr,*) ''
                       error stop
-                    endif
-                  endif
+                    end if
+                  end if
                 else
                   write(stderr,*) 'ERROR: Expected connectivity between blocks',my_block,' and ',blocks_all(irank),'not found.'
                   write(stderr,*) ''
                   error stop
-                endif
-              endif
-            endif
-          enddo
-        endif
-      enddo
-    enddo
+                end if
+              end if
+            end if
+          end do
+        end if
+      end do
+    end do
     deallocate(lo_all,hi_all,lmin_all,lmax_all,gr_all,gt_all,blocks_all)
     do idir=1,3
       do inb=0,1
@@ -157,15 +157,15 @@ module mod_initmpi
           write(stderr,*) 'E.g. Blocks must share the same boundaries.'
           write(stderr,*) ''
           error stop
-        endif
-      enddo
-    enddo
+        end if
+      end do
+    end do
     !
     do idir=1,3
       is_bound(:,idir) = .false.
       where(nb(0:1,idir) == MPI_PROC_NULL) is_bound(0:1,idir) = .true.
       call makehalo(idir,1,n,halos(idir))
-    enddo
+    end do
     !
     ! check distribution of grid points over the different tasks
     !
@@ -211,12 +211,12 @@ module mod_initmpi
         where(coords_aux(:)<0        ) shift(:) =   (dims(:)-1-coords_aux(:))/dims(:)
         coords_aux(:) = coords_aux(:) + shift(:)*dims(:)
       end where
-    endif
+    end if
     if(all(coords_aux(:)<=dims(:)-1).and.all(coords_aux(:)>=0)) then
       id = coords_aux(1)+coords_aux(2)*dims(1)+coords_aux(3)*dims(1)*dims(2)
     else
       id = MPI_PROC_NULL
-    endif
+    end if
   end function get_id
   function get_coords(id,dims) result(coords)
     integer :: coords(3)

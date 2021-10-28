@@ -25,9 +25,9 @@ module mod_correc
       do j=lo(2)-1,hi(2)+1
         do i=lo(1)-1,hi(1)
           u(i,j,k) = up(i,j,k) - dt*(p(i+1,j,k)-p(i,j,k))/dxc(i)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP SHARED(lo,hi,dt,dyc,v,vp,p) &
@@ -36,9 +36,9 @@ module mod_correc
       do j=lo(2)-1,hi(2)
         do i=lo(1)-1,hi(1)+1
           v(i,j,k) = vp(i,j,k) - dt*(p(i,j+1,k)-p(i,j,k))/dyc(j)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP SHARED(lo,hi,dt,dzc,w,wp,p) &
@@ -47,9 +47,9 @@ module mod_correc
       do j=lo(2)-1,hi(2)+1
         do i=lo(1)-1,hi(1)+1
           w(i,j,k) = wp(i,j,k) - dt*(p(i,j,k+1)-p(i,j,k))/dzc(k)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine correc
 end module mod_correc

@@ -15,7 +15,7 @@ module mod_chkdiv
     real(rp), intent(in ), dimension(lo(2)-1:) :: dyf
     real(rp), intent(in ), dimension(lo(3)-1:) :: dzf
     real(rp), intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
-    real(rp), intent(in ) :: vol 
+    real(rp), intent(in ) :: vol
     type(MPI_COMM), intent(in ) :: comm
     real(rp), intent(out) :: divtot,divmax
     real(rp) :: div
@@ -36,9 +36,9 @@ module mod_chkdiv
                 (u(i,j,k)-u(i-1,j,k))/dxf(i)
           divmax = max(divmax,abs(div))
           divtot = divtot + div*dxf(i)*dyf(j)*dzf(k)/vol
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,divtot,1,MPI_REAL_RP,MPI_SUM,comm)
     call mpi_allreduce(MPI_IN_PLACE,divmax,1,MPI_REAL_RP,MPI_MAX,comm)

@@ -65,9 +65,9 @@ module mod_initflow
             v(i,j,k) = -cos(xcl)*sin(yfl)*cos(zcl)
             w(i,j,k) = 0._rp
             p(i,j,k) = 0._rp!(cos(2._rp*xc)+cos(2._rp*yc))*(cos(2._rp*zc)+2._rp)/16._rp
-          enddo
-        enddo
-      enddo
+          end do
+        end do
+      end do
     case('pdc')
       if(is_wallturb) then ! turbulent flow
         retau  = sqrt(bforce*lref)*uref/visc
@@ -75,7 +75,7 @@ module mod_initflow
         uref   = (reb/2._rp)/retau
       else                 ! laminar flow
         uref = (bforce*lref**2/(3._rp*visc))
-      endif
+      end if
       call poiseuille(lo(3),hi(3),zc,l(3),uref,u1d)
       is_mean=.true.
     case default
@@ -94,18 +94,18 @@ module mod_initflow
             v(i,j,k) = 0._rp
             w(i,j,k) = 0._rp
             p(i,j,k) = 0._rp
-          enddo
-        enddo
-      enddo
-    endif
+          end do
+        end do
+      end do
+    end if
     if(is_noise) then
       call add_noise(lo,hi,lo_g,hi_g,123,.5_rp,u)
       call add_noise(lo,hi,lo_g,hi_g,456,.5_rp,v)
       call add_noise(lo,hi,lo_g,hi_g,789,.5_rp,w)
-    endif
+    end if
     if(is_mean) then
       call set_mean(lo,hi,l,dxc,dyf,dzf,uref,u)
-    endif
+    end if
     if(is_wallturb) is_pair = .true.
     if(is_pair) then
       !
@@ -130,9 +130,9 @@ module mod_initflow
             v(i,j,k) = -1._rp*gxy(yfl,xcl)*dfz(zcl)*uref
             w(i,j,k) =  1._rp*fz(zfl)*dgxy(ycl,xcl)*uref
             p(i,j,k) =  0._rp
-          enddo
-        enddo
-      enddo
+          end do
+        end do
+      end do
       !
       ! alternatively, using a Taylor-Green vortex
       ! for the cross-stream velocity components
@@ -150,10 +150,10 @@ module mod_initflow
       !      v(i,j,k) =  sin(xcl)*cos(yfl)*cos(zcl)
       !      w(i,j,k) = -cos(xcl)*sin(ycl)*cos(zfl)
       !      p(i,j,k) = 0._rp!(cos(2._rp*xcl)+cos(2._rp*ycl))*(cos(2._rp*zcl)+2._rp)/16._rp
-      !    enddo
-      !  enddo
-      !enddo
-    endif
+      !    end do
+      !  end do
+      !end do
+    end if
     deallocate(u1d)
   end subroutine initflow
   !
@@ -177,10 +177,10 @@ module mod_initflow
              j>=lo(2).and.j<=hi(2) .and. &
              k>=lo(3).and.k<=hi(3) ) then
              p(i,j,k) = p(i,j,k) + 2._rp*(rn-.5_rp)*norm
-          endif
-        enddo
-      enddo
-    enddo
+          end if
+        end do
+      end do
+    end do
   end subroutine add_noise
   !
   subroutine set_mean(lo,hi,l,dx,dy,dz,mean,p)
@@ -204,16 +204,16 @@ module mod_initflow
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           meanold = meanold + p(i,j,k)*dx(i)*dy(j)*dz(k)/(l(1)*l(2)*l(3))
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,meanold,1,MPI_REAL_RP,MPI_SUM,comm_block)
     if(meanold /= 0._rp) then
       !$OMP WORKSHARE
       p(:,:,:) = p(:,:,:)/meanold*mean
       !$OMP END WORKSHARE
-    endif
+    end if
   end subroutine set_mean
   !
   subroutine couette(lo,hi,zc,l,norm,p)
@@ -230,7 +230,7 @@ module mod_initflow
     do k=lo,hi
       z    = zc(k)/l
       p(k) = .5_rp*(1._rp-2._rp*z)*norm
-    enddo
+    end do
   end subroutine couette
   !
   subroutine poiseuille(lo,hi,zc,l,norm,p)
@@ -247,14 +247,14 @@ module mod_initflow
     do k=lo,hi
       z    = zc(k)/l
       p(k) = 6._rp*z*(1._rp-z)*norm
-    enddo
+    end do
   end subroutine poiseuille
   !
   function poiseuille_square(r,lmin,lmax) result(vel)
     !
     ! below a poiseuille inflow is calculated
     !   it is convinient that the integral a function of this kind
-    !   is equal to one, such that it can be easily recycled 
+    !   is equal to one, such that it can be easily recycled
     !   for the inflow of a square duct, as done in
     !   in init_inflow below
     !
@@ -272,7 +272,7 @@ module mod_initflow
     ! later this subroutine can be generalized with other shapes of
     ! inflow velocity; by construction, the profile will not vary along
     ! a direction that does not have Dirichlet BCs; note that
-    ! since the inflow is evaluated at the center of a face, 
+    ! since the inflow is evaluated at the center of a face,
     ! there is no danger of experiencing a singularity '0._rp**0'.
     !
     implicit none
@@ -295,8 +295,8 @@ module mod_initflow
       do i1 = lo(1)-1,hi(1)+1
         vel(i1,i2) = uref*poiseuille_square(x1c(i1),lmin(1),lmax(1))**q(1) * &
                           poiseuille_square(x2c(i2),lmin(2),lmax(2))**q(2)
-      enddo
-    enddo
+      end do
+    end do
   end subroutine init_inflow
   !
   subroutine log_profile(lo,hi,zc,l,uref,lref,visc,p)
@@ -315,7 +315,7 @@ module mod_initflow
       z    = zc(k)*2._rp*retau
       p(k) = 2.5_rp*log(z) + 5.5_rp
       if (z<=11.6_rp) p(k)=z
-    enddo
+    end do
   end subroutine log_profile
   !
   ! functions to initialize the streamwise vortex pair

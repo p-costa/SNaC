@@ -35,9 +35,9 @@ module mod_mom
                         ( -uuip + uuim )/dxc(i) + &
                         ( -uvjp + uvjm )/dyf(j) + &
                         ( -uwkp + uwkm )/dzf(k)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momx_a
   !
@@ -72,9 +72,9 @@ module mod_mom
                         ( -uvip + uvim )/dxf(i) + &
                         ( -vvjp + vvjm )/dyc(j) + &
                         ( -wvkp + wvkm )/dzf(k)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momy_a
   !
@@ -109,9 +109,9 @@ module mod_mom
                         ( -uwip + uwim )/dxf(i) + &
                         ( -vwjp + vwjm )/dyf(j) + &
                         ( -wwkp + wwkm )/dzc(k)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momz_a
   !
@@ -147,9 +147,9 @@ module mod_mom
                                        ( -uvjp + uvjm ) + &
                                        ( -uwkp + uwkm ) &
                                       )/(dxc(i)*dyf(j)*dzf(k))
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momx_a_vv
   !
@@ -186,9 +186,9 @@ module mod_mom
                                        ( -wvkp + wvkm ) &
                                       )/(dxf(i)*dyc(j)*dzf(k))
 
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momy_a_vv
   !
@@ -224,9 +224,9 @@ module mod_mom
                                        ( -vwjp + vwjm ) + &
                                        ( -wwkp + wwkm ) &
                                       )/(dxf(i)*dyf(j)*dzc(k))
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momz_a_vv
   !
@@ -262,9 +262,9 @@ module mod_mom
                         visc*(dudxp-dudxm)/dxc(i) + &
                         visc*(dudyp-dudym)/dyf(j) + &
                         visc*(dudzp-dudzm)/dzf(k)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momx_d
   !
@@ -300,9 +300,9 @@ module mod_mom
                         visc*(dvdxp-dvdxm)/dxf(i) + &
                         visc*(dvdyp-dvdym)/dyc(j) + &
                         visc*(dvdzp-dvdzm)/dzf(k)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momy_d
   !
@@ -338,9 +338,9 @@ module mod_mom
                         visc*(dwdxp-dwdxm)/dxf(i) + &
                         visc*(dwdyp-dwdym)/dyf(j) + &
                         visc*(dwdzp-dwdzm)/dzc(k)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momz_d
   subroutine momx_p(lo,hi,dxc,bforce,p,dudt)
@@ -359,9 +359,9 @@ module mod_mom
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           dudt(i,j,k) = - ( p(i+1,j,k)-p(i,j,k) )/dxc(i) + bforce
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momx_p
   !
@@ -381,9 +381,9 @@ module mod_mom
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           dvdt(i,j,k) = - ( p(i,j+1,k)-p(i,j,k) )/dyc(j) + bforce
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momy_p
   !
@@ -403,9 +403,9 @@ module mod_mom
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           dwdt(i,j,k) = - ( p(i,j,k+1)-p(i,j,k) )/dzc(k) + bforce
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine momz_p
 end module mod_mom

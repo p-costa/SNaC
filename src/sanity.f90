@@ -54,7 +54,7 @@ module mod_sanity
     logical :: passed_loc
     passed = .true.
     passed_loc = all(gr(:) >= 0._rp)
-    if(.not.passed_loc) & 
+    if(.not.passed_loc) &
       call write_error('grid growth parameter must be positive.')
     passed = passed.and.passed_loc
     call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
@@ -75,14 +75,14 @@ module mod_sanity
       call write_error('no domain decomposition allowed in the uniform (FFT) direction')
     passed = passed.and.passed_loc
     !
-    call MPI_ALLREDUCE(lo  ,lo_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD) 
-    call MPI_ALLREDUCE(lo  ,lo_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD) 
-    call MPI_ALLREDUCE(hi  ,hi_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD) 
-    call MPI_ALLREDUCE(hi  ,hi_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD) 
-    call MPI_ALLREDUCE(lmin,lmin_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD) 
-    call MPI_ALLREDUCE(lmin,lmin_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD) 
-    call MPI_ALLREDUCE(lmax,lmax_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD) 
-    call MPI_ALLREDUCE(lmax,lmax_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD) 
+    call MPI_ALLREDUCE(lo  ,lo_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(lo  ,lo_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(hi  ,hi_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(hi  ,hi_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(lmin,lmin_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(lmin,lmin_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(lmax,lmax_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(lmax,lmax_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
     passed_loc = (lo_min == lo).and.(lo_max == lo).and. &
                  (hi_min == hi).and.(hi_max == hi)
     passed_loc = passed_loc.and. &
@@ -119,8 +119,8 @@ module mod_sanity
       do idir=1,3
         bc01v = cbcvel(0,idir,ivel)//cbcvel(1,idir,ivel)
         passed_loc = passed_loc.and.any(bc01v == bcs)
-      enddo
-    enddo
+      end do
+    end do
     if(.not.passed_loc) call write_error('velocity BCs not valid.')
     passed = passed.and.passed_loc
     !
@@ -128,7 +128,7 @@ module mod_sanity
     do idir=1,3
       bc01p = cbcpre(0,idir)//cbcpre(1,idir)
       passed_loc = passed_loc.and.any(bc01p == bcs)
-    enddo
+    end do
     if(.not.passed_loc) call write_error('pressure BCs not valid.')
     passed = passed.and.passed_loc
     !
@@ -146,7 +146,7 @@ module mod_sanity
                                     (bc01v == 'FN'.and.bc01p == 'FD').or. &
                                     (bc01v == 'NF'.and.bc01p == 'DF').or. &
                                     (bc01v == 'NN'.and.bc01p == 'DD') )
-    enddo
+    end do
     if(.not.passed_loc) call write_error('velocity and pressure BCs not compatible.')
     passed = passed.and.passed_loc
     call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)

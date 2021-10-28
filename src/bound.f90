@@ -37,32 +37,32 @@ module mod_bound
       if(.not.is_correc) call set_bc(cbc(0,1,1),0,lo,hi,1,.false.,bc(0,1,1),dxf(lo(1)-1),u)
                          call set_bc(cbc(0,1,2),0,lo,hi,1,.true. ,bc(0,1,2),dxc(lo(1)-1),v)
                          call set_bc(cbc(0,1,3),0,lo,hi,1,.true. ,bc(0,1,3),dxc(lo(1)-1),w)
-    endif
+    end if
     if(is_bound(1,1)) then
       if(.not.is_correc) call set_bc(cbc(1,1,1),1,lo,hi,1,.false.,bc(1,1,1),dxf(hi(1)  ),u)
                          call set_bc(cbc(1,1,2),1,lo,hi,1,.true. ,bc(1,1,2),dxc(hi(1)  ),v)
                          call set_bc(cbc(1,1,3),1,lo,hi,1,.true. ,bc(1,1,3),dxc(hi(1)  ),w)
-    endif
+    end if
     if(is_bound(0,2)) then
                          call set_bc(cbc(0,2,1),0,lo,hi,2,.true. ,bc(0,2,1),dyc(lo(2)-1),u)
       if(.not.is_correc) call set_bc(cbc(0,2,2),0,lo,hi,2,.false.,bc(0,2,2),dyf(lo(2)-1),v)
                          call set_bc(cbc(0,2,3),0,lo,hi,2,.true. ,bc(0,2,3),dyc(lo(2)-1),w)
-     endif
+     end if
     if(is_bound(1,2)) then
                          call set_bc(cbc(1,2,1),1,lo,hi,2,.true. ,bc(1,2,1),dyc(hi(2)  ),u)
       if(.not.is_correc) call set_bc(cbc(1,2,2),1,lo,hi,2,.false.,bc(1,2,2),dyf(hi(2)  ),v)
                          call set_bc(cbc(1,2,3),1,lo,hi,2,.true. ,bc(1,2,3),dyc(hi(2)  ),w)
-    endif
+    end if
     if(is_bound(0,3)) then
                          call set_bc(cbc(0,3,1),0,lo,hi,3,.true. ,bc(0,3,1),dzc(lo(3)-1),u)
                          call set_bc(cbc(0,3,2),0,lo,hi,3,.true. ,bc(0,3,2),dzc(lo(3)-1),v)
       if(.not.is_correc) call set_bc(cbc(0,3,3),0,lo,hi,3,.false.,bc(0,3,3),dzf(lo(3)-1),w)
-    endif
+    end if
     if(is_bound(1,3)) then
                          call set_bc(cbc(1,3,1),1,lo,hi,3,.true. ,bc(1,3,1),dzc(hi(3)  ),u)
                          call set_bc(cbc(1,3,2),1,lo,hi,3,.true. ,bc(1,3,2),dzc(hi(3)  ),v)
       if(.not.is_correc) call set_bc(cbc(1,3,3),1,lo,hi,3,.false.,bc(1,3,3),dzf(hi(3)  ),w)
-    endif
+    end if
   end subroutine bounduvw
   !
   subroutine boundp(cbc,lo,hi,bc,halos,is_bound,nb,dxc,dyc,dzc,p)
@@ -87,22 +87,22 @@ module mod_bound
     !
     if(is_bound(0,1)) then
       call set_bc(cbc(0,1),0,lo,hi,1,.true.,bc(0,1),dxc(lo(1)-1),p)
-    endif                                                       
-    if(is_bound(1,1)) then                                      
+    end if
+    if(is_bound(1,1)) then
       call set_bc(cbc(1,1),1,lo,hi,1,.true.,bc(1,1),dxc(hi(1)  ),p)
-    endif                       
-    if(is_bound(0,2)) then      
+    end if
+    if(is_bound(0,2)) then
       call set_bc(cbc(0,2),0,lo,hi,2,.true.,bc(0,2),dyc(lo(2)-1),p)
-    endif                                                       
-    if(is_bound(1,2)) then                                      
+    end if
+    if(is_bound(1,2)) then
       call set_bc(cbc(1,2),1,lo,hi,2,.true.,bc(1,2),dyc(hi(2)  ),p)
-    endif                       
-    if(is_bound(0,3)) then      
+    end if
+    if(is_bound(0,3)) then
       call set_bc(cbc(0,3),0,lo,hi,3,.true.,bc(0,3),dzc(lo(3)-1),p)
-    endif                       
-    if(is_bound(1,3)) then      
+    end if
+    if(is_bound(1,3)) then
       call set_bc(cbc(1,3),1,lo,hi,3,.true.,bc(1,3),dzc(hi(3)  ),p)
-    endif
+    end if
   end subroutine boundp
   !
   subroutine set_bc(ctype,ibound,lo,hi,idir,centered,rvalue,dr,p)
@@ -120,15 +120,15 @@ module mod_bound
     if(ctype == 'D'.and.centered) then
       factor = 2._rp*factor
       sgn    = -1._rp
-    endif
+    end if
     if(ctype == 'N') then
       if(    ibound == 0) then
         factor = -dr*factor
       elseif(ibound == 1) then
         factor =  dr*factor
-      endif
+      end if
       sgn    = 1._rp
-    endif
+    end if
     !
     select case(ctype)
     case('P')
@@ -161,7 +161,7 @@ module mod_bound
             !$OMP WORKSHARE
             p(hi(idir)+1,:,:) = factor+sgn*p(hi(idir),:,:)
             !$OMP END WORKSHARE
-          endif
+          end if
         case(2)
           if    (ibound == 0) then
             !$OMP WORKSHARE
@@ -171,7 +171,7 @@ module mod_bound
             !$OMP WORKSHARE
             p(:,hi(idir)+1,:) = factor+sgn*p(:,hi(idir),:)
             !$OMP END WORKSHARE
-          endif
+          end if
         case(3)
           if    (ibound == 0) then
             !$OMP WORKSHARE
@@ -181,7 +181,7 @@ module mod_bound
             !$OMP WORKSHARE
             p(:,:,hi(idir)+1) = factor+sgn*p(:,:,hi(idir))
             !$OMP END WORKSHARE
-          endif
+          end if
         end select
       elseif(.not.centered.and.ctype == 'D') then
         select case(idir)
@@ -195,7 +195,7 @@ module mod_bound
             p(hi(idir)  ,:,:) = factor
             p(hi(idir)+1,:,:) = p(hi(idir)-1,:,:)
             !$OMP END WORKSHARE
-          endif
+          end if
         case(2)
           if    (ibound == 0) then
             !$OMP WORKSHARE
@@ -206,7 +206,7 @@ module mod_bound
             p(:,hi(idir)  ,:) = factor
             p(:,hi(idir)+1,:) = p(:,hi(idir)-1,:)
             !$OMP END WORKSHARE
-          endif
+          end if
         case(3)
           if    (ibound == 0) then
             !$OMP WORKSHARE
@@ -217,7 +217,7 @@ module mod_bound
             p(:,:,hi(idir)  ) = factor
             p(:,:,hi(idir)+1) = p(:,:,hi(idir)-1)
             !$OMP END WORKSHARE
-          endif
+          end if
         end select
       elseif(.not.centered.and.ctype == 'N') then
         select case(idir)
@@ -233,7 +233,7 @@ module mod_bound
             p(hi(idir)  ,:,:) = factor + p(hi(idir)-1,:,:)
             p(hi(idir)+1,:,:) =          p(hi(idir)  ,:,:) ! not needed
             !$OMP END WORKSHARE
-          endif
+          end if
         case(2)
           if    (ibound == 0) then
             !$OMP WORKSHARE
@@ -246,7 +246,7 @@ module mod_bound
             p(:,hi(idir)  ,:) = factor + p(:,hi(idir)-1,:)
             p(:,hi(idir)+1,:) =          p(:,hi(idir)  ,:) ! not needed
             !$OMP END WORKSHARE
-          endif
+          end if
         case(3)
           if    (ibound == 0) then
             !$OMP WORKSHARE
@@ -259,9 +259,9 @@ module mod_bound
             p(:,:,hi(idir)  ) = factor + p(:,:,hi(idir)-1)
             p(:,:,hi(idir)+1) =          p(:,:,hi(idir)  ) ! not needed
             !$OMP END WORKSHARE
-          endif
+          end if
         end select
-      endif
+      end if
     end select
   end subroutine set_bc
   !
@@ -287,9 +287,9 @@ module mod_bound
             case(3)
               w(:,:,q) = velz(:,:,ibound)
           end select
-        endif
-      enddo
-    enddo
+        end if
+      end do
+    end do
   end subroutine inflow
   !
   subroutine updt_rhs(lo,hi,is_bound,rhsbx,rhsby,rhsbz,p)
@@ -308,32 +308,32 @@ module mod_bound
       !$OMP WORKSHARE
       p(lo(1),lo(2):hi(2),lo(3):hi(3)) = p(lo(1),lo(2):hi(2),lo(3):hi(3)) + rhsbx(lo(2):hi(2),lo(3):hi(3),0)
       !$OMP END WORKSHARE
-    endif  
+    end if
     if(is_bound(1,1)) then
       !$OMP WORKSHARE
       p(hi(1),lo(2):hi(2),lo(3):hi(3)) = p(hi(1),lo(2):hi(2),lo(3):hi(3)) + rhsbx(lo(2):hi(2),lo(3):hi(3),1)
       !$OMP END WORKSHARE
-    endif
+    end if
     if(is_bound(0,2)) then
       !$OMP WORKSHARE
       p(lo(1):hi(1),lo(2),lo(3):hi(3)) = p(lo(1):hi(1),lo(2),lo(3):hi(3)) + rhsby(lo(1):hi(1),lo(3):hi(3),0)
       !$OMP END WORKSHARE
-    endif
+    end if
     if(is_bound(1,2)) then
       !$OMP WORKSHARE
       p(lo(1):hi(1),hi(2),lo(3):hi(3)) = p(lo(1):hi(1),hi(2),lo(3):hi(3)) + rhsby(lo(1):hi(1),lo(3):hi(3),1)
       !$OMP END WORKSHARE
-    endif
+    end if
     if(is_bound(0,3)) then
       !$OMP WORKSHARE
       p(lo(1):hi(1),lo(2):hi(2),lo(3)) = p(lo(1):hi(1),lo(2):hi(2),lo(3)) + rhsbz(lo(1):hi(1),lo(2):hi(2),0)
       !$OMP END WORKSHARE
-    endif
+    end if
     if(is_bound(1,3)) then
       !$OMP WORKSHARE
       p(lo(1):hi(1),lo(2):hi(2),hi(3)) = p(lo(1):hi(1),lo(2):hi(2),hi(3)) + rhsbz(lo(1):hi(1),lo(2):hi(2),1)
       !$OMP END WORKSHARE
-    endif
+    end if
   end subroutine updt_rhs
   !
   subroutine updthalo(lo,hi,nh,halo,nb,idir,p)

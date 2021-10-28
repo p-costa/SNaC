@@ -35,9 +35,9 @@ module mod_fillps
                       (vp(i,j,k)-vp(i,j-1,k))/dyf(j) + &
                       (up(i,j,k)-up(i-1,j,k))/dxf(i) &
                      )/dt
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine fillps
 end module mod_fillps

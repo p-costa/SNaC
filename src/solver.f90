@@ -33,10 +33,10 @@ module mod_solver
                         HYPRESolverPFMG     = 2, &
                         HYPRESolverGMRES    = 3, &
                         HYPRESolverBiCGSTAB = 4
-  type hypre_solver 
+  type hypre_solver
     type(C_PTR) :: grid,stencil,precond,solver,mat,rhs,sol
     integer     :: stype,comm_hypre
-  end type hypre_solver 
+  end type hypre_solver
   contains
   subroutine init_bc_rhs(cbc,bc,dl,is_bound,is_centered,lo,hi,periods, &
                          dx1,dx2,dy1,dy2,dz1,dz2,rhsx,rhsy,rhsz,bcx,bcy,bcz)
@@ -84,16 +84,16 @@ module mod_solver
             else
               factor(qq,q) = -1._rp*bc(qq,q)
               sgn(   qq,q) =  0._rp
-            endif
+            end if
           end select
-        endif
-      enddo
-    enddo
+        end if
+      end do
+    end do
     !
     eye(:,:) = 0
     do idir=1,3
       eye(idir,idir) = 1
-    enddo
+    end do
     rhsx(:,:,:) = 0._rp
     rhsy(:,:,:) = 0._rp
     rhsz(:,:,:) = 0._rp
@@ -108,40 +108,40 @@ module mod_solver
                   ib = 0
                 elseif(i == hi(idir)) then
                   ib = 1
-                endif
+                end if
                 if(is_bound(ib,idir)) then
                   rhs = factor(ib,idir)/(dx1(i-(1-ib)+qqq(idir))*dx2(i))
                   if(present(bcx).and.bc(ib,idir)/=0._rp) rhs = rhs*bcx(j,k,ib)/bc(ib,idir)
                   rhsx(j,k,ib) = rhsx(j,k,ib) + rhs
-                endif
+                end if
               case(2)
                 if(    j == lo(idir)) then
                   ib = 0
                 elseif(j == hi(idir)) then
                   ib = 1
-                endif
+                end if
                 if(is_bound(ib,idir)) then
                   rhs = factor(ib,idir)/(dy1(j-(1-ib)+qqq(idir))*dy2(j))
                   if(present(bcy).and.bc(ib,idir)/=0._rp) rhs = rhs*bcy(i,k,ib)/bc(ib,idir)
                   rhsy(i,k,ib) = rhsy(i,k,ib) + rhs
-                endif
+                end if
               case(3)
                 if(    k == lo(idir)) then
                   ib = 0
                 elseif(k == hi(idir)) then
                   ib = 1
-                endif
+                end if
                 if(is_bound(ib,idir)) then
                   rhsz(i,j,ib) = factor(ib,idir)/(dz1(k-(1-ib)+qqq(idir))*dz2(k))
                   if(present(bcz).and.bc(ib,idir)/=0._rp) rhs = rhs*bcz(i,j,ib)/bc(ib,idir)
                   rhsz(i,j,ib) = rhsz(i,j,ib) + rhs
-                endif
+                end if
               end select
-            endif
-          enddo
-        enddo
-      enddo
-    enddo
+            end if
+          end do
+        end do
+      end do
+    end do
   end subroutine init_bc_rhs
   subroutine init_matrix_3d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
                             dx1,dx2,dy1,dy2,dz1,dz2,asolver,lambda)
@@ -191,11 +191,11 @@ module mod_solver
             else
               factor(qq,q) = -1._rp*bc(qq,q)
               sgn(   qq,q) =  0._rp
-            endif
+            end if
           end select
-        endif
-      enddo
-    enddo
+        end if
+      end do
+    end do
     !
     ! create 3D grid object
     !
@@ -216,7 +216,7 @@ module mod_solver
                         0, 0, 1 ],shape(offsets))
     do q=1,nstencil
       call HYPRE_StructStencilSetElement(stencil,q-1,offsets(:,q),ierr)
-    enddo
+    end do
     !
     ! create coefficient matrix, and solution & right-hand-side vectors
     !
@@ -259,32 +259,32 @@ module mod_solver
             if(is_bound(0,1).and.i == lo(1)) then
               cc = cc + sgn(0,1)*cxm
               cxm = 0._rp
-            endif
+            end if
             if(is_bound(1,1).and.i == hi(1)) then
               cc = cc + sgn(1,1)*cxp
               cxp = 0._rp
-            endif
-          endif
+            end if
+          end if
           if(periods(2) == 0) then
             if(is_bound(0,2).and.j == lo(2)) then
               cc = cc + sgn(0,2)*cym
               cym = 0._rp
-            endif
+            end if
             if(is_bound(1,2).and.j == hi(2)) then
               cc = cc + sgn(1,2)*cyp
               cyp = 0._rp
-            endif
-          endif
+            end if
+          end if
           if(periods(3) == 0) then
             if(is_bound(0,3).and.k == lo(3)) then
               cc = cc + sgn(0,3)*czm
               czm = 0._rp
-            endif
+            end if
             if(is_bound(1,3).and.k == hi(3)) then
               cc = cc + sgn(1,3)*czp
               czp = 0._rp
-            endif
-          endif
+            end if
+          end if
           qq = (q-1)*nstencil
           matvalues(qq+1) = cc
           matvalues(qq+2) = cxm
@@ -293,9 +293,9 @@ module mod_solver
           matvalues(qq+5) = cyp
           matvalues(qq+6) = czm
           matvalues(qq+7) = czp
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     call HYPRE_StructMatrixSetBoxValues(mat,lo,hi,nstencil, &
                                         [0,1,2,3,4,5,6],matvalues,ierr)
     call HYPRE_StructMatrixAssemble(mat,ierr)
@@ -353,7 +353,7 @@ module mod_solver
         call HYPRE_StructBiCGSTABCreate(asolver%comm_hypre,solver,ierr)
         call HYPRE_StructBiCGSTABSetMaxIter(solver,maxiter,ierr)
         call HYPRE_StructBiCGSTABSetTol(solver,maxerror,ierr)
-      endif
+      end if
       ! Use PFMG as preconditioner
       call HYPRE_StructPFMGCreate(asolver%comm_hypre,precond,ierr)
       call HYPRE_StructPFMGSetMaxIter(precond,10,ierr)
@@ -366,9 +366,9 @@ module mod_solver
         call HYPRE_StructGMRESSetPrecond(solver,precond_id,precond,ierr)
       elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSetPrecond(solver,precond_id,precond,ierr)
-      endif
+      end if
       asolver%precond = precond
-    endif
+    end if
     asolver%solver  = solver
     asolver%stype   = stype
   end subroutine create_solver
@@ -400,8 +400,8 @@ module mod_solver
         call HYPRE_StructGMRESSetup(solver,mat,rhs,sol,ierr)
       elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSetup(solver,mat,rhs,sol,ierr)
-      endif
-    endif
+      end if
+    end if
   end subroutine setup_solver
   subroutine add_constant_to_diagonal(lo,hi,alpha,mat)
     implicit none
@@ -416,9 +416,9 @@ module mod_solver
         do i=lo(1),hi(1)
           q=q+1
           matvalues(q) = alpha
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     call HYPRE_StructMatrixAddToBoxValues(mat,lo,hi,1,[0],matvalues,ierr)
   end subroutine add_constant_to_diagonal
   subroutine solve_helmholtz(asolver,lo,hi,p,po)
@@ -448,19 +448,19 @@ module mod_solver
     !       freely available under a GPL license; see:
     !       http://www.ida.upmc.fr/~zaleski/paris/
     !
-    if ( stype == HYPRESolverSMG ) then 
+    if ( stype == HYPRESolverSMG ) then
       call HYPRE_StructSMGSolve(solver,mat,rhs,sol,ierr)
       !call HYPRE_StructSMGGetNumIterations(solver,num_iterations,ierr)
-    elseif ( stype == HYPRESolverPFMG ) then  
+    elseif ( stype == HYPRESolverPFMG ) then
       call HYPRE_StructPFMGSolve(solver,mat,rhs,sol,ierr)
       !call HYPRE_StructPFMGGetNumIteration(solver,num_iterations,ierr)
-    elseif (stype == HYPRESolverGMRES) then 
+    elseif (stype == HYPRESolverGMRES) then
       call HYPRE_StructGMRESSolve(solver,mat,rhs,sol,ierr)
       !call HYPRE_StructGMRESGetNumIteratio(solver, num_iterations,ierr)
-    elseif (stype == HYPRESolverBiCGSTAB) then 
+    elseif (stype == HYPRESolverBiCGSTAB) then
       call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
       !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
-    endif ! stype
+    end if ! stype
     !
     ! end of part based on the Paris Simulator code
     !
@@ -495,7 +495,7 @@ module mod_solver
     elseif ( stype == HYPRESolverBiCGSTAB ) then
       call HYPRE_StructBiCGSTABDestroy(solver,ierr)
       call HYPRE_StructPFMGDestroy(precond,ierr)
-    endif
+    end if
   end subroutine finalize_solver
   subroutine finalize_matrix(asolver)
     implicit none
@@ -563,11 +563,11 @@ module mod_solver
             else
               factor(qq,q) = -1._rp*bc(qq,q)
               sgn(   qq,q) =  0._rp
-            endif
+            end if
           end select
-        endif
-      enddo
-    enddo
+        end if
+      end do
+    end do
     !
     ! create 2D grid object
     !
@@ -586,7 +586,7 @@ module mod_solver
                         0, 1 ],shape(offsets))
     do q=1,nstencil
       call HYPRE_StructStencilSetElement(stencil,q-1,offsets(:,q),ierr)
-    enddo
+    end do
     !
     ! create coefficient matrix, and solution & right-hand-side vectors
     !
@@ -609,22 +609,22 @@ module mod_solver
           if(is_bound(0,1).and.i1 == lo(1)) then
             cc = cc + sgn(0,1)*c1m
             c1m = 0._rp
-          endif
+          end if
           if(is_bound(1,1).and.i1 == hi(1)) then
             cc = cc + sgn(1,1)*c1p
             c1p = 0._rp
-          endif
-        endif
+          end if
+        end if
         if(periods(2) == 0) then
           if(is_bound(0,2).and.i2 == lo(2)) then
             cc = cc + sgn(0,2)*c2m
             c2m = 0._rp
-          endif
+          end if
           if(is_bound(1,2).and.i2 == hi(2)) then
             cc = cc + sgn(1,2)*c2p
             c2p = 0._rp
-          endif
-        endif
+          end if
+        end if
         q  = q + 1
         qq = (q-1)*nstencil
         matvalues(qq+1) = cc
@@ -632,8 +632,8 @@ module mod_solver
         matvalues(qq+3) = c1p
         matvalues(qq+4) = c2m
         matvalues(qq+5) = c2p
-      enddo
-    enddo
+      end do
+    end do
     call HYPRE_StructMatrixSetBoxValues(mat,lo,hi,nstencil, &
                                         [0,1,2,3,4],matvalues,ierr)
     call HYPRE_StructMatrixAssemble(mat,ierr)
@@ -660,7 +660,7 @@ module mod_solver
     integer    , pointer :: stype
     integer :: i_out,n
     do i_out=lo_out,hi_out
-      n = i_out-lo_out+1 
+      n = i_out-lo_out+1
       solver  => asolver(n)%solver
       mat     => asolver(n)%mat
       rhs     => asolver(n)%rhs
@@ -700,7 +700,7 @@ module mod_solver
       elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
         !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
-      endif ! stype
+      end if ! stype
       !
       ! end of part based on the Paris Simulator code
       !
@@ -722,7 +722,7 @@ module mod_solver
       po(i_out,lo(1):hi(1),lo(2):hi(2)) = p(i_out,lo(1):hi(1),lo(2):hi(2))
       !$OMP END WORKSHARE
 #endif
-    enddo
+    end do
   end subroutine solve_n_helmholtz_2d
   subroutine solve_n_helmholtz_3d(asolver,nslices,lo_sp,hi_sp,nh,lo,hi,p,po)
     implicit none
@@ -770,7 +770,7 @@ module mod_solver
       elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
         !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
-      endif ! stype
+      end if ! stype
       !
       ! end of part based on the Paris Simulator code
       !
@@ -780,7 +780,7 @@ module mod_solver
       !$OMP WORKSHARE
       po(lo_s(1):hi_s(1),lo_s(2):hi_s(2),lo_s(3):hi_s(3)) = p(lo_s(1):hi_s(1),lo_s(2):hi_S(2),lo_s(3):hi_s(3))
       !$OMP END WORKSHARE
-    enddo
+    end do
   end subroutine solve_n_helmholtz_3d
   subroutine init_n_2d_matrices(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_out,hi_out,lo,hi,periods, &
                                 dl1_1,dl1_2,dl2_1,dl2_2,lambda,comm,asolver)
@@ -806,7 +806,7 @@ module mod_solver
                           dl1_1,dl1_2,dl2_1,dl2_2,comm(q),asolver_aux)
       call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],lambda(q),asolver_aux%mat)
       asolver(q) = asolver_aux
-    enddo
+    end do
   end subroutine init_n_2d_matrices
   subroutine init_n_3d_matrices(idir,nslice,cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,periods, &
                                 lo_sp,hi_sp,dl1_1,dl1_2,dl2_1,dl2_2,dl3_1,dl3_2,lambda,asolver)
@@ -834,7 +834,7 @@ module mod_solver
                           dl3_1(lo_sp(3,q)-1:hi_sp(3,q)+1),dl3_2(lo_sp(3,q)-1:hi_sp(3,q)+1), &
                           asolver_aux,lambda(lo_sp(idir,q)-lo(idir)+1:hi_sp(idir,q)-lo(idir)+1))
       asolver(q) = asolver_aux
-    enddo
+    end do
   end subroutine init_n_3d_matrices
   subroutine create_n_solvers(n,maxiter,maxerror,stype,asolver)
     integer           , intent(   in) :: n
@@ -845,7 +845,7 @@ module mod_solver
     integer :: q
     do q=1,n
       call create_solver(maxiter,maxerror,stype,asolver(q))
-    enddo
+    end do
   end subroutine create_n_solvers
   subroutine setup_n_solvers(n,asolver)
     integer           , intent(   in) :: n
@@ -853,7 +853,7 @@ module mod_solver
     integer :: q
     do q=1,n
       call setup_solver(asolver(q))
-    enddo
+    end do
   end subroutine setup_n_solvers
   subroutine add_constant_to_n_diagonals(n,lo,hi,alpha,mat)
     integer    , intent(in   )               :: n
@@ -863,7 +863,7 @@ module mod_solver
     integer :: q
     do q=1,n
       call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],alpha,mat(q))
-    enddo
+    end do
   end subroutine add_constant_to_n_diagonals
   subroutine finalize_n_matrices(n,asolver)
     integer           , intent(   in) :: n
@@ -871,7 +871,7 @@ module mod_solver
     integer :: q
     do q=1,n
       call finalize_matrix(asolver(q))
-    enddo
+    end do
   end subroutine finalize_n_matrices
   subroutine finalize_n_solvers(n,asolver)
     integer           , intent(   in) :: n
@@ -879,7 +879,7 @@ module mod_solver
     integer :: q
     do q=1,n
       call finalize_solver(asolver(q))
-    enddo
+    end do
   end subroutine finalize_n_solvers
   subroutine init_fft_reduction(idir,n,bc,is_centered,dl,arrplan,normfft,lambda)
     use mod_fft       , only: fftini,eigenvalues
@@ -888,7 +888,7 @@ module mod_solver
     integer         , intent(in ), dimension(3  ) :: n
     character(len=1), intent(in ), dimension(0:1) :: bc
     logical         , intent(in )                 :: is_centered
-    real(rp)        , intent(in )                 :: dl       
+    real(rp)        , intent(in )                 :: dl
     type(C_PTR)     , intent(out), dimension(2  ) :: arrplan
     real(rp)        , intent(out)                 :: normfft
     real(rp)        , intent(out), dimension(:  ) :: lambda
@@ -937,8 +937,8 @@ module mod_solver
           rhsvalues(q) = p( i_out,i1,i2)
           solvalues(q) = po(i_out,i1,i2)
 #endif
-        enddo
-      enddo
+        end do
+      end do
       ii = i_out-lo_out+1
       alpha = lambda(ii) - alpha_old
       call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],alpha,mat)
@@ -974,7 +974,7 @@ module mod_solver
       elseif (stype == HYPRESolverBiCGSTAB) then
         call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
         !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
-      endif ! stype
+      end if ! stype
       !
       ! end of part based on the Paris Simulator code
       !
@@ -995,10 +995,10 @@ module mod_solver
           p( i_out,i1,i2) = solvalues(q)
           po(i_out,i1,i2) = p(i_out,i1,i2)
 #endif
-        enddo
-      enddo
+        end do
+      end do
       call finalize_solver(asolver)
-    enddo
+    end do
   end subroutine solve_n_helmholtz_2d_old
   subroutine init_transpose_slab_uneven(idir,nhi,nho,dims,lo_p,lo_s,n_p,n_s,comm_block,transpose_params)
     implicit none
@@ -1016,7 +1016,7 @@ module mod_solver
     eye(:,:) = 0
     do i=1,3
       eye(i,i) = 1
-    enddo
+    end do
     call MPI_ALLGATHER(lo_p,3,MPI_INTEGER,lo_p_a,3,MPI_INTEGER,comm_block)
     call MPI_ALLGATHER(lo_s,3,MPI_INTEGER,lo_s_a,3,MPI_INTEGER,comm_block)
     call MPI_ALLGATHER(n_p ,3,MPI_INTEGER,n_p_a ,3,MPI_INTEGER,comm_block)
@@ -1045,9 +1045,9 @@ module mod_solver
           transpose_params(irank+1,1)%types = type_sub_p
           transpose_params(irank+1,2)%types = type_sub_s
           irank = irank + 1
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
   end subroutine init_transpose_slab_uneven
   subroutine init_transpose_slab(idir,nhi,nho,dims,n_p,n_s,transpose_params)
     implicit none
@@ -1063,7 +1063,7 @@ module mod_solver
     eye(:,:) = 0
     do i=1,3
       eye(i,i) = 1
-    enddo
+    end do
     select case(idir)
       case(1)
         n_i(:) = [n_s(1),n_p(2),n_p(3)]
@@ -1087,9 +1087,9 @@ module mod_solver
           kk = k*n_p(3)*(1-eye(3,idir)) + 1
           transpose_params(irank+1,2)%disps = extent_f(ii,jj,kk,n_s+2*nho)*ext_rp
           irank = irank + 1
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     call MPI_TYPE_CREATE_SUBARRAY(3,n_p+2*nhi,n_i,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_p)
     call MPI_TYPE_CREATE_SUBARRAY(3,n_s+2*nho,n_i,[0,0,0],MPI_ORDER_FORTRAN,MPI_REAL_RP,type_sub_s)
     call MPI_TYPE_COMMIT(type_sub_p)
@@ -1126,7 +1126,7 @@ module mod_solver
       ! n.b. -- order of ranks could be set by e.g. memory layout (i-1 + (j-1)*n(1) + (k-1)*n(1)*n(2)*k)
       call MPI_COMM_SPLIT(MPI_COMM_WORLD,icolor,myid,comm)
       if(i >= lo_s_idir .and. i <= hi_s_idir) comms_slab(n) = comm
-    enddo
+    end do
   end subroutine init_comm_slab
 #endif
 end module mod_solver

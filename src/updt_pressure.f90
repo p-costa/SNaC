@@ -25,9 +25,9 @@ module mod_updt_pressure
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           p(i,j,k) = p(i,j,k) + pp(i,j,k)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
 #ifdef _IMPDIFF
     !$OMP PARALLEL DO DEFAULT(none) &
@@ -36,16 +36,16 @@ module mod_updt_pressure
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
-          p(i,j,k) = p(i,j,k) + & 
+          p(i,j,k) = p(i,j,k) + &
                       alpha*( ((pp(i+1,j,k)-pp(i  ,j,k))/dxc(i  ) - &
                                (pp(i  ,j,k)-pp(i-1,j,k))/dxc(i-1))/dxf(i) + &
                               ((pp(i,j+1,k)-pp(i,j  ,k))/dyc(j  ) - &
                                (pp(i,j  ,k)-pp(i,j-1,k))/dyc(j-1))/dyf(j) + &
                               ((pp(i,j,k+1)-pp(i,j,k  ))/dzc(k  ) - &
                                (pp(i,j,k  )-pp(i,j,k-1))/dzc(k-1))/dzf(k) )
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
 #endif
   end subroutine updt_pressure

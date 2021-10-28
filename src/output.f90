@@ -1,7 +1,7 @@
 module mod_output
   use mpi_f08
   use mod_common_mpi, only: myid,myid_block
-  use mod_load      , only: io_field 
+  use mod_load      , only: io_field
   use mod_types
   implicit none
   private
@@ -26,9 +26,9 @@ module mod_output
     write(cfmt,'(A,I3,A)') '(',n,'E15.7)'
     if (myid == 0) then
       open(newunit=iunit,file=fname,position='append')
-      write(iunit,trim(cfmt)) (var(i),i=1,n) 
+      write(iunit,trim(cfmt)) (var(i),i=1,n)
       close(iunit)
-    endif
+    end if
   end subroutine out0d
   !
   subroutine out1d(fname,lo,hi,lo_g,hi_g,idir,l,dx,dy,dz,x_g,y_g,z_g,comm,myrank,p)
@@ -73,17 +73,17 @@ module mod_output
         do j=lo(2),hi(2)
           do i=lo(1),hi(1)
             p1d(k) = p1d(k) + p(i,j,k)*dx(i)*dy(j)/(l(1)*l(2))
-          enddo
-        enddo
-      enddo
+          end do
+        end do
+      end do
       call mpi_allreduce(MPI_IN_PLACE,p1d,ng(3),MPI_REAL_RP,MPI_SUM,comm)
       if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do k=lo_g(3),hi_g(3)
           write(iunit,'(2E15.7)') z_g(k),p1d(k)
-        enddo
+        end do
         close(iunit)
-      endif
+      end if
     case(2)
       allocate(p1d(lo_g(2):hi_g(2)))
       p1d(:) = 0._rp
@@ -91,17 +91,17 @@ module mod_output
         do k=lo(3),hi(3)
           do i=lo(1),hi(1)
             p1d(j) = p1d(j) + p(i,j,k)*dx(i)*dz(k)/(l(1)*l(3))
-          enddo
-        enddo
-      enddo
+          end do
+        end do
+      end do
       call mpi_allreduce(MPI_IN_PLACE,p1d,ng(2),MPI_REAL_RP,MPI_SUM,comm)
       if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do j=lo_g(2),hi_g(2)
           write(iunit,'(2E15.7)') y_g(j),p1d(j)
-        enddo
+        end do
         close(iunit)
-      endif
+      end if
     case(1)
       allocate(p1d(lo_g(1):hi_g(1)))
       p1d(:) = 0._rp
@@ -109,17 +109,17 @@ module mod_output
         do k=lo(3),hi(3)
           do j=lo(2),hi(2)
             p1d(i) = p1d(i) + p(i,j,k)*dy(j)*dz(k)/(l(2)*l(3))
-          enddo
-        enddo
-      enddo
+          end do
+        end do
+      end do
       call mpi_allreduce(MPI_IN_PLACE,p1d,ng(1),MPI_REAL_RP,MPI_SUM,comm)
       if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do i=lo_g(1),hi_g(1)
           write(iunit,'(2E15.7)') x_g(i),p1d(i)
-        enddo
+        end do
         close(iunit)
-      endif
+      end if
     end select
     deallocate(p1d)
   end subroutine out1d
@@ -167,19 +167,19 @@ module mod_output
           p2d(:,:) = 0._rp
           do i=lo(idir),hi(idir)
             p2d(j,k) = p2d(j,k) + p(i,j,k)*dx(i)/l(idir)
-          enddo
-        enddo
-      enddo
+          end do
+        end do
+      end do
       call mpi_allreduce(MPI_IN_PLACE,p2d,ng(2)*ng(3),MPI_REAL_RP,MPI_SUM,comm)
       if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do k=lo_g(3),hi_g(3)
           do j=lo_g(2),hi_g(2)
             write(iunit,'(3E15.7)') y_g(j),z_g(k),p2d(j,k)
-          enddo
-        enddo
+          end do
+        end do
         close(iunit)
-      endif
+      end if
     case(2)
       allocate(p2d(lo_g(1):hi_g(1),lo_g(3):hi_g(3)))
       p2d(:,:) = 0._rp
@@ -187,19 +187,19 @@ module mod_output
         do i=lo(1),hi(1)
           do j=lo(idir),hi(idir)
             p2d(i,k) = p2d(i,k) + p(i,j,k)*dy(j)/l(idir)
-          enddo
-        enddo
-      enddo
+          end do
+        end do
+      end do
       call mpi_allreduce(MPI_IN_PLACE,p2d,ng(1)*ng(3),MPI_REAL_RP,MPI_SUM,comm)
       if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do k=lo(3),hi(3)
           do i=lo(1),hi(1)
             write(iunit,'(3E15.7)') x_g(i),z_g(k),p2d(i,k)
-          enddo
-        enddo
+          end do
+        end do
         close(iunit)
-      endif
+      end if
     case(3)
       allocate(p2d(lo_g(1):hi_g(1),lo_g(2):hi_g(2)))
       p2d(:,:) = 0._rp
@@ -207,19 +207,19 @@ module mod_output
         do i=lo(1),hi(1)
           do k=lo(idir),hi(idir)
             p2d(i,j) = p2d(i,j) + p(i,j,k)*dz(k)/l(idir)
-          enddo
-        enddo
-      enddo
+          end do
+        end do
+      end do
       call mpi_allreduce(MPI_IN_PLACE,p2d,ng(1)*ng(2),MPI_REAL_RP,MPI_SUM,comm)
       if(myrank == 0) then
         open(newunit=iunit,file=fname)
         do j=lo_g(2),hi_g(2)
           do i=lo_g(1),hi_g(1)
             write(iunit,'(3E15.7)') x_g(i),y_g(j),p2d(i,j)
-          enddo
-        enddo
+          end do
+        end do
         close(iunit)
-      endif
+      end if
     end select
     deallocate(p2d)
   end subroutine out2d
@@ -229,13 +229,13 @@ module mod_output
     ! saves a 3D scalar field into a binary file
     !
     ! fname  -> name of the output file
-    ! lo,hi  -> local lower and upper bounds of input array 
+    ! lo,hi  -> local lower and upper bounds of input array
     !           in global coordinates
     ! ng     -> global sizes of the input array
     ! nskip  -> array with the step size for which the
     !           field is written; i.e.: (/1,1,1/)
     !           writes the full field
-    !           n.b.: not implemented for now; it will 
+    !           n.b.: not implemented for now; it will
     !                 always write the full array
     ! p      -> 3D input scalar field
     !
@@ -283,7 +283,7 @@ module mod_output
       open(newunit=iunit,file=fname,position='append')
       write(iunit,trim(cfmt)) trim(fname_fld),' ',trim(varname),nmin,nmax,nskip,time,istep
       close(iunit)
-    endif
+    end if
   end subroutine write_log_output
   !
   subroutine write_visu_3d(datadir,fname_bin,comm,fname_log,varname,lo,hi,ng,nmin,nmax,nskip,time,istep,p)

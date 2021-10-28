@@ -3,9 +3,9 @@
     ! writes the profile of a variable averaged over two domain directions
     !
     ! fname        -> name of the file
-    ! lo  ,hi      -> local lower and upper bounds of input array 
+    ! lo  ,hi      -> local lower and upper bounds of input array
     !                 in global coordinates
-    ! lo_g,hi_g    -> local lower and upper bounds of input array 
+    ! lo_g,hi_g    -> local lower and upper bounds of input array
     !                 containing all the points of the block
     ! idir         -> direction of the profile
     ! l            -> domain dimensions

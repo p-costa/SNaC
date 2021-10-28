@@ -34,9 +34,9 @@ module mod_scal
                         alpha*(dsdxp-dsdxm)/dxf(i) + &
                         alpha*(dsdyp-dsdym)/dyf(j) + &
                         alpha*(dsdzp-dsdzm)/dzf(k)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine scal_d
   subroutine scal_a(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdt)
@@ -68,9 +68,9 @@ module mod_scal
                         ( -usip + usim )/dxf(i) + &
                         ( -vsjp + vsjm )/dyf(j) + &
                         ( -wskp + wskm )/dzf(k)
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
   end subroutine scal_a
 end module mod_scal

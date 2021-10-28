@@ -55,14 +55,14 @@ module mod_initgrid
       r0 = (q-lo+1-0._rp)/(1._rp*n)
       call gridpoint(gr,r0,rf_g(q))
       rf_g(q) = lmin + rf_g(q)*(lmax-lmin)
-    enddo
+    end do
     rf_g(lo-1) = lmin
     !
     ! step 2) determine grid spacing between faces drf
     !
     do q=lo,hi
       drf_g(q) = rf_g(q)-rf_g(q-1)
-    enddo
+    end do
     drf_g(lo-1) = drf_g(lo)
     drf_g(hi+1) = drf_g(hi)
     !
@@ -70,7 +70,7 @@ module mod_initgrid
     !
     do q=lo-1,hi
       drc_g(q) = .5_rp*(drf_g(q)+drf_g(q+1))
-    enddo
+    end do
     drc_g(hi+1) = drc_g(hi)
     !
     ! step 4) compute coordinates of cell centers rc and faces rf
@@ -80,7 +80,7 @@ module mod_initgrid
     do q=lo,hi+1
       rc_g(q) = rc_g(q-1) + drc_g(q-1)
       rf_g(q) = rf_g(q-1) + drf_g(q  )
-    enddo
+    end do
     !
   end subroutine initgrid
   subroutine distribute_grid(lo_g,lo,hi,grid_g,grid)
@@ -109,7 +109,7 @@ module mod_initgrid
       call MPI_IRECV(grid_f(lo-1),1,MPI_REAL_RP,nb(0),lo_g-1    , &
                      MPI_COMM_WORLD,requests(nrequests+2))
       nrequests = nrequests + 2
-    endif
+    end if
     shift = 0
     if(hi == hi_g) then
       if(is_periodic.and.hi == hi_max) shift = hi_max-lo_min + 1
@@ -118,7 +118,7 @@ module mod_initgrid
       call MPI_IRECV(grid_f(hi+1),1,MPI_REAL_RP,nb(1),hi_g+1    , &
                      MPI_COMM_WORLD,requests(nrequests+2))
       nrequests = nrequests + 2
-    endif
+    end if
     call MPI_WAITALL(nrequests,requests,MPI_STATUSES_IGNORE)
     if(lo == lo_g) grid_c(lo-1) = (grid_f(lo  )+grid_f(lo-1))/2._rp
     if(hi == hi_g) grid_c(hi  ) = (grid_f(hi+1)+grid_f(hi  ))/2._rp
@@ -137,11 +137,11 @@ module mod_initgrid
     open(newunit=iunit,status='replace',file=trim(fname)//'.out')
     do q=lo_g-1,hi_g+1
       write(iunit,'(5E15.7)') 0._rp,rf_g(q),rc_g(q),drf_g(q),drc_g(q)
-    enddo
+    end do
     close(iunit)
   end subroutine save_grid
   !
-  ! grid stretching functions 
+  ! grid stretching functions
   ! see e.g., Fluid Flow Phenomena -- A Numerical Toolkit, by P. Orlandi
   !           Pirozzoli et al. JFM 788, 614–639 (commented)
   !
@@ -157,7 +157,7 @@ module mod_initgrid
       !r = 0.5_rp*(1._rp+erf( (r0-0.5_rp)*alpha)/erf( alpha/2._rp))
     else
       r = r0
-    endif
+    end if
   end subroutine gridpoint_cluster_two_end
   subroutine gridpoint_cluster_one_end(alpha,r0,r)
     !
@@ -171,7 +171,7 @@ module mod_initgrid
       !r = 1.0_rp*(1._rp+erf( (r0-1.0_rp)*alpha)/erf( alpha/1._rp))
     else
       r = r0
-    endif
+    end if
   end subroutine gridpoint_cluster_one_end
   subroutine gridpoint_cluster_one_end_r(alpha,r0,r)
     !
@@ -185,7 +185,7 @@ module mod_initgrid
       !r = 1._rp-1.0_rp*(1._rp+erf( (1._rp-r0-1.0_rp)*alpha)/erf( alpha/1._rp))
     else
       r = r0
-    endif
+    end if
   end subroutine gridpoint_cluster_one_end_r
   subroutine gridpoint_cluster_middle(alpha,r0,r)
     !
@@ -195,16 +195,16 @@ module mod_initgrid
     real(rp), intent(in ) :: alpha,r0
     real(rp), intent(out) :: r
     if(alpha /= 0._rp) then
-      if(    r0 <= 0.5_rp) then 
+      if(    r0 <= 0.5_rp) then
         r = 0.5_rp*(1._rp-1._rp+tanh(2._rp*alpha*(r0-0._rp))/tanh(alpha))
         !r = 0.5_rp*(1._rp-1._rp+erf( 2._rp*alpha*(r0-0._rp))/erf( alpha))
       elseif(r0 >  0.5_rp) then
         r = 0.5_rp*(1._rp+1._rp+tanh(2._rp*alpha*(r0-1._rp))/tanh(alpha))
         !r = 0.5_rp*(1._rp+1._rp+erf( 2._rp*alpha*(r0-1._rp))/erf( alpha))
-      endif
+      end if
     else
       r = r0
-    endif
+    end if
   end subroutine gridpoint_cluster_middle
   subroutine gridpoint_cluster_geometric_one_end(alpha,r0,r)
     !
@@ -220,7 +220,7 @@ module mod_initgrid
       r = r0
     else
       r = r0*((1._rp-r0**(alpha))/(1._rp-r0)/alpha)**power
-    endif
+    end if
   end subroutine gridpoint_cluster_geometric_one_end
   subroutine gridpoint_cluster_geometric_one_end_r(alpha,r0,r)
     !
@@ -245,7 +245,7 @@ module mod_initgrid
     else
       call gridpoint_cluster_geometric_one_end(alpha/2._rp,2._rp*(1._rp-r0),r)
       r = 1._rp-r/2._rp
-    endif
+    end if
   end subroutine gridpoint_cluster_geometric_two_ends
   subroutine gridpoint_cluster_geometric_middle(alpha,r0,r)
     !
@@ -260,6 +260,6 @@ module mod_initgrid
     else
       call gridpoint_cluster_geometric_one_end(alpha/2._rp,(r0-.5_rp)*2._rp,r)
       r = (1._rp+r)/2._rp
-    endif
+    end if
   end subroutine gridpoint_cluster_geometric_middle
 end module mod_initgrid

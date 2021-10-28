@@ -3,12 +3,12 @@
 ! S:::::SSSSSS::::::SN::::::::N      N::::::N                    CC:::::::::::::::C
 ! S:::::S     SSSSSSSN:::::::::N     N::::::N                   C:::::CCCCCCCC::::C
 ! S:::::S            N::::::::::N    N::::::N  aaaaaaaaaaaaa   C:::::C       CCCCCC
-! S:::::S            N:::::::::::N   N::::::N  a::::::::::::a C:::::C              
-!  S::::SSSS         N:::::::N::::N  N::::::N  aaaaaaaaa:::::aC:::::C              
-!   SS::::::SSSSS    N::::::N N::::N N::::::N           a::::aC:::::C              
-!     SSS::::::::SS  N::::::N  N::::N:::::::N    aaaaaaa:::::aC:::::C              
-!        SSSSSS::::S N::::::N   N:::::::::::N  aa::::::::::::aC:::::C              
-!             S:::::SN::::::N    N::::::::::N a::::aaaa::::::aC:::::C              
+! S:::::S            N:::::::::::N   N::::::N  a::::::::::::a C:::::C
+!  S::::SSSS         N:::::::N::::N  N::::::N  aaaaaaaaa:::::aC:::::C
+!   SS::::::SSSSS    N::::::N N::::N N::::::N           a::::aC:::::C
+!     SSS::::::::SS  N::::::N  N::::N:::::::N    aaaaaaa:::::aC:::::C
+!        SSSSSS::::S N::::::N   N:::::::::::N  aa::::::::::::aC:::::C
+!             S:::::SN::::::N    N::::::::::N a::::aaaa::::::aC:::::C
 !             S:::::SN::::::N     N:::::::::Na::::a    a:::::a C:::::C       CCCCCC
 ! SSSSSSS     S:::::SN::::::N      N::::::::Na::::a    a:::::a  C:::::CCCCCCCC::::C
 ! S::::::SSSSSS:::::SN::::::N       N:::::::Na:::::aaaa::::::a   CC:::::::::::::::C
@@ -53,7 +53,7 @@ program snac
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
-  use mod_solver         , only: init_bc_rhs,init_matrix_3d,create_solver,setup_solver, & 
+  use mod_solver         , only: init_bc_rhs,init_matrix_3d,create_solver,setup_solver, &
                                  add_constant_to_diagonal,solve_helmholtz,finalize_solver,finalize_matrix, &
                                  hypre_solver
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
@@ -284,7 +284,7 @@ if(nslices > ng(idir)) then
   if(myid == 0) write(stderr,*) 'ERROR: number of pencil slices cannot exceed the number of grid points along the FFT direction.'
   call MPI_FINALIZE()
   error stop
-endif
+end if
 #if defined(_IMPDIFF) || defined(_FFT_USE_SLABS)
 #if   defined(_IMPDIFF)
   if(myid == 0) write(stderr,*) 'ERROR: implicit diffusion not yet supported with "_FFT_USE_SLICED_PENCILS".'
@@ -315,7 +315,7 @@ endif
     write(stderr,*) 'Aborting...'
     call MPI_FINALIZE()
     stop
-  endif
+  end if
   !
   ! distribute slab subdomains as evenly as possible
   !
@@ -328,7 +328,7 @@ endif
   if(myid_block+1 > irk) then
     lo_s(idir) = lo_s(idir) + irk
     hi_s(idir) = hi_s(idir) + irk
-  endif
+  end if
   !
   lo_a(:) = lo_s(:)
   hi_a(:) = hi_s(:)
@@ -368,10 +368,10 @@ endif
     if(q > irk) then
       lo_s(idir) = lo_s(idir) + irk
       hi_s(idir) = hi_s(idir) + irk
-    endif
+    end if
     lo_sp(:,q) = lo_s(:)
     hi_sp(:,q) = hi_s(:)
-  enddo
+  end do
   npsolvers = nslices
 #endif
 #endif
@@ -381,7 +381,7 @@ endif
     write(stdout,*) '*** Beginning of simulation ***'
     write(stdout,*) '*******************************'
     write(stdout,*) ''
-  endif
+  end if
   !
   ! generate grid
   !
@@ -399,7 +399,7 @@ endif
       write(iunit,*) lmin(1),lmin(2),lmin(3)
       write(iunit,*) lmax(1),lmax(2),lmax(3)
     close(iunit)
-  endif
+  end if
   call distribute_grid(lo_g(1),lo(1),hi(1),dxc_g,dxc)
   call distribute_grid(lo_g(1),lo(1),hi(1),dxf_g,dxf)
   call distribute_grid(lo_g(1),lo(1),hi(1), xc_g, xc)
@@ -422,10 +422,10 @@ endif
   if(lo(1) == lo_g(1)) then
     dxc_g(lo_g(1)-1) = dxc(lo(1)-1)
     dxf_g(lo_g(1)-1) = dxf(lo(1)-1)
-  endif
+  end if
   call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(lo_g(1)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
   call MPI_ALLREDUCE(MPI_IN_PLACE,dxf_g(lo_g(1)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
-  dxc_g(hi_g(1)  ) = 0._rp 
+  dxc_g(hi_g(1)  ) = 0._rp
   dxf_g(hi_g(1)  ) = 0._rp
   dxc_g(hi_g(1)+1) = 0._rp
   dxf_g(hi_g(1)+1) = 0._rp
@@ -434,7 +434,7 @@ endif
     dxf_g(hi_g(1)  ) = dxf(hi(1)  )
     dxc_g(hi_g(1)+1) = dxc(hi(1)+1)
     dxf_g(hi_g(1)+1) = dxf(hi(1)+1)
-  endif
+  end if
   call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(hi_g(1)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
   call MPI_ALLREDUCE(MPI_IN_PLACE,dxf_g(hi_g(1)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
   call MPI_ALLREDUCE(MPI_IN_PLACE,dxc_g(hi_g(1)+1),1,MPI_REAL_RP,MPI_MAX,comm_block)
@@ -444,7 +444,7 @@ endif
   if(lo(2) == lo_g(2)) then
     dyc_g(lo_g(2)-1) = dyc(lo(2)-1)
     dyf_g(lo_g(2)-1) = dyf(lo(2)-1)
-  endif
+  end if
   call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(lo_g(2)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
   call MPI_ALLREDUCE(MPI_IN_PLACE,dyf_g(lo_g(2)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
   dyc_g(hi_g(2)  ) = 0._rp
@@ -456,7 +456,7 @@ endif
     dyf_g(hi_g(2)  ) = dyf(hi(2)  )
     dyc_g(hi_g(2)+1) = dyc(hi(2)+1)
     dyf_g(hi_g(2)+1) = dyf(hi(2)+1)
-  endif
+  end if
   call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(hi_g(2)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
   call MPI_ALLREDUCE(MPI_IN_PLACE,dyf_g(hi_g(2)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
   call MPI_ALLREDUCE(MPI_IN_PLACE,dyc_g(hi_g(2)+1),1,MPI_REAL_RP,MPI_MAX,comm_block)
@@ -466,7 +466,7 @@ endif
   if(lo(3) == lo_g(3)) then
     dzc_g(lo_g(3)-1) = dzc(lo(3)-1)
     dzf_g(lo_g(3)-1) = dzf(lo(3)-1)
-  endif
+  end if
   call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(lo_g(3)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
   call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(lo_g(3)-1),1,MPI_REAL_RP,MPI_MAX,comm_block)
   dzc_g(hi_g(3)  ) = 0._rp
@@ -478,7 +478,7 @@ endif
     dzf_g(hi_g(3)  ) = dzf(hi(3)  )
     dzc_g(hi_g(3)+1) = dzc(hi(3)+1)
     dzf_g(hi_g(3)+1) = dzf(hi(3)+1)
-  endif
+  end if
   call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(hi_g(3)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
   call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(hi_g(3)  ),1,MPI_REAL_RP,MPI_MAX,comm_block)
   call MPI_ALLREDUCE(MPI_IN_PLACE,dzc_g(hi_g(3)+1),1,MPI_REAL_RP,MPI_MAX,comm_block)
@@ -516,7 +516,7 @@ endif
   else
     call load('r',trim(datadir)//'fld_b_'//cblock//'.bin',comm_block,ng,[1,1,1],lo_1,hi_1,u,v,w,p,po,time,istep)
     if(myid == 0) write(stdout,*) '*** Checkpoint loaded at time = ', time, 'time step = ', istep, '. ***'
-  endif
+  end if
   call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
                 dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
   call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
@@ -534,7 +534,7 @@ endif
     bcw%x(:,:,ib) = bcvel(ib,1,3)
     bcw%y(:,:,ib) = bcvel(ib,2,3)
     bcw%z(:,:,ib) = bcvel(ib,3,3)
-  enddo
+  end do
 #endif
   do idir=1,3
     do ib=0,1
@@ -563,9 +563,9 @@ endif
   bcw%z(:,:,ib) = velin_z(:,:,ib)
 #endif
         end select
-      endif
-    enddo
-  enddo
+      end if
+    end do
+  end do
   call inflow(is_bound_inflow,lo,hi,velin_x,velin_y,velin_z,u,v,w)
   up(:,:,:)      = 0._rp
   vp(:,:,:)      = 0._rp
@@ -677,7 +677,7 @@ endif
   do ib=1,3 ! determine is_bound pertaining to the slabs
     is_bound_a(:,ib) = .false.
     where(cbcpre(0:1,ib) /= 'F') is_bound_a(0:1,ib) = .true.
-  enddo
+  end do
   call init_comm_slab(lo(idir),hi(idir),lo_s(idir),hi_s(idir),myid,comms_fft)
   lambda_p_a(:) = lambda_p(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
   call init_transpose_slab_uneven(idir,1,0,dims,lo_1-1,lo_s-1,n_p,n_s,comm_block,t_params)
@@ -916,7 +916,7 @@ endif
         w(:,:,:) = wp(:,:,:)
         !$OMP END WORKSHARE
         cycle
-      endif
+      end if
 #endif
       call fillps(lo,hi,dxf,dyf,dzf,dtrk,up,vp,wp,pp)
       call updt_rhs(lo,hi,is_bound,rhsp%x,rhsp%y,rhsp%z,pp)
@@ -946,21 +946,21 @@ endif
                     dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
       call updt_pressure(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,pp,p)
       call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
-    enddo
+    end do
     !
     ! check simulation stopping criteria
     !
     if(stop_type(1)) then ! maximum number of time steps reached
       if(istep >= nstep   ) is_done = is_done.or..true.
-    endif
+    end if
     if(stop_type(2)) then ! maximum simulation time reached
       if(time  >= time_max) is_done = is_done.or..true.
-    endif
+    end if
     if(stop_type(3)) then ! maximum wall-clock time reached
       tw = (MPI_WTIME()-twi)/3600._rp
       call MPI_ALLREDUCE(MPI_IN_PLACE,tw,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
       if(tw    >= tw_max  ) is_done = is_done.or..true.
-    endif
+    end if
     if(mod(istep,icheck) == 0) then
       if(myid == 0) write(stdout,*) 'Checking stability and divergence...'
       !
@@ -972,7 +972,7 @@ endif
         if(myid == 0) write(stderr,*) 'Aborting...'
         is_done = .true.
         kill = .true.
-      endif
+      end if
       !
       call chkdiv(lo,hi,dxf,dyf,dzf,u,v,w,vol_all,MPI_COMM_WORLD,divtot,divmax)
       if(myid == 0) write(stdout,*) 'Total divergence = ', divtot, '| Maximum divergence = ', divmax
@@ -981,8 +981,8 @@ endif
         if(myid == 0) write(stderr,*) 'Aborting...'
         is_done = .true.
         kill = .true.
-      endif
-    endif
+      end if
+    end if
     !
     ! output routines below
     !
@@ -992,33 +992,33 @@ endif
       var(2) = dt
       var(3) = time
       call out0d(trim(datadir)//'time.out',3,var)
-    endif
+    end if
     write(fldnum,'(i7.7)') istep
     if(mod(istep,iout1d) == 0) then
       include 'out1d.h90'
-    endif
+    end if
     if(mod(istep,iout2d) == 0) then
       include 'out2d.h90'
-    endif
+    end if
     if(mod(istep,iout3d) == 0) then
       include 'out3d.h90'
-    endif
+    end if
     if(mod(istep,isave ) == 0.or.(is_done.and..not.kill)) then
       if(is_overwrite_save) then
         filename = 'fld_b_'//cblock//'.bin'
       else
         filename = 'fld_'//fldnum//'_b_'//cblock//'.bin'
-      endif
+      end if
       call load('w',trim(datadir)//trim(filename),comm_block,ng,[1,1,1],lo_1,hi_1,u,v,w,p,po,time,istep)
       if(.not.is_overwrite_save) then
         !
         ! fld.bin -> last checkpoint file (symbolic link)
         !
         if(myid_block == 0) call execute_command_line('ln -sf '//trim(filename)//' '//trim(datadir)//'fld_b_'//cblock//'.bin')
-      endif
+      end if
       if(myid_block == 0) write(stdout,*) '*** Checkpoint saved at time = ', time, &
                                           'time step = ', istep, 'block = ',my_block,'. ***'
-    endif
+    end if
 #ifdef _TIMING
       dt12 = MPI_WTIME()-dt12
       call MPI_ALLREDUCE(dt12,dt12av ,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
@@ -1027,7 +1027,7 @@ endif
       if(myid == 0) write(stdout,*) 'Avrg, min & max elapsed time: '
       if(myid == 0) write(stdout,*) dt12av/(1._rp*nrank),dt12min,dt12max
 #endif
-  enddo
+  end do
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   call finalize_n_matrices(npsolvers,psolver_fft)
   call finalize_n_solvers(npsolvers,psolver_fft)

@@ -52,7 +52,7 @@ integer , dimension(3) :: periods
 real(rp), dimension(3) :: l_periodic
 integer , dimension(3) :: lo_min,hi_max
 real(rp), dimension(3) :: lmin_min,lmax_max
-contains 
+contains
   subroutine read_input()
   use mpi_f08
   use mod_common_mpi, only:myid
@@ -74,14 +74,14 @@ contains
         read(iunit,*)  bforce(1),bforce(2),bforce(3)
         read(iunit,*) nthreadsmax
       else
-        if(myid == 0) write(stderr,*) '*** Error reading the input file *** ' 
+        if(myid == 0) write(stderr,*) '*** Error reading the input file *** '
         if(myid == 0) write(stderr,*) 'Aborting...'
         call MPI_FINALIZE()
         error stop
-      endif
+      end if
     close(iunit)
     visc = uref*lref/rey
-    ! 
+    !
     exists = .true.
     nblocks = 1
     filename = 'geo/block.'
@@ -89,7 +89,7 @@ contains
       write(cblock,'(i3.3)') nblocks
       inquire(file=trim(filename)//cblock, exist = exists)
       if(exists) nblocks = nblocks + 1
-    enddo
+    end do
     nblocks = nblocks - 1
     allocate(nranks(nblocks))
     do iblock = 1,nblocks
@@ -99,13 +99,13 @@ contains
           read(iunit,*) dims(1),dims(2),dims(3)
           nranks(iblock) = product(dims(:))
         else
-          if(myid == 0) write(stderr,*) '*** Error reading the input file *** ' 
+          if(myid == 0) write(stderr,*) '*** Error reading the input file *** '
           if(myid == 0) write(stderr,*) 'Aborting...'
           call MPI_FINALIZE(ierr)
           error stop
-        endif
+        end if
       close(iunit)
-    enddo
+    end do
     call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
     if(nrank /= sum(nranks(1:nblocks))) then
       if(myid == 0) write(stderr,*) '*** Error: invalid number of MPI tasks. ***'
@@ -113,7 +113,7 @@ contains
       if(myid == 0) write(stderr,*) 'Aborting...'
       call MPI_FINALIZE(ierr)
       error stop
-    endif
+    end if
     is_periodic(:) = .true.
     do iblock = 1,nblocks
       write(cblock,'(i3.3)') iblock
@@ -142,16 +142,16 @@ contains
             id_first = sum(nranks(1:iblock-1))
             do q=1,3
               is_periodic(q) = is_periodic(q).and.(cbcpre(0,q)//cbcpre(1,q) == 'FF')
-            enddo
-          endif
+            end do
+          end if
         else
-          if(myid == 0) write(stderr,*) '*** Error reading the input file *** ' 
+          if(myid == 0) write(stderr,*) '*** Error reading the input file *** '
           if(myid == 0) write(stderr,*) 'Aborting...'
           call MPI_FINALIZE(ierr)
           error stop
-        endif
+        end if
       close(iunit)
-    enddo
+    end do
     call mpi_allreduce(MPI_IN_PLACE,is_periodic,3,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
     deallocate(nranks)
     !
@@ -185,23 +185,23 @@ contains
             if(myid == 0) write(stderr,*) '*** Error: invalid solver choice [1-4] *** '
             if(myid == 0) write(stderr,*) 'Reverting to the default (2 -> PFMG)...'
             hypre_solver_i = hypre_solver_i_default
-          endif
+          end if
           if(hypre_tol > 1._rp .or. hypre_tol < 0._rp) then
             if(myid == 0) write(stderr,*) '*** Error: iterative error tolerance is too high or negative *** '
             if(myid == 0) write(stderr,*) 'Reverting to the default (1.e-4)...'
             hypre_tol     = hypre_tol_default
-          endif
+          end if
           if(hypre_maxiter < 0) then
             if(myid == 0) write(stderr,*) '*** Error: maximum number of iterations needs to be > 0 *** '
             if(myid == 0) write(stderr,*) 'Reverting to the default (50)...'
             hypre_maxiter = hypre_maxiter_default
-          endif
+          end if
         else
           if(myid == 0) write(stderr,*) '*** Error reading the input file *** '
           if(myid == 0) write(stderr,*) 'Aborting...'
           call MPI_FINALIZE()
           error stop
-        endif
+        end if
       close(iunit)
     else
       !
@@ -210,6 +210,6 @@ contains
       hypre_solver_i = hypre_solver_i_default
       hypre_tol      = hypre_tol_default
       hypre_maxiter  = hypre_maxiter_default
-    endif
+    end if
   end subroutine read_input
 end module mod_param

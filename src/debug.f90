@@ -29,9 +29,9 @@ module mod_debug
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           mean = mean + p(i,j,k)*dx(i)*dy(j)*dz(k)/vol
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,mean,1,MPI_REAL_RP,MPI_SUM,comm)
   end subroutine chkmean
@@ -67,9 +67,9 @@ module mod_debug
                  ((fpp(i,j,k+1)-fpp(i,j,k  ))/dz1(k  +q(3)) - &
                   (fpp(i,j,k  )-fpp(i,j,k-1))/dz1(k-1+q(3)))/dz2(k)
           diffmax = max(diffmax,abs(val-fp(i,j,k)))
-        enddo
-      enddo
-    enddo
+        end do
+      end do
+    end do
     call mpi_allreduce(MPI_IN_PLACE,diffmax,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
   end subroutine chk_helmholtz
   subroutine mean_boundary_force(dt,factor,l,tau,tauo,f)
@@ -106,34 +106,34 @@ module mod_debug
         do i=lo(1),hi(1)
           tau%x(idir) = tau%x(idir) + &
             (u(i,lo(idir),k)-u(i,lo(idir)-1,k))/dyc(lo(idir)-1)*visc*dxc(i)*dzc(k)/(l(1)*l(3))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     if(is_bound(1,idir)) then
       do k=lo(3),hi(3)
         do i=lo(1),hi(1)
           tau%x(idir) = tau%x(idir) + &
             (u(i,hi(idir),k)-u(i,hi(idir)+1,k))/dyc(hi(idir)+0)*visc*dxc(i)*dzc(k)/(l(1)*l(3))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     idir = 3
     if(is_bound(0,idir)) then
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           tau%x(idir) = tau%x(idir) + &
             (u(i,j,lo(idir))-u(i,j,lo(idir)-1))/dzc(lo(idir)-1)*visc*dxc(i)*dyc(j)/(l(1)*l(2))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     if(is_bound(1,idir)) then
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           tau%x(idir) = tau%x(idir) + &
             (u(i,j,hi(idir))-u(i,j,hi(idir)+1))/dzc(hi(idir)+0)*visc*dxc(i)*dyc(j)/(l(1)*l(2))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     call mpi_allreduce(MPI_IN_PLACE,tau%x(1),3,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
     tau%y(:) = 0._rp
     idir = 1
@@ -142,34 +142,34 @@ module mod_debug
         do j=lo(2),hi(2)
           tau%y(idir) = tau%y(idir) + &
             (v(lo(idir),j,k)-v(lo(idir)-1,j,k))/dxc(lo(idir)-1)*visc*dyc(j)*dzc(k)/(l(2)*l(3))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     if(is_bound(1,idir)) then
       do k=lo(3),hi(3)
         do j=lo(2),hi(2)
           tau%y(idir) = tau%y(idir) + &
             (v(hi(idir),j,k)-v(hi(idir)+1,j,k))/dxc(hi(idir)+0)*visc*dyc(j)*dzc(k)/(l(2)*l(3))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     idir = 3
     if(is_bound(0,idir)) then
       do i=lo(1),hi(1)
         do j=lo(2),hi(2)
           tau%y(idir) = tau%y(idir) + &
             (v(i,j,lo(idir))-v(i,j,lo(idir)-1))/dzc(lo(idir)-1)*visc*dyc(j)*dxc(i)/(l(2)*l(1))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     if(is_bound(1,idir)) then
       do i=lo(1),hi(1)
         do j=lo(2),hi(2)
           tau%y(idir) = tau%y(idir) + &
             (v(i,j,hi(idir))-v(i,j,hi(idir)+1))/dzc(hi(idir)+0)*visc*dyc(j)*dxc(i)/(l(2)*l(1))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     call mpi_allreduce(MPI_IN_PLACE,tau%y(1),3,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
     tau%z(:) = 0._rp
     idir = 1
@@ -178,34 +178,34 @@ module mod_debug
         do k=lo(3),hi(3)
           tau%z(idir) = tau%z(idir) + &
             (w(lo(idir),j,k)-w(lo(idir)-1,j,k))/dxc(lo(idir)-1)*visc*dzc(k)*dyc(j)/(l(3)*l(2))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     if(is_bound(1,idir)) then
       do k=lo(3),hi(3)
         do j=lo(2),hi(2)
           tau%z(idir) = tau%z(idir) + &
             (w(hi(idir),j,k)-w(hi(idir)+1,j,k))/dxc(hi(idir)+0)*visc*dzc(k)*dyc(j)/(l(3)*l(2))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     idir = 2
     if(is_bound(0,idir)) then
       do i=lo(1),hi(1)
         do k=lo(3),hi(3)
           tau%z(idir) = tau%z(idir) + &
             (w(i,lo(idir),k)-w(i,lo(idir)-1,k))/dyc(lo(idir)-1)*visc*dzc(k)*dxc(i)/(l(3)*l(1))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     if(is_bound(1,idir)) then
       do i=lo(1),hi(1)
         do k=lo(3),hi(3)
           tau%z(idir) = tau%z(idir) + &
             (w(i,hi(idir),k)-w(i,hi(idir)+1,k))/dyc(hi(idir)+0)*visc*dzc(k)*dxc(i)/(l(3)*l(1))
-        enddo
-      enddo
-    endif
+        end do
+      end do
+    end if
     call mpi_allreduce(MPI_IN_PLACE,tau%z(1),3,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD)
   end subroutine compute_mean_wall_shear
 end module mod_debug

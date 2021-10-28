@@ -145,7 +145,7 @@ module mod_fft
       kind_bwd = FFTW_RODFT10
       norm = [2.,0.]*1._rp
     end select
-  endif
+  end if
   end subroutine find_fft
   !
   subroutine eigenvalues(n,bc,is_centered,lambda)
@@ -155,36 +155,36 @@ module mod_fft
     character(len=1), intent(in ), dimension(0:1) :: bc
     logical         , intent(in )                 :: is_centered
     real(rp)        , intent(out), dimension(n  ) :: lambda
-    integer :: l 
+    integer :: l
     select case(bc(0)//bc(1))
     case('FF')
       do l=1,n
         lambda(l) = -4._rp*sin((1._rp*(l-1))*pi/(1._rp*n))**2
-      enddo
+      end do
     case('NN')
       if(is_centered) then
         do l=1,n
           lambda(l) = -4._rp*sin((1._rp*(l-1))*pi/(2._rp*n))**2
-        enddo
+        end do
       else
         do l=1,n
           lambda(l) = -4._rp*sin((1._rp*(l-1))*pi/(2._rp*(n-1+1)))**2
-        enddo
-      endif
+        end do
+      end if
     case('DD')
       if(is_centered) then
         do l=1,n
           lambda(l) = -4._rp*sin((1._rp*(l-0))*pi/(2._rp*n))**2
-        enddo
+        end do
       else
         do l=1,n-1
           lambda(l) = -4._rp*sin((1._rp*(l-0))*pi/(2._rp*(n+1-1)))**2
-        enddo
-      endif
+        end do
+      end if
     case('ND')
       do l=1,n
         lambda(l) = -4._rp*sin((1._rp*(2*l-1))*pi/(4._rp*n))**2
-      enddo
-    end select   
+      end do
+    end select
   end subroutine eigenvalues
 end module mod_fft
