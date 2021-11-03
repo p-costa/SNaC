@@ -132,7 +132,7 @@ module mod_solver
                   ib = 1
                 end if
                 if(is_bound(ib,idir)) then
-                  rhsz(i,j,ib) = factor(ib,idir)/(dz1(k-(1-ib)+qqq(idir))*dz2(k))
+                  rhs = factor(ib,idir)/(dz1(k-(1-ib)+qqq(idir))*dz2(k))
                   if(present(bcz).and.bc(ib,idir)/=0._rp) rhs = rhs*bcz(i,j,ib)/bc(ib,idir)
                   rhsz(i,j,ib) = rhsz(i,j,ib) + rhs
                 end if
@@ -144,7 +144,7 @@ module mod_solver
     end do
   end subroutine init_bc_rhs
   subroutine init_matrix_3d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                            dx1,dx2,dy1,dy2,dz1,dz2,asolver,lambda)
+                            dx1,dx2,dy1,dy2,dz1,dz2,alpha,alpha_bc,asolver,lambda)
     !
     ! description
     !
@@ -160,6 +160,8 @@ module mod_solver
     real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dx1,dx2
     real(rp)          , intent(in ), target, dimension(lo(2)-1:) :: dy1,dy2
     real(rp)          , intent(in ), target, dimension(lo(3)-1:) :: dz1,dz2
+    real(rp)          , intent(in )                              :: alpha
+    real(rp)          , intent(in ), dimension(0:1,3)            :: alpha_bc
     type(hypre_solver), intent(out)                              :: asolver
     real(rp)          , intent(in ), optional, dimension(:)      :: lambda
     integer, dimension(3         ) :: qqq
@@ -251,37 +253,37 @@ module mod_solver
           czp = 0._rp
           qq  = k - lo(3) + 1
 #endif
-          cc  = -(cxm+cxp+cym+cyp+czm+czp)
+          cc  = -(cxm+cxp+cym+cyp+czm+czp) + alpha
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
           cc  = cc + lambda(qq)
 #endif
           if(periods(1) == 0) then
             if(is_bound(0,1).and.i == lo(1)) then
-              cc = cc + sgn(0,1)*cxm
+              cc = cc + sgn(0,1)*cxm + alpha_bc(0,1)
               cxm = 0._rp
             end if
             if(is_bound(1,1).and.i == hi(1)) then
-              cc = cc + sgn(1,1)*cxp
+              cc = cc + sgn(1,1)*cxp + alpha_bc(1,1)
               cxp = 0._rp
             end if
           end if
           if(periods(2) == 0) then
             if(is_bound(0,2).and.j == lo(2)) then
-              cc = cc + sgn(0,2)*cym
+              cc = cc + sgn(0,2)*cym + alpha_bc(0,2)
               cym = 0._rp
             end if
             if(is_bound(1,2).and.j == hi(2)) then
-              cc = cc + sgn(1,2)*cyp
+              cc = cc + sgn(1,2)*cyp + alpha_bc(1,2)
               cyp = 0._rp
             end if
           end if
           if(periods(3) == 0) then
             if(is_bound(0,3).and.k == lo(3)) then
-              cc = cc + sgn(0,3)*czm
+              cc = cc + sgn(0,3)*czm + alpha_bc(0,3)
               czm = 0._rp
             end if
             if(is_bound(1,3).and.k == hi(3)) then
-              cc = cc + sgn(1,3)*czp
+              cc = cc + sgn(1,3)*czp + alpha_bc(1,3)
               czp = 0._rp
             end if
           end if
@@ -516,7 +518,7 @@ module mod_solver
   end subroutine finalize_matrix
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   subroutine init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                            dl1_1,dl1_2,dl2_1,dl2_2,comm,asolver)
+                            dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,comm,asolver)
     !
     ! description
     !
@@ -531,6 +533,8 @@ module mod_solver
     integer           , intent(in ), dimension(    2) :: lo,hi,periods
     real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dl1_1,dl1_2
     real(rp)          , intent(in ), target, dimension(lo(2)-1:) :: dl2_1,dl2_2
+    real(rp)          , intent(in )                              :: alpha
+    real(rp)          , intent(in ), dimension(0:1,2)            :: alpha_bc
     type(MPI_COMM)    , intent(in )                   :: comm
     type(hypre_solver), intent(out)                              :: asolver
     integer, dimension(2         ) :: qqq
@@ -604,24 +608,24 @@ module mod_solver
         c1p = 1._rp/(dl1_1(i1  +qqq(1))*dl1_2(i1))
         c2m = 1._rp/(dl2_1(i2-1+qqq(2))*dl2_2(i2))
         c2p = 1._rp/(dl2_1(i2  +qqq(2))*dl2_2(i2))
-        cc  = -(c1m+c1p+c2m+c2p)
+        cc  = -(c1m+c1p+c2m+c2p) + alpha
         if(periods(1) == 0) then
           if(is_bound(0,1).and.i1 == lo(1)) then
-            cc = cc + sgn(0,1)*c1m
+            cc = cc + sgn(0,1)*c1m + alpha_bc(0,1)
             c1m = 0._rp
           end if
           if(is_bound(1,1).and.i1 == hi(1)) then
-            cc = cc + sgn(1,1)*c1p
+            cc = cc + sgn(1,1)*c1p + alpha_bc(1,1)
             c1p = 0._rp
           end if
         end if
         if(periods(2) == 0) then
           if(is_bound(0,2).and.i2 == lo(2)) then
-            cc = cc + sgn(0,2)*c2m
+            cc = cc + sgn(0,2)*c2m + alpha_bc(0,2)
             c2m = 0._rp
           end if
           if(is_bound(1,2).and.i2 == hi(2)) then
-            cc = cc + sgn(1,2)*c2p
+            cc = cc + sgn(1,2)*c2p + alpha_bc(1,2)
             c2p = 0._rp
           end if
         end if
@@ -783,7 +787,7 @@ module mod_solver
     end do
   end subroutine solve_n_helmholtz_3d
   subroutine init_n_2d_matrices(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_out,hi_out,lo,hi,periods, &
-                                dl1_1,dl1_2,dl2_1,dl2_2,lambda,comm,asolver)
+                                dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,lambda,comm,asolver)
     character(len=1)  , intent(in   ), dimension(0:1,2) :: cbc
     real(rp)          , intent(in   ), dimension(0:1,2) ::  bc
     real(rp)          , intent(in   ), dimension(0:1,2) ::  dl
@@ -794,6 +798,8 @@ module mod_solver
     integer           , intent(in   ), dimension(    2) :: lo,hi,periods
     real(rp)          , intent(in   ), target, dimension(lo(1)-1:) :: dl1_1,dl1_2
     real(rp)          , intent(in   ), target, dimension(lo(2)-1:) :: dl2_1,dl2_2
+    real(rp)          , intent(in   )                              :: alpha
+    real(rp)          , intent(in   ), dimension(0:1,2)            :: alpha_bc
     real(rp)          , intent(in   ), dimension(:) :: lambda
     type(MPI_COMM)    , intent(in   ), dimension(:) :: comm
     type(hypre_solver), intent(inout), dimension(:) :: asolver
@@ -803,13 +809,13 @@ module mod_solver
       q = i_out-lo_out+1
       asolver_aux = asolver(q)
       call init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                          dl1_1,dl1_2,dl2_1,dl2_2,comm(q),asolver_aux)
+                          dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,comm(q),asolver_aux)
       call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],lambda(q),asolver_aux%mat)
       asolver(q) = asolver_aux
     end do
   end subroutine init_n_2d_matrices
   subroutine init_n_3d_matrices(idir,nslice,cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,periods, &
-                                lo_sp,hi_sp,dl1_1,dl1_2,dl2_1,dl2_2,dl3_1,dl3_2,lambda,asolver)
+                                lo_sp,hi_sp,dl1_1,dl1_2,dl2_1,dl2_2,dl3_1,dl3_2,alpha,alpha_bc,lambda,asolver)
     integer           , intent(in   )                   :: idir,nslice
     character(len=1)  , intent(in   ), dimension(0:1,3) :: cbc
     real(rp)          , intent(in   ), dimension(0:1,3) ::  bc
@@ -822,6 +828,8 @@ module mod_solver
     real(rp)          , intent(in   ), target, dimension(lo(1)-1:) :: dl1_1,dl1_2
     real(rp)          , intent(in   ), target, dimension(lo(2)-1:) :: dl2_1,dl2_2
     real(rp)          , intent(in   ), target, dimension(lo(3)-1:) :: dl3_1,dl3_2
+    real(rp)          , intent(in   )                              :: alpha
+    real(rp)          , intent(in   ), dimension(0:1,3)            :: alpha_bc
     real(rp)          , intent(in   ), dimension(:) :: lambda
     type(hypre_solver), intent(inout), dimension(:) :: asolver
     type(hypre_solver) :: asolver_aux
@@ -832,6 +840,7 @@ module mod_solver
                           dl1_1(lo_sp(1,q)-1:hi_sp(1,q)+1),dl1_2(lo_sp(1,q)-1:hi_sp(1,q)+1), &
                           dl2_1(lo_sp(2,q)-1:hi_sp(2,q)+1),dl2_2(lo_sp(2,q)-1:hi_sp(2,q)+1), &
                           dl3_1(lo_sp(3,q)-1:hi_sp(3,q)+1),dl3_2(lo_sp(3,q)-1:hi_sp(3,q)+1), &
+                          alpha,alpha_bc, & 
                           asolver_aux,lambda(lo_sp(idir,q)-lo(idir)+1:hi_sp(idir,q)-lo(idir)+1))
       asolver(q) = asolver_aux
     end do

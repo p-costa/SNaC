@@ -265,6 +265,103 @@ module mod_bound
     end select
   end subroutine set_bc
   !
+  subroutine set_open_bc(ibound,lo,hi,idir,is_estimated_traction,visc,dr,p,u,v,w)
+    !
+    ! a zero or estiamted-traction open BC (Bozonnet et al, JCP 2021)
+    ! the latter serves well as a robust outflow BC
+    !
+    implicit none
+    integer , intent(in   ) :: ibound
+    integer , intent(in   ), dimension(3) :: lo,hi
+    integer , intent(in   ) :: idir
+    logical , intent(in   ) :: is_estimated_traction
+    real(rp), intent(in   ) :: visc,dr(2)
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
+    real(rp) :: factor,sgn
+    integer  :: q
+    !
+    if(    ibound == 0) then
+      sgn    = -1._rp
+      q = lo(idir) - 1
+    elseif(ibound == 1) then
+      sgn    =  1._rp
+      q = hi(idir)
+    end if
+    factor = sgn*dr(1)*2*visc
+    select case(idir)
+    case(1)
+      if    (ibound == 0) then
+        !$OMP WORKSHARE
+        u(q,:,:) = u(q+1,:,:) + factor*(.5_rp*max(0._rp,sgn*u(q+1,:,:)**2) + p(q+1,:,:))
+        !$OMP END WORKSHARE
+        if(is_estimated_traction) then
+          !$OMP WORKSHARE
+          u(q,:,:) = u(q,:,:) + (u(q+2,:,:)-u(q+1,:,:))/dr(2) - factor*p(q+1,:,:)
+          !$OMP END WORKSHARE
+        end if
+      elseif(ibound == 1) then
+        !$OMP WORKSHARE
+        u(q,:,:) = u(q-1,:,:) + factor*(.5_rp*max(0._rp,sgn*u(q-1,:,:)**2) + p(q,:,:))
+        !$OMP END WORKSHARE
+        if(is_estimated_traction) then
+          !$OMP WORKSHARE
+          u(q,:,:) = u(q,:,:) + (u(q-1,:,:)-u(q-2,:,:))/dr(2) - factor*p(q-1,:,:)
+          !$OMP END WORKSHARE
+        end if
+        !$OMP WORKSHARE
+        u(hi(idir)+1,:,:) = u(hi(idir)  ,:,:) ! not needed
+        !$OMP END WORKSHARE
+      end if
+    case(2)
+      if    (ibound == 0) then
+        !$OMP WORKSHARE
+        v(:,q,:) = v(:,q+1,:) + factor*(.5_rp*max(0._rp,sgn*v(:,q+1,:)**2) + p(:,q+1,:))
+        !$OMP END WORKSHARE
+        if(is_estimated_traction) then
+          !$OMP WORKSHARE
+          v(:,q,:) = v(:,q,:) + (v(:,q+2,:)-v(:,q+1,:))/dr(2) - factor*p(:,q+1,:)
+          !$OMP END WORKSHARE
+        end if
+      elseif(ibound == 1) then
+        !$OMP WORKSHARE
+        v(:,q,:) = v(:,q-1,:) + factor*(.5_rp*max(0._rp,sgn*v(:,q-1,:)**2) + p(:,q,:))
+        !$OMP END WORKSHARE
+        if(is_estimated_traction) then
+          !$OMP WORKSHARE
+          v(:,q,:) = v(:,q,:) + (v(:,q-1,:)-v(:,q-2,:))/dr(2) - factor*p(:,q-1,:)
+          !$OMP END WORKSHARE
+        end if
+        !$OMP WORKSHARE
+        v(:,hi(idir)+1,:) = v(:,hi(idir)  ,:) ! not needed
+        !$OMP END WORKSHARE
+      end if
+    case(3)
+      if    (ibound == 0) then
+        !$OMP WORKSHARE
+        w(:,:,q) = w(:,:,q+1) + factor*(.5_rp*max(0._rp,sgn*w(:,:,q+1)**2) + p(:,:,q+1))
+        !$OMP END WORKSHARE
+        if(is_estimated_traction) then
+          !$OMP WORKSHARE
+          w(:,:,q) = w(:,:,q) + (w(:,:,q+2)-w(:,:,q+1))/dr(2) - factor*p(:,:,q+1)
+          !$OMP END WORKSHARE
+        end if
+      elseif(ibound == 1) then
+        !$OMP WORKSHARE
+        w(:,:,q) = w(:,:,q-1) + factor*(.5_rp*max(0._rp,sgn*w(:,:,q-1)**2) + p(:,:,q))
+        !$OMP END WORKSHARE
+        if(is_estimated_traction) then
+          !$OMP WORKSHARE
+          w(:,:,q) = w(:,:,q) + (w(:,:,q-1)-w(:,:,q-2))/dr(2) - factor*p(:,:,q-1)
+          !$OMP END WORKSHARE
+        end if
+        !$OMP WORKSHARE
+        w(:,:,hi(idir)+1) = w(:,:,hi(idir)  ) ! not needed
+        !$OMP END WORKSHARE
+      end if
+    end select
+  end subroutine set_open_bc
+  !
   subroutine inflow(is_inflow_bound,lo,hi,velx,vely,velz,u,v,w)
     !
     implicit none
