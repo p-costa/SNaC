@@ -85,7 +85,7 @@ program snac
     real(rp), allocatable, dimension(:,:,:) :: z
   end type rhs_bound
   type(rhs_bound) :: rhsp
-  real(rp) :: alpha
+  real(rp) :: alpha,alpha_bc(0:1,1:3)
 #ifdef _IMPDIFF
   type(rhs_bound) :: rhsu,rhsv,rhsw,bcu,bcv,bcw
 #endif
@@ -662,6 +662,8 @@ end if
   is_centered(:) = [.true.,.true.,.true.]
   call init_bc_rhs(cbcpre,bcpre,dl,is_bound,is_centered,lo,hi,periods, &
                    dxc,dxf,dyc,dyf,dzc,dzf,rhsp%x,rhsp%y,rhsp%z)
+  alpha         = 0._rp
+  alpha_bc(:,:) = 0._rp
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   allocate(lambda_p(hi(idir)-lo(idir)+1))
   call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcpre(:,idir),.true.,dl(0,idir),arrplan_p,normfft_p,lambda_p)
@@ -686,16 +688,16 @@ end if
   call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hi_a(idir),lo_a(il:iu:iskip),hi_a(il:iu:iskip),periods(il:iu:iskip), &
-                          dl1_1,dl1_2,dl2_1,dl2_2,lambda_p_a,comms_fft,psolver_fft)
+                          dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,lambda_p_a,comms_fft,psolver_fft)
 #else
   call init_n_3d_matrices(idir,nslices,cbcpre,bcpre,dl,is_uniform_grid,is_bound,is_centered,lo,periods, &
-                          lo_sp,hi_sp,dxc,dxf,dyc,dyf,dzc,dzf,lambda_p_a,psolver_fft)
+                          lo_sp,hi_sp,dxc,dxf,dyc,dyf,dzc,dzf,alpha,alpha_bc,lambda_p_a,psolver_fft)
 #endif
   call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,hypre_solver_i,psolver_fft)
   call setup_n_solvers(npsolvers,psolver_fft)
 #else
   call init_matrix_3d(cbcpre,bcpre,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                      dxc,dxf,dyc,dyf,dzc,dzf,psolver)
+                      dxc,dxf,dyc,dyf,dzc,dzf,alpha,alpha_bc,psolver)
   call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,psolver)
   call setup_solver(psolver)
 #endif
@@ -725,10 +727,10 @@ end if
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiu_a(idir),lo_a(il:iu:iskip),hiu_a(il:iu:iskip),periods(il:iu:iskip), &
-                          dlu1_1,dlu1_2,dlu2_1,dlu2_2,lambda_u_a,comms_fft,usolver_fft)
+                          dlu1_1,dlu1_2,dlu2_1,dlu2_2,alpha,alpha_bc,lambda_u_a,comms_fft,usolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,is_centered,lo,hiu,periods, &
-                      dxf,dxc,dyc,dyf,dzc,dzf,usolver)
+                      dxf,dxc,dyc,dyf,dzc,dzf,alpha,alpha_bc,usolver)
 #endif
   dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
                 dyf_g(lo_g(2)-0),dyf_g(hi_g(2)), &
@@ -755,10 +757,10 @@ end if
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiv_a(idir),lo_a(il:iu:iskip),hiv_a(il:iu:iskip),periods(il:iu:iskip), &
-                          dlv1_1,dlv1_2,dlv2_1,dlv2_2,lambda_v_a,comms_fft,vsolver_fft)
+                          dlv1_1,dlv1_2,dlv2_1,dlv2_2,alpha,alpha_bc,lambda_v_a,comms_fft,vsolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,is_centered,lo,hiv,periods, &
-                      dxc,dxf,dyf,dyc,dzc,dzf,vsolver)
+                      dxc,dxf,dyf,dyc,dzc,dzf,alpha,alpha_bc,vsolver)
 #endif
   dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
                 dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
@@ -785,10 +787,10 @@ end if
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dl(:,il:iu:iskip), &
                           is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiw_a(idir),lo_a(il:iu:iskip),hiw_a(il:iu:iskip),periods(il:iu:iskip), &
-                          dlw1_1,dlw1_2,dlw2_1,dlw2_2,lambda_w_a,comms_fft,wsolver_fft)
+                          dlw1_1,dlw1_2,dlw2_1,dlw2_2,alpha,alpha_bc,lambda_w_a,comms_fft,wsolver_fft)
 #else
   call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,is_centered,lo,hiw,periods, &
-                      dxc,dxf,dyc,dyf,dzf,dzc,wsolver)
+                      dxc,dxf,dyc,dyf,dzf,dzc,alpha,alpha_bc,wsolver)
 #endif
 #endif
   !
