@@ -122,9 +122,9 @@ module mod_bound
       sgn    = -1._rp
     end if
     if(ctype == 'N') then
-      if(    ibound == 0) then
+      if(     ibound == 0) then
         factor = -dr*factor
-      elseif(ibound == 1) then
+      else if(ibound == 1) then
         factor =  dr*factor
       end if
       sgn    = 1._rp
@@ -153,81 +153,81 @@ module mod_bound
       if(centered) then
         select case(idir)
         case(1)
-          if    (ibound == 0) then
+          if     (ibound == 0) then
             !$OMP WORKSHARE
             p(lo(idir)-1,:,:) = factor+sgn*p(lo(idir),:,:)
             !$OMP END WORKSHARE
-          elseif(ibound == 1) then
+          else if(ibound == 1) then
             !$OMP WORKSHARE
             p(hi(idir)+1,:,:) = factor+sgn*p(hi(idir),:,:)
             !$OMP END WORKSHARE
           end if
         case(2)
-          if    (ibound == 0) then
+          if     (ibound == 0) then
             !$OMP WORKSHARE
             p(:,lo(idir)-1,:) = factor+sgn*p(:,lo(idir),:)
             !$OMP END WORKSHARE
-          elseif(ibound == 1) then
+          else if(ibound == 1) then
             !$OMP WORKSHARE
             p(:,hi(idir)+1,:) = factor+sgn*p(:,hi(idir),:)
             !$OMP END WORKSHARE
           end if
         case(3)
-          if    (ibound == 0) then
+          if     (ibound == 0) then
             !$OMP WORKSHARE
             p(:,:,lo(idir)-1) = factor+sgn*p(:,:,lo(idir))
             !$OMP END WORKSHARE
-          elseif(ibound == 1) then
+          else if(ibound == 1) then
             !$OMP WORKSHARE
             p(:,:,hi(idir)+1) = factor+sgn*p(:,:,hi(idir))
             !$OMP END WORKSHARE
           end if
         end select
-      elseif(.not.centered.and.ctype == 'D') then
+      else if(.not.centered.and.ctype == 'D') then
         select case(idir)
         case(1)
-          if    (ibound == 0) then
+          if     (ibound == 0) then
             !$OMP WORKSHARE
             p(lo(idir)-1,:,:) = factor
             !$OMP END WORKSHARE
-          elseif(ibound == 1) then
+          else if(ibound == 1) then
             !$OMP WORKSHARE
             p(hi(idir)  ,:,:) = factor
             p(hi(idir)+1,:,:) = p(hi(idir)-1,:,:)
             !$OMP END WORKSHARE
           end if
         case(2)
-          if    (ibound == 0) then
+          if     (ibound == 0) then
             !$OMP WORKSHARE
             p(:,lo(idir)-1,:) = factor
             !$OMP END WORKSHARE
-          elseif(ibound == 1) then
+          else if(ibound == 1) then
             !$OMP WORKSHARE
             p(:,hi(idir)  ,:) = factor
             p(:,hi(idir)+1,:) = p(:,hi(idir)-1,:)
             !$OMP END WORKSHARE
           end if
         case(3)
-          if    (ibound == 0) then
+          if     (ibound == 0) then
             !$OMP WORKSHARE
             p(:,:,lo(idir)-1) = factor
             !$OMP END WORKSHARE
-          elseif(ibound == 1) then
+          else if(ibound == 1) then
             !$OMP WORKSHARE
             p(:,:,hi(idir)  ) = factor
             p(:,:,hi(idir)+1) = p(:,:,hi(idir)-1)
             !$OMP END WORKSHARE
           end if
         end select
-      elseif(.not.centered.and.ctype == 'N') then
+      else if(.not.centered.and.ctype == 'N') then
         select case(idir)
         case(1)
-          if    (ibound == 0) then
+          if     (ibound == 0) then
             !$OMP WORKSHARE
             !p(0,:,:) = 1./3.*(-2.*factor+4.*p(1  ,:,:)-p(2  ,:,:))
             p(lo(idir)-1,:,:) = factor + p(lo(idir)  ,:,:)
             !$OMP END WORKSHARE
-          elseif(ibound == 1) then
+          else if(ibound == 1) then
             !$OMP WORKSHARE
             !p(n,:,:) = 1./3.*(-2.*factor+4.*p(n-1,:,:)-p(n-2,:,:))
             p(hi(idir)  ,:,:) = factor + p(hi(idir)-1,:,:)
@@ -235,12 +235,12 @@ module mod_bound
             !$OMP END WORKSHARE
           end if
         case(2)
-          if    (ibound == 0) then
+          if     (ibound == 0) then
             !$OMP WORKSHARE
             !p(:,0  ,:) = 1./3.*(-2.*factor+4.*p(:,1,:)-p(:,2  ,:))
             p(:,lo(idir)-1,:) = factor + p(:,lo(idir)  ,:)
             !$OMP END WORKSHARE
-          elseif(ibound == 1) then
+          else if(ibound == 1) then
             !$OMP WORKSHARE
             !p(:,n,:) = 1./3.*(-2.*factor+4.*p(:,n-1,:)-p(:,n-2,:))
             p(:,hi(idir)  ,:) = factor + p(:,hi(idir)-1,:)
@@ -248,12 +248,12 @@ module mod_bound
             !$OMP END WORKSHARE
           end if
         case(3)
-          if    (ibound == 0) then
+          if     (ibound == 0) then
             !$OMP WORKSHARE
             !p(:,:,0) = 1./3.*(-2.*factor+4.*p(:,:,1  )-p(:,:,2  ))
             p(:,:,lo(idir)-1) = factor + p(:,:,lo(idir)  )
             !$OMP END WORKSHARE
-          elseif(ibound == 1) then
+          else if(ibound == 1) then
             !$OMP WORKSHARE
             !p(:,:,n) = 1./3.*(-2.*factor+4.*p(:,:,n-1)-p(:,:,n-2))
             p(:,:,hi(idir)  ) = factor + p(:,:,hi(idir)-1)
@@ -287,7 +287,7 @@ module mod_bound
     if(    ibound == 0) then
       sgn    = -1._rp
       q = lo(idir) - 1
-    elseif(ibound == 1) then
+    else if(ibound == 1) then
       sgn    =  1._rp
       q = hi(idir)
     end if
@@ -295,7 +295,7 @@ module mod_bound
     is_estimated_traction = .false.; if(present(tr)) is_estimated_traction = .true.
     select case(idir)
     case(1)
-      if    (ibound == 0) then
+      if     (ibound == 0) then
         !$OMP WORKSHARE
         u(q,:,:) = u(q+1,:,:) + factor*(.5_rp*max(0._rp,sgn*u(q+1,:,:)**2) + p(q+1,:,:))
         !$OMP END WORKSHARE
@@ -304,7 +304,7 @@ module mod_bound
           u(q,:,:) = u(q,:,:) + factor*tr(0,:,:)
           !$OMP END WORKSHARE
         end if
-      elseif(ibound == 1) then
+      else if(ibound == 1) then
         !$OMP WORKSHARE
         u(q,:,:) = u(q-1,:,:) + factor*(.5_rp*max(0._rp,sgn*u(q-1,:,:)**2) + p(q,:,:))
         !$OMP END WORKSHARE
@@ -318,7 +318,7 @@ module mod_bound
         !$OMP END WORKSHARE
       end if
     case(2)
-      if    (ibound == 0) then
+      if     (ibound == 0) then
         !$OMP WORKSHARE
         v(:,q,:) = v(:,q+1,:) + factor*(.5_rp*max(0._rp,sgn*v(:,q+1,:)**2) + p(:,q+1,:))
         !$OMP END WORKSHARE
@@ -327,7 +327,7 @@ module mod_bound
           v(:,q,:) = v(:,q,:) + factor*tr(0,:,:)
           !$OMP END WORKSHARE
         end if
-      elseif(ibound == 1) then
+      else if(ibound == 1) then
         !$OMP WORKSHARE
         v(:,q,:) = v(:,q-1,:) + factor*(.5_rp*max(0._rp,sgn*v(:,q-1,:)**2) + p(:,q,:))
         !$OMP END WORKSHARE
@@ -341,7 +341,7 @@ module mod_bound
         !$OMP END WORKSHARE
       end if
     case(3)
-      if    (ibound == 0) then
+      if     (ibound == 0) then
         !$OMP WORKSHARE
         w(:,:,q) = w(:,:,q+1) + factor*(.5_rp*max(0._rp,sgn*w(:,:,q+1)**2) + p(:,:,q+1))
         !$OMP END WORKSHARE
@@ -350,7 +350,7 @@ module mod_bound
           w(:,:,q) = w(:,:,q) + factor*tr(0,:,:)
           !$OMP END WORKSHARE
         end if
-      elseif(ibound == 1) then
+      else if(ibound == 1) then
         !$OMP WORKSHARE
         w(:,:,q) = w(:,:,q-1) + factor*(.5_rp*max(0._rp,sgn*w(:,:,q-1)**2) + p(:,:,q))
         !$OMP END WORKSHARE
@@ -385,37 +385,37 @@ module mod_bound
     !
     if(    ibound == 0) then
       q = lo(idir) - 1
-    elseif(ibound == 1) then
+    else if(ibound == 1) then
       q = hi(idir)
     end if
     factor = 2.*visc/dr
     select case(idir)
     case(1)
-      if    (ibound == 0) then
+      if     (ibound == 0) then
         !$OMP WORKSHARE
         tr(0,:,:) = -p(q+1,:,:) + factor*(u(q+2,:,:)-u(q+1,:,:))
         !$OMP END WORKSHARE
-      elseif(ibound == 1) then
+      else if(ibound == 1) then
         !$OMP WORKSHARE
         tr(1,:,:) = -p(q-1,:,:) + factor*(u(q-1,:,:)-u(q-2,:,:))
         !$OMP END WORKSHARE
       end if
     case(2)
-      if    (ibound == 0) then
+      if     (ibound == 0) then
         !$OMP WORKSHARE
         tr(0,:,:) = -p(:,q+1,:) + factor*(v(:,q+2,:)-v(:,q+1,:))
         !$OMP END WORKSHARE
-      elseif(ibound == 1) then
+      else if(ibound == 1) then
         !$OMP WORKSHARE
         tr(1,:,:) = -p(:,q-1,:) + factor*(v(:,q-1,:)-v(:,q-2,:))
         !$OMP END WORKSHARE
       end if
     case(3)
-      if    (ibound == 0) then
+      if     (ibound == 0) then
         !$OMP WORKSHARE
         tr(1,:,:) = -p(:,:,q+1) + factor*(w(:,:,q+2)-w(:,:,q+1))
         !$OMP END WORKSHARE
-      elseif(ibound == 1) then
+      else if(ibound == 1) then
         !$OMP WORKSHARE
         tr(0,:,:) = -p(:,:,q-1) + factor*(w(:,:,q-1)-w(:,:,q-2))
         !$OMP END WORKSHARE

@@ -109,12 +109,12 @@ module mod_initmpi
               !
               if(is_nb) then
                 if(      inb == 0 .and. lo(idir) == lo_g(idir)) then
-                  if(    lo(idir) == hi_all(idir,irank)+1) then
+                  if(     lo(idir) == hi_all(idir,irank)+1) then
                     nb(inb,idir) = irank
-                  elseif(lo(idir) <  hi_all(idir,irank)+1) then
+                  else if(lo(idir) <  hi_all(idir,irank)+1) then
                     if(periods(idir) == hi_all(idir,irank)-lo(idir)+1) then
                       nb(inb,idir) = irank
-                    elseif(hi_all(idir,irank) == hi_g_all(idir,irank)) then
+                    else if(hi_all(idir,irank) == hi_g_all(idir,irank)) then
                       write(stderr,*) 'ERROR: Inconsistent periodic boundary condition (?).'
                       write(stderr,*) 'Expected: periods(',idir,') = ',hi_all(idir,irank)-lo(idir)+1
                       write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)
@@ -123,13 +123,13 @@ module mod_initmpi
                       error stop
                     end if
                   end if
-                elseif ( inb == 1 .and. hi(idir) == hi_g(idir)) then
-                  if(    hi(idir) == lo_all(idir,irank)-1) then
+                else if (inb == 1 .and. hi(idir) == hi_g(idir)) then
+                  if(     hi(idir) == lo_all(idir,irank)-1) then
                     nb(inb,idir) = irank
-                  elseif(hi(idir) >  lo_all(idir,irank)-1) then
+                  else if(hi(idir) >  lo_all(idir,irank)-1) then
                     if(periods(idir) == hi(idir)-lo_all(idir,irank)+1) then
                       nb(inb,idir) = irank
-                    elseif(lo_all(idir,irank) == lo_g_all(idir,irank)) then
+                    else if(lo_all(idir,irank) == lo_g_all(idir,irank)) then
                       write(stderr,*) 'ERROR: Inconsistent periodic boundary condition (?).'
                       write(stderr,*) 'Expected: periods(',idir,') = ',hi(idir)-lo_all(idir,irank)+1
                       write(stderr,*) 'Found   : periods(',idir,') = ',periods(idir)

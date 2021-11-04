@@ -195,10 +195,10 @@ module mod_initgrid
     real(rp), intent(in ) :: alpha,r0
     real(rp), intent(out) :: r
     if(alpha /= 0._rp) then
-      if(    r0 <= 0.5_rp) then
+      if(     r0 <= 0.5_rp) then
         r = 0.5_rp*(1._rp-1._rp+tanh(2._rp*alpha*(r0-0._rp))/tanh(alpha))
         !r = 0.5_rp*(1._rp-1._rp+erf( 2._rp*alpha*(r0-0._rp))/erf( alpha))
-      elseif(r0 >  0.5_rp) then
+      else if(r0 >  0.5_rp) then
         r = 0.5_rp*(1._rp+1._rp+tanh(2._rp*alpha*(r0-1._rp))/tanh(alpha))
         !r = 0.5_rp*(1._rp+1._rp+erf( 2._rp*alpha*(r0-1._rp))/erf( alpha))
       end if
