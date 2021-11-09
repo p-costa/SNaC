@@ -52,7 +52,6 @@ module mod_initmpi
       if(coords(idir)+1 <= dims(idir)-1) &
         nb(1,idir) = id_first + get_id([coords(1)+eye(1,idir),coords(2)+eye(2,idir),coords(3)+eye(3,idir)],dims(:))
     end do
-    print*,id_first + get_id([coords(1)+eye(1,1),coords(2)+eye(2,1),coords(3)+eye(3,1)],dims(:)),myid
     n(:) = ng(:)/dims(:)
     where(coords(:)+1 <= mod(ng(:),dims(:))) n(:) = n(:) + 1
     lo(:) = lo_g(:)   + (coords(:)  )*n(:)
