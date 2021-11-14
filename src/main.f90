@@ -864,8 +864,16 @@ end if
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
       alpha = -visc*dtrk/2._rp
+#ifndef _NON_NEWTONIAN
       call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce, &
                   visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp)
+#else
+      call strain_rate_norm(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,mu)
+      call compute_viscosity(lo,hi,kappa,rn,tau0,eps,mu)
+      call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,mu)
+      call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce, &
+                  visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,mu)
+#endif
 #ifdef _IMPDIFF
       alphai = alpha**(-1)
       !
@@ -1021,7 +1029,12 @@ end if
     if(mod(istep,icheck) == 0) then
       if(myid == 0) write(stdout,*) 'Checking stability and divergence...'
       !
+#ifdef _NON_NEWTONIAN
+      visc = minval(mu(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call MPI_ALLREDUCE(MPI_IN_PLACE,visc,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD)
+#endif
       call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
+      visc = kappa
       dt = min(cfl*dtmax,dtmin)
       if(myid == 0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
       if(dtmax < small) then
@@ -1029,7 +1042,7 @@ end if
         if(myid == 0) write(stderr,*) 'Aborting...'
         is_done = .true.
         kill = .true.
-      end if
+      endif
       !
       call chkdiv(lo,hi,dxf,dyf,dzf,u,v,w,vol_all,MPI_COMM_WORLD,divtot,divmax)
       if(myid == 0) write(stdout,*) 'Total divergence = ', divtot, '| Maximum divergence = ', divmax

@@ -45,9 +45,10 @@ module mod_initflow
       call poiseuille(lo(3),hi(3),zc,l(3),uref,u1d)
       is_mean=.true.
 #ifdef _NON_NEWTONIAN
+      is_mean=.false.
       do k=lo(3),hi(3)
         u1d(k) = inflow_herschel_bulkley(zc(k),lmin(3),lmax(3),rn,dpdl,visc,tauy)
-      enddo
+      end do
 #endif
     case('zer')
       u1d(:) = 0._rp
@@ -59,9 +60,10 @@ module mod_initflow
       call poiseuille(lo(3),hi(3),zc,2.*l(3),uref,u1d)
       is_mean = .true.
 #ifdef _NON_NEWTONIAN
+      is_mean=.false.
       do k=lo(3),hi(3)
         u1d(k) = inflow_herschel_bulkley(zc(k),lmin(3),lmin(3)+2._rp*(lmax(3)-lmin(3)),rn,dpdl,visc,tauy)
-      enddo
+      end do
 #endif
     case('hcl')
       call log_profile(lo(3),hi(3),zc,2.*l(3),uref,lref,visc,u1d)
@@ -269,7 +271,7 @@ module mod_initflow
     !
     ! below a poiseuille inflow is calculated
     !   it is convinient that the integral a function of this kind
-    !   is equal to one, such that it can be easily recycled
+    !   is equal to one, such that it can be easily recycled 
     !   for the inflow of a square duct, as done in
     !   in init_inflow below
     !
@@ -287,7 +289,7 @@ module mod_initflow
     ! later this subroutine can be generalized with other shapes of
     ! inflow velocity; by construction, the profile will not vary along
     ! a direction that does not have Dirichlet BCs; note that
-    ! since the inflow is evaluated at the center of a face,
+    ! since the inflow is evaluated at the center of a face, 
     ! there is no danger of experiencing a singularity '0._rp**0'.
     !
     implicit none
@@ -327,7 +329,7 @@ module mod_initflow
       vel = vel*((1._rp  -ryield)**aux - (abs(rr)-ryield)**aux)
     else
       vel = vel*((1._rp  -ryield)**aux)
-    endif
+    end if
   end function inflow_herschel_bulkley
   !
   subroutine init_inflow_nn(periods,lo,hi,lmin,lmax,x1c,x2c,rn,dpdl,kappa,tauy,vel)
@@ -357,10 +359,13 @@ module mod_initflow
     where(periods(:) /= 0) q(:) = 0
     do i2 = lo(2)-1,hi(2)+1
       do i1 = lo(1)-1,hi(1)+1
-        vel(i1,i2) = inflow_herschel_bulkley(x1c(i1),lmin(1),lmax(1),rn,dpdl,kappa,tauy)**q(1) * &
-                     inflow_herschel_bulkley(x2c(i2),lmin(2),lmax(2),rn,dpdl,kappa,tauy)**q(2)
-      enddo
-    enddo
+        !vel(i1,i2) = inflow_herschel_bulkley(x1c(i1),lmin(1),lmax(1),rn,dpdl,kappa,tauy)**q(1) * &
+        !             inflow_herschel_bulkley(x2c(i2),lmin(2),lmax(2),rn,dpdl,kappa,tauy)**q(2)
+        ! IN FUTURE TAKE AN INFLOW TYPE AS ARGUMENT
+        vel(i1,i2) = inflow_herschel_bulkley(x1c(i1),lmin(1),lmin(1)+2._rp*(lmax(1)-lmin(1)),rn,dpdl,kappa,tauy)**q(1) * &
+                     inflow_herschel_bulkley(x2c(i2),lmin(2),lmin(2)+2._rp*(lmax(2)-lmin(2)),rn,dpdl,kappa,tauy)**q(2)
+      end do
+    end do
   end subroutine init_inflow_nn
 #endif
   !
