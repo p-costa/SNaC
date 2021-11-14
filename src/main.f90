@@ -75,6 +75,9 @@ program snac
   use mod_fft            , only: fft,fftend
   use mod_sanity         , only: test_sanity_fft
 #endif
+#if defined(_NON_NEWTONIAN) && defined(_IMPDIFF)
+  use mod_solver         , only: init_matrix_3d_vc
+#endif
   use mod_types
   !$ use omp_lib
   implicit none
@@ -784,8 +787,10 @@ end if
                           lo_a(idir),hiu_a(idir),lo_a(il:iu:iskip),hiu_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlu1_1,dlu1_2,dlu2_1,dlu2_2,alpha,alpha_bc,lambda_u_a,comms_fft,usolver_fft)
 #else
+#ifndef _NON_NEWTONIAN
   call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,is_centered,lo,hiu,periods, &
                       dxf,dxc,dyc,dyf,dzc,dzf,alpha,alpha_bc,usolver)
+#endif
 #endif
   dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
                 dyf_g(lo_g(2)-0),dyf_g(hi_g(2)), &
@@ -814,8 +819,10 @@ end if
                           lo_a(idir),hiv_a(idir),lo_a(il:iu:iskip),hiv_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlv1_1,dlv1_2,dlv2_1,dlv2_2,alpha,alpha_bc,lambda_v_a,comms_fft,vsolver_fft)
 #else
+#ifndef _NON_NEWTONIAN
   call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,is_centered,lo,hiv,periods, &
                       dxc,dxf,dyf,dyc,dzc,dzf,alpha,alpha_bc,vsolver)
+#endif
 #endif
   dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
                 dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
@@ -844,8 +851,10 @@ end if
                           lo_a(idir),hiw_a(idir),lo_a(il:iu:iskip),hiw_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlw1_1,dlw1_2,dlw2_1,dlw2_2,alpha,alpha_bc,lambda_w_a,comms_fft,wsolver_fft)
 #else
+#ifndef _NON_NEWTONIAN
   call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,is_centered,lo,hiw,periods, &
                       dxc,dxf,dyc,dyf,dzf,dzc,alpha,alpha_bc,wsolver)
+#endif
 #endif
 #endif
   !
@@ -877,9 +886,11 @@ end if
 #ifdef _IMPDIFF
       alphai = alpha**(-1)
       !
+#ifndef _NON_NEWTONIAN
       !$OMP WORKSHARE
       up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
+#endif
       call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,up)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiu_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiu_a(il:iu:iskip), &
@@ -900,16 +911,31 @@ end if
       !$OMP END WORKSHARE
       call finalize_n_solvers(hiu_a(idir)-lo_a(idir)+1,usolver_fft)
 #else
+#ifdef _NON_NEWTONIAN
+      dl = reshape([dxf_g(lo_g(1)-0),dxf_g(hi_g(1)), &
+                    dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
+                    dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
+      call init_matrix_3d_vc(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,[.false.,.true.,.true.],lo,hiu,periods, &
+                             dxf,dxc,dyc,dyf,dzc,dzf,usolver,1,mu,alpha/visc,1._rp)
+      call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,usolver)
+      call setup_solver(usolver)
+      call solve_helmholtz(usolver,lo,hiu,up,uo)
+      call finalize_solver(usolver)
+      call finalize_matrix(usolver)
+#else
       call add_constant_to_diagonal(lo,hiu,alphai-alphaoi,usolver%mat) ! correct diagonal term
       call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,usolver)
       call setup_solver(usolver)
       call solve_helmholtz(usolver,lo,hiu,up,uo)
       call finalize_solver(usolver)
 #endif
+#endif
       !
+#ifndef _NON_NEWTONIAN
       !$OMP WORKSHARE
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
+#endif
       call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,vp)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiv_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiv_a(il:iu:iskip), &
@@ -930,16 +956,31 @@ end if
       !$OMP END WORKSHARE
       call finalize_n_solvers(hiv_a(idir)-lo_a(idir)+1,vsolver_fft)
 #else
+#ifdef _NON_NEWTONIAN
+      dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
+                    dyf_g(lo_g(2)-0),dyf_g(hi_g(2)), &
+                    dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
+      call init_matrix_3d_vc(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,[.true.,.false.,.true.],lo,hiv,periods, &
+                          dxc,dxf,dyf,dyc,dzc,dzf,vsolver,2,mu,alpha/visc,1._rp)
+      call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,vsolver)
+      call setup_solver(vsolver)
+      call solve_helmholtz(vsolver,lo,hiv,vp,vo)
+      call finalize_solver(vsolver)
+      call finalize_matrix(vsolver)
+#else
       call add_constant_to_diagonal(lo,hiv,alphai-alphaoi,vsolver%mat) ! correct diagonal term
       call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,vsolver)
       call setup_solver(vsolver)
       call solve_helmholtz(vsolver,lo,hiv,vp,vo)
       call finalize_solver(vsolver)
 #endif
+#endif
       !
+#ifndef _NON_NEWTONIAN
       !$OMP WORKSHARE
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
+#endif
       call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,wp)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiw_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiw_a(il:iu:iskip), &
@@ -960,11 +1001,24 @@ end if
       !$OMP END WORKSHARE
       call finalize_n_solvers(hiw_a(idir)-lo_a(idir)+1,wsolver_fft)
 #else
+#ifdef _NON_NEWTONIAN
+      dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
+                    dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
+                    dzf_g(lo_g(3)-0),dzf_g(hi_g(3))],shape(dl))
+      call init_matrix_3d_vc(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,[.true.,.true.,.false.],lo,hiw,periods, &
+                             dxc,dxf,dyc,dyf,dzf,dzc,wsolver,3,mu,alpha/visc,1._rp)
+      call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,wsolver)
+      call setup_solver(wsolver)
+      call solve_helmholtz(wsolver,lo,hiw,wp,wo)
+      call finalize_solver(wsolver)
+      call finalize_matrix(wsolver)
+#else
       call add_constant_to_diagonal(lo,hiw,alphai-alphaoi,wsolver%mat) ! correct diagonal term
       call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,wsolver)
       call setup_solver(wsolver)
       call solve_helmholtz(wsolver,lo,hiw,wp,wo)
       call finalize_solver(wsolver)
+#endif
 #endif
       !
       alphaoi = alphai

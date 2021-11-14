@@ -59,14 +59,15 @@ module mod_rk
     dvdtrkd(:,:,:) = 0._rp
     dwdtrkd(:,:,:) = 0._rp
     !$OMP END WORKSHARE
+#ifndef _NON_NEWTONIAN
     call momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudtrkd)
     call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrkd)
     call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrkd)
-#ifdef _NON_NEWTONIAN
+#else
     if(present(mu)) then
-      call momx_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu-visc,u,v,w,dudtrk)
-      call momy_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu-visc,u,v,w,dvdtrk)
-      call momz_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu-visc,u,v,w,dwdtrk)
+      call momx_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu,u,v,w,dudtrkd)
+      call momy_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu,u,v,w,dvdtrkd)
+      call momz_d_nn(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,mu,u,v,w,dwdtrkd)
     else
       error stop "ERROR: variable viscosity field not provided; aborting..."
     endif
