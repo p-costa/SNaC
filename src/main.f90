@@ -27,10 +27,16 @@ program snac
   use mod_common_mpi     , only: myid,myid_block,comm_block
   use mod_correc         , only: correc
   use mod_initflow       , only: initflow,init_inflow
+#ifdef _NON_NEWTONIAN
+  use mod_initflow       , only: init_inflow_nn
+#endif
   use mod_initgrid       , only: initgrid,distribute_grid,bound_grid,save_grid
   use mod_initmpi        , only: initmpi
   use mod_fillps         , only: fillps
   use mod_load           , only: load
+#ifdef _NON_NEWTONIAN
+  use mod_non_newtonian, only: strain_rate_norm,compute_viscosity
+#endif
   use mod_output         , only: out0d,out1d,out2d,write_visu_3d
   use mod_param          , only: read_input, &
                                  datadir,    &
@@ -50,6 +56,9 @@ program snac
                                  is_periodic,l_periodic,                   &
                                  lmax_max,lmin_min,lo_min,hi_max,          &
                                  hypre_tol,hypre_maxiter,hypre_solver_i
+#ifdef _NON_NEWTONIAN
+  use mod_param          , only: kappa,rn,tau0,eps,dpdl_nn
+#endif
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
   use mod_sanity         , only: test_sanity
@@ -75,6 +84,9 @@ program snac
   integer , dimension(    3) :: ng,lo_g,hi_g,lo_1,hi_1
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
   real(rp), allocatable, dimension(:,:,:) :: velin_x,velin_y,velin_z
+#ifdef _NON_NEWTONIAN
+  real(rp), allocatable, dimension(:,:,:) :: mu
+#endif
 #ifdef _IMPDIFF
   real(rp), allocatable, dimension(:,:,:) :: uo,vo,wo
 #endif
@@ -226,6 +238,9 @@ program snac
   allocate(uo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            vo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            wo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
+#endif
+#ifdef _NON_NEWTONIAN
+  allocate(mu(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
 #endif
   allocate(dudtrko(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)), &
            dvdtrko(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)), &
@@ -510,8 +525,15 @@ end if
   if(.not.restart) then
     istep = 0
     time = 0._rp
+#ifndef _NON_NEWTONIAN
     call initflow(inivel,.false.,lo,hi,lo_g,hi_g,lmax-lmin,uref,lref,visc,bforce(1), &
                   xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
+#else
+    call initflow(inivel,.false.,lo,hi,lo_g,hi_g,lmax-lmin,uref,lref,kappa,bforce(1), &
+                  xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p,lmin,lmax,rn,dpdl_nn(1),tau0)
+    if(bforce(1).ne.0._rp.and.bforce(1).ne.dpdl_nn(1)) &
+      print*, 'WARNING: prescribed pressure gradient inconsistent with initial condition!'
+#endif
     if(myid == 0) write(stdout,*) '*** Initial condition succesfully set ***'
   else
     call load('r',trim(datadir)//'fld_b_'//cblock//'.bin',comm_block,ng,[1,1,1],lo_1,hi_1,u,v,w,p,po,time,istep)
@@ -536,6 +558,7 @@ end if
     bcw%z(:,:,ib) = bcvel(ib,3,3)
   end do
 #endif
+#ifndef _NON_NEWTONIAN
   do idir=1,3
     do ib=0,1
       is_bound_inflow(ib,idir) = is_bound(ib,idir).and.inflow_type(ib,idir)>0.and.cbcvel(ib,idir,idir)=='D'
@@ -566,6 +589,38 @@ end if
       end if
     end do
   end do
+#else
+  do idir=1,3
+    do ib=0,1
+      is_bound_inflow(ib,idir) = is_bound(ib,idir).and.inflow_type(ib,idir)>0.and.cbcvel(ib,idir,idir)=='D'
+      if(is_bound_inflow(ib,idir)) then
+        select case(idir)
+        case(1)
+          il = 2;iu = 3;iskip = 1
+          call init_inflow_nn(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                              yc,zc,rn,dpdl_nn(idir),kappa,tau0,velin_x(:,:,ib))
+#ifdef _IMPDIFF
+  bcu%x(:,:,ib) = velin_x(:,:,ib)
+#endif
+        case(2)
+          il = 1;iu = 3;iskip = 2
+          call init_inflow_nn(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                              xc,zc,rn,dpdl_nn(idir),kappa,tau0,velin_y(:,:,ib))
+#ifdef _IMPDIFF
+  bcv%y(:,:,ib) = velin_y(:,:,ib)
+#endif
+        case(3)
+          il = 1;iu = 2;iskip = 1
+          call init_inflow_nn(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                              yc,zc,rn,dpdl_nn(idir),kappa,tau0,velin_z(:,:,ib))
+#ifdef _IMPDIFF
+  bcw%z(:,:,ib) = velin_z(:,:,ib)
+#endif
+        end select
+      endif
+    enddo
+  enddo
+#endif
   call inflow(is_bound_inflow,lo,hi,velin_x,velin_y,velin_z,u,v,w)
   up(:,:,:)      = 0._rp
   vp(:,:,:)      = 0._rp

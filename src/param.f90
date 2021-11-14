@@ -30,6 +30,10 @@ logical                :: restart,is_overwrite_save
 integer                :: icheck,iout0d,iout1d,iout2d,iout3d,isave
 real(rp), dimension(3) :: bforce
 integer                :: nthreadsmax
+#ifdef _NON_NEWTONIAN
+real(rp) :: kappa,rn,tau0,eps
+real(rp), dimension(3) :: dpdl_nn
+#endif
 !
 ! parameters specific to each block
 !
@@ -81,6 +85,22 @@ contains
       end if
     close(iunit)
     visc = uref*lref/rey
+    !
+#ifdef _NON_NEWTONIAN
+    open(newunit=iunit,file='non_newtonian.in',status='old',action='read',iostat=ierr)
+      if( ierr == 0 ) then
+        read(iunit,*) rn,tau0,eps
+        read(iunit,*) dpdl_nn(1),dpdl_nn(2),dpdl_nn(3)
+      else
+        if(myid == 0) write(stderr,*) '*** Error reading the input file *** '
+        if(myid == 0) write(stderr,*) 'Aborting...'
+        call MPI_FINALIZE()
+        error stop
+      endif
+    close(iunit)
+    kappa = uref*lref/rey/(uref/lref)**(rn-1._rp)
+    visc = kappa
+#endif
     !
     exists = .true.
     nblocks = 1

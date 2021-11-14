@@ -6,9 +6,13 @@ module mod_initflow
   implicit none
   private
   public initflow,init_inflow
+#ifdef _NON_NEWTONIAN
+  public init_inflow_nn
+#endif
   contains
   subroutine initflow(inivel,is_wallturb,lo,hi,lo_g,hi_g,l,uref,lref,visc,bforce, &
-                      xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
+                      xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p, &
+                      lmin,lmax,rn,dpdl,tauy)
     !
     ! computes initial conditions for the velocity field
     !
@@ -22,6 +26,7 @@ module mod_initflow
     real(rp), intent(in), dimension(lo(1)-1:) :: xc,xf,dxc,dxf
     real(rp), intent(in), dimension(lo(2)-1:) :: yc,yf,dyc,dyf
     real(rp), intent(in), dimension(lo(3)-1:) :: zc,zf,dzc,dzf
+    real(rp), intent(in), optional :: lmin(3),lmax(3),rn,dpdl,tauy
     real(rp), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:), intent(out) :: u,v,w,p
     real(rp), allocatable, dimension(:) :: u1d
     integer  :: i,j,k
@@ -39,6 +44,11 @@ module mod_initflow
     case('poi')
       call poiseuille(lo(3),hi(3),zc,l(3),uref,u1d)
       is_mean=.true.
+#ifdef _NON_NEWTONIAN
+      do k=lo(3),hi(3)
+        u1d(k) = inflow_herschel_bulkley(zc(k),lmin(3),lmax(3),rn,dpdl,visc,tauy)
+      enddo
+#endif
     case('zer')
       u1d(:) = 0._rp
     case('log')
@@ -48,6 +58,11 @@ module mod_initflow
     case('hcp')
       call poiseuille(lo(3),hi(3),zc,2.*l(3),uref,u1d)
       is_mean = .true.
+#ifdef _NON_NEWTONIAN
+      do k=lo(3),hi(3)
+        u1d(k) = inflow_herschel_bulkley(zc(k),lmin(3),lmin(3)+2._rp*(lmax(3)-lmin(3)),rn,dpdl,visc,tauy)
+      enddo
+#endif
     case('hcl')
       call log_profile(lo(3),hi(3),zc,2.*l(3),uref,lref,visc,u1d)
       is_noise = .true.
@@ -298,6 +313,56 @@ module mod_initflow
       end do
     end do
   end subroutine init_inflow
+  !
+#ifdef _NON_NEWTONIAN
+  function inflow_herschel_bulkley(r,lmin,lmax,rn,dpdl,kappa,tauy) result(vel)
+    real(rp), intent(in) :: r,lmin,lmax,rn,dpdl,kappa,tauy
+    real(rp) :: vel,rr,h,aux,ryield
+    rr = 2._rp*(r-(lmin+lmax)/2._rp)/(lmax-lmin) ! between -1 and +1
+    h  = (lmax-lmin)/2._rp
+    aux = 1._rp+1._rp/rn
+    vel = 1._rp/aux*(h**rn*dpdl*h/kappa)**(aux-1._rp)
+    ryield = tauy/(dpdl*h)
+    if(abs(rr) > ryield) then
+      vel = vel*((1._rp  -ryield)**aux - (abs(rr)-ryield)**aux)
+    else
+      vel = vel*((1._rp  -ryield)**aux)
+    endif
+  end function inflow_herschel_bulkley
+  !
+  subroutine init_inflow_nn(periods,lo,hi,lmin,lmax,x1c,x2c,rn,dpdl,kappa,tauy,vel)
+    !
+    ! below an inflow is calculated for a 2d plane
+    ! later this subroutine can be generalized with other shapes of
+    ! inflow velocity; by construction, the profile will not vary along
+    ! a direction that does not have Dirichlet BCs; note that
+    ! since the inflow is evaluated at the center of a face, 
+    ! there is no danger of experiencing a singularity '0._rp**0'.
+    !
+    implicit none
+    integer , intent(in ), dimension(2       ) :: periods
+    integer , intent(in ), dimension(2       ) :: lo,hi
+    real(rp), intent(in ), dimension(2       ) :: lmin,lmax
+    real(rp), intent(in ), dimension(lo(1)-1:) :: x1c
+    real(rp), intent(in ), dimension(lo(2)-1:) :: x2c
+    real(rp), intent(in ) :: rn,dpdl,kappa,tauy
+    real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:) :: vel
+    integer, dimension(2) :: q
+    integer :: i1,i2
+    ! real(rp), external :: poiseuille_square
+    ! procedure (), pointer :: inflow_function => null()
+    ! if(inflow_type == POISEUILLE) inflow_function => poiseuille_square
+    !
+    q(:) = 1
+    where(periods(:) /= 0) q(:) = 0
+    do i2 = lo(2)-1,hi(2)+1
+      do i1 = lo(1)-1,hi(1)+1
+        vel(i1,i2) = inflow_herschel_bulkley(x1c(i1),lmin(1),lmax(1),rn,dpdl,kappa,tauy)**q(1) * &
+                     inflow_herschel_bulkley(x2c(i2),lmin(2),lmax(2),rn,dpdl,kappa,tauy)**q(2)
+      enddo
+    enddo
+  end subroutine init_inflow_nn
+#endif
   !
   subroutine log_profile(lo,hi,zc,l,uref,lref,visc,p)
     implicit none
