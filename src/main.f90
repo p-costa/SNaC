@@ -1169,9 +1169,11 @@ end if
   call fftend(arrplan_v)
   call fftend(arrplan_w)
 #else
+#ifndef _NON_NEWTONIAN
   call finalize_matrix(usolver)
   call finalize_matrix(vsolver)
   call finalize_matrix(wsolver)
+#endif
 #endif
 #endif
   if(myid == 0.and.(.not.kill)) write(stdout,*) '*** Fim ***'

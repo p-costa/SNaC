@@ -48,7 +48,7 @@ module mod_initflow
       is_mean=.false.
       do k=lo(3),hi(3)
         u1d(k) = inflow_herschel_bulkley(zc(k),lmin(3),lmax(3),rn,dpdl,visc,tauy)
-      end do
+      enddo
 #endif
     case('zer')
       u1d(:) = 0._rp
@@ -63,7 +63,7 @@ module mod_initflow
       is_mean=.false.
       do k=lo(3),hi(3)
         u1d(k) = inflow_herschel_bulkley(zc(k),lmin(3),lmin(3)+2._rp*(lmax(3)-lmin(3)),rn,dpdl,visc,tauy)
-      end do
+      enddo
 #endif
     case('hcl')
       call log_profile(lo(3),hi(3),zc,2.*l(3),uref,lref,visc,u1d)
@@ -82,9 +82,9 @@ module mod_initflow
             v(i,j,k) = -cos(xcl)*sin(yfl)*cos(zcl)
             w(i,j,k) = 0._rp
             p(i,j,k) = 0._rp!(cos(2._rp*xc)+cos(2._rp*yc))*(cos(2._rp*zc)+2._rp)/16._rp
-          end do
-        end do
-      end do
+          enddo
+        enddo
+      enddo
     case('pdc')
       if(is_wallturb) then ! turbulent flow
         retau  = sqrt(bforce*lref)*uref/visc
@@ -92,7 +92,7 @@ module mod_initflow
         uref   = (reb/2._rp)/retau
       else                 ! laminar flow
         uref = (bforce*lref**2/(3._rp*visc))
-      end if
+      endif
       call poiseuille(lo(3),hi(3),zc,l(3),uref,u1d)
       is_mean=.true.
     case default
@@ -111,18 +111,18 @@ module mod_initflow
             v(i,j,k) = 0._rp
             w(i,j,k) = 0._rp
             p(i,j,k) = 0._rp
-          end do
-        end do
-      end do
-    end if
+          enddo
+        enddo
+      enddo
+    endif
     if(is_noise) then
       call add_noise(lo,hi,lo_g,hi_g,123,.5_rp,u)
       call add_noise(lo,hi,lo_g,hi_g,456,.5_rp,v)
       call add_noise(lo,hi,lo_g,hi_g,789,.5_rp,w)
-    end if
+    endif
     if(is_mean) then
       call set_mean(lo,hi,l,dxc,dyf,dzf,uref,u)
-    end if
+    endif
     if(is_wallturb) is_pair = .true.
     if(is_pair) then
       !
@@ -147,9 +147,9 @@ module mod_initflow
             v(i,j,k) = -1._rp*gxy(yfl,xcl)*dfz(zcl)*uref
             w(i,j,k) =  1._rp*fz(zfl)*dgxy(ycl,xcl)*uref
             p(i,j,k) =  0._rp
-          end do
-        end do
-      end do
+          enddo
+        enddo
+      enddo
       !
       ! alternatively, using a Taylor-Green vortex
       ! for the cross-stream velocity components
@@ -167,10 +167,10 @@ module mod_initflow
       !      v(i,j,k) =  sin(xcl)*cos(yfl)*cos(zcl)
       !      w(i,j,k) = -cos(xcl)*sin(ycl)*cos(zfl)
       !      p(i,j,k) = 0._rp!(cos(2._rp*xcl)+cos(2._rp*ycl))*(cos(2._rp*zcl)+2._rp)/16._rp
-      !    end do
-      !  end do
-      !end do
-    end if
+      !    enddo
+      !  enddo
+      !enddo
+    endif
     deallocate(u1d)
   end subroutine initflow
   !
@@ -194,10 +194,10 @@ module mod_initflow
              j>=lo(2).and.j<=hi(2) .and. &
              k>=lo(3).and.k<=hi(3) ) then
              p(i,j,k) = p(i,j,k) + 2._rp*(rn-.5_rp)*norm
-          end if
-        end do
-      end do
-    end do
+          endif
+        enddo
+      enddo
+    enddo
   end subroutine add_noise
   !
   subroutine set_mean(lo,hi,l,dx,dy,dz,mean,p)
@@ -221,16 +221,16 @@ module mod_initflow
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           meanold = meanold + p(i,j,k)*dx(i)*dy(j)*dz(k)/(l(1)*l(2)*l(3))
-        end do
-      end do
-    end do
+        enddo
+      enddo
+    enddo
     !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,meanold,1,MPI_REAL_RP,MPI_SUM,comm_block)
     if(meanold /= 0._rp) then
       !$OMP WORKSHARE
       p(:,:,:) = p(:,:,:)/meanold*mean
       !$OMP END WORKSHARE
-    end if
+    endif
   end subroutine set_mean
   !
   subroutine couette(lo,hi,zc,l,norm,p)
@@ -247,7 +247,7 @@ module mod_initflow
     do k=lo,hi
       z    = zc(k)/l
       p(k) = .5_rp*(1._rp-2._rp*z)*norm
-    end do
+    enddo
   end subroutine couette
   !
   subroutine poiseuille(lo,hi,zc,l,norm,p)
@@ -264,7 +264,7 @@ module mod_initflow
     do k=lo,hi
       z    = zc(k)/l
       p(k) = 6._rp*z*(1._rp-z)*norm
-    end do
+    enddo
   end subroutine poiseuille
   !
   function poiseuille_square(r,lmin,lmax) result(vel)
@@ -312,8 +312,8 @@ module mod_initflow
       do i1 = lo(1)-1,hi(1)+1
         vel(i1,i2) = uref*poiseuille_square(x1c(i1),lmin(1),lmax(1))**q(1) * &
                           poiseuille_square(x2c(i2),lmin(2),lmax(2))**q(2)
-      end do
-    end do
+      enddo
+    enddo
   end subroutine init_inflow
   !
 #ifdef _NON_NEWTONIAN
@@ -329,7 +329,7 @@ module mod_initflow
       vel = vel*((1._rp  -ryield)**aux - (abs(rr)-ryield)**aux)
     else
       vel = vel*((1._rp  -ryield)**aux)
-    end if
+    endif
   end function inflow_herschel_bulkley
   !
   subroutine init_inflow_nn(periods,lo,hi,lmin,lmax,x1c,x2c,rn,dpdl,kappa,tauy,vel)
@@ -359,10 +359,13 @@ module mod_initflow
     where(periods(:) /= 0) q(:) = 0
     do i2 = lo(2)-1,hi(2)+1
       do i1 = lo(1)-1,hi(1)+1
-        vel(i1,i2) = inflow_herschel_bulkley(x1c(i1),lmin(1),lmax(1),rn,dpdl,kappa,tauy)**q(1) * &
-                     inflow_herschel_bulkley(x2c(i2),lmin(2),lmax(2),rn,dpdl,kappa,tauy)**q(2)
-      end do
-    end do
+        !vel(i1,i2) = inflow_herschel_bulkley(x1c(i1),lmin(1),lmax(1),rn,dpdl,kappa,tauy)**q(1) * &
+        !             inflow_herschel_bulkley(x2c(i2),lmin(2),lmax(2),rn,dpdl,kappa,tauy)**q(2)
+        ! IN FUTURE TAKE AN INFLOW TYPE AS ARGUMENT
+        vel(i1,i2) = inflow_herschel_bulkley(x1c(i1),lmin(1),lmin(1)+2._rp*(lmax(1)-lmin(1)),rn,dpdl,kappa,tauy)**q(1) * &
+                     inflow_herschel_bulkley(x2c(i2),lmin(2),lmin(2)+2._rp*(lmax(2)-lmin(2)),rn,dpdl,kappa,tauy)**q(2)
+      enddo
+    enddo
   end subroutine init_inflow_nn
 #endif
   !
@@ -382,7 +385,7 @@ module mod_initflow
       z    = zc(k)*2._rp*retau
       p(k) = 2.5_rp*log(z) + 5.5_rp
       if (z<=11.6_rp) p(k)=z
-    end do
+    enddo
   end subroutine log_profile
   !
   ! functions to initialize the streamwise vortex pair
