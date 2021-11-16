@@ -1,0 +1,18 @@
+1      1      1     ! dims(1:3)
+1      129    1     ! lo(1:3)
+256    160    128   ! hi(1:3)
+-10    -0.5   -0.05 ! lmin(1:3)
+-0.5    0.0   0.0   ! lmax(1:3)
+5      0      0     ! gt(1:3)
+1.4522506188253894    0.0    0.    ! gr(1:3)
+N  D   F  N   D  N  ! cbcvel(0.03125,1:3,1) [u BC type]
+N  D   F  D   D  N  ! cbcvel(0.03125,1:3,2) [v BC type]
+N  D   F  N   D  D  ! cbcvel(0.03125,1:3,3) [w BC type]
+D  N   F  N   N  N  ! cbcpre(0.03125,1:3  ) [p BC type]
+0. 0.  2. 0.  0. 0. !  bcvel(0.03125,1:3,1) [u BC value]
+0. 0.  2. 0.  0. 0. !  bcvel(0.03125,1:3,2) [v BC value]
+0. 0.  2. 0.  0. 0. !  bcvel(0.03125,1:3,3) [w BC value]
+0. 0.  2. 0.  0. 0. !  bcpre(0.03125,1:3  ) [p BC value]
+0  0   0  0   0  0  !  is_inflow(0.03125,1:3)
+zer                 ! inivel
+1                   ! id
