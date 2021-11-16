@@ -840,7 +840,7 @@ module mod_solver
                           dl1_1(lo_sp(1,q)-1:hi_sp(1,q)+1),dl1_2(lo_sp(1,q)-1:hi_sp(1,q)+1), &
                           dl2_1(lo_sp(2,q)-1:hi_sp(2,q)+1),dl2_2(lo_sp(2,q)-1:hi_sp(2,q)+1), &
                           dl3_1(lo_sp(3,q)-1:hi_sp(3,q)+1),dl3_2(lo_sp(3,q)-1:hi_sp(3,q)+1), &
-                          alpha,alpha_bc, & 
+                          alpha,alpha_bc, &
                           asolver_aux,lambda(lo_sp(idir,q)-lo(idir)+1:hi_sp(idir,q)-lo(idir)+1))
       asolver(q) = asolver_aux
     end do
