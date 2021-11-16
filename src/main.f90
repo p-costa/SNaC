@@ -546,21 +546,21 @@ end if
           call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                            yc,zc,bcvel(ib,idir,idir),velin_x(:,:,ib))
 #ifdef _IMPDIFF
-  bcu%x(:,:,ib) = velin_x(:,:,ib)
+  bcu%x(:,:,ib) = velin_x(lo(2):hi(2),lo(3):hi(3),ib)
 #endif
         case(2)
           il = 1;iu = 3;iskip = 2
           call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                            xc,zc,bcvel(ib,idir,idir),velin_y(:,:,ib))
 #ifdef _IMPDIFF
-  bcv%y(:,:,ib) = velin_y(:,:,ib)
+  bcv%y(:,:,ib) = velin_y(lo(1):hi(1),lo(3):hi(3),ib)
 #endif
         case(3)
           il = 1;iu = 2;iskip = 1
           call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                            xc,yc,bcvel(ib,idir,idir),velin_z(:,:,ib))
 #ifdef _IMPDIFF
-  bcw%z(:,:,ib) = velin_z(:,:,ib)
+  bcw%z(:,:,ib) = velin_z(lo(1):hi(1),lo(2):hi(2),ib)
 #endif
         end select
       end if
