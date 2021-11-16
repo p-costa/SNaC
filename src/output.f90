@@ -7,7 +7,7 @@ module mod_output
   private
   public out0d,out1d,out2d,out3d,write_log_output,write_visu_3d
   contains
-  subroutine out0d(fname,n,var)
+  subroutine out0d(fname,n,irank,var)
     !
     ! appends the first n entries of an array
     ! var to a file
@@ -17,14 +17,14 @@ module mod_output
     !
     implicit none
     character(len=*), intent(in) :: fname
-    integer , intent(in) :: n
+    integer , intent(in) :: n,irank
     real(rp), intent(in), dimension(:) :: var
     integer :: iunit
     character(len=30) :: cfmt
     integer :: i
     !
     write(cfmt,'(A,I3,A)') '(',n,'E15.7)'
-    if (myid == 0) then
+    if (irank == 0) then
       open(newunit=iunit,file=fname,position='append')
       write(iunit,trim(cfmt)) (var(i),i=1,n)
       close(iunit)
