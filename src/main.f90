@@ -572,21 +572,21 @@ end if
           call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                            yc,zc,bcvel(ib,idir,idir),velin_x(:,:,ib))
 #ifdef _IMPDIFF
-  bcu%x(:,:,ib) = velin_x(:,:,ib)
+  bcu%x(:,:,ib) = velin_x(lo(2):hi(2),lo(3):hi(3),ib)
 #endif
         case(2)
           il = 1;iu = 3;iskip = 2
           call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                            xc,zc,bcvel(ib,idir,idir),velin_y(:,:,ib))
 #ifdef _IMPDIFF
-  bcv%y(:,:,ib) = velin_y(:,:,ib)
+  bcv%y(:,:,ib) = velin_y(lo(1):hi(1),lo(3):hi(3),ib)
 #endif
         case(3)
           il = 1;iu = 2;iskip = 1
           call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                            xc,yc,bcvel(ib,idir,idir),velin_z(:,:,ib))
 #ifdef _IMPDIFF
-  bcw%z(:,:,ib) = velin_z(:,:,ib)
+  bcw%z(:,:,ib) = velin_z(lo(1):hi(1),lo(2):hi(2),ib)
 #endif
         end select
       end if
@@ -603,21 +603,21 @@ end if
           call init_inflow_nn(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                               yc,zc,rn,dpdl_nn(idir),kappa,tau0,velin_x(:,:,ib))
 #ifdef _IMPDIFF
-  bcu%x(:,:,ib) = velin_x(:,:,ib)
+  bcu%x(:,:,ib) = velin_x(lo(2):hi(2),lo(3):hi(3),ib)
 #endif
         case(2)
           il = 1;iu = 3;iskip = 2
           call init_inflow_nn(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                               xc,zc,rn,dpdl_nn(idir),kappa,tau0,velin_y(:,:,ib))
 #ifdef _IMPDIFF
-  bcv%y(:,:,ib) = velin_y(:,:,ib)
+  bcv%y(:,:,ib) = velin_y(lo(1):hi(1),lo(3):hi(3),ib)
 #endif
         case(3)
           il = 1;iu = 2;iskip = 1
           call init_inflow_nn(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
                               yc,zc,rn,dpdl_nn(idir),kappa,tau0,velin_z(:,:,ib))
 #ifdef _IMPDIFF
-  bcw%z(:,:,ib) = velin_z(:,:,ib)
+  bcw%z(:,:,ib) = velin_z(lo(1):hi(1),lo(2):hi(2),ib)
 #endif
         end select
       endif
@@ -890,8 +890,8 @@ end if
       !$OMP WORKSHARE
       up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
-#endif
       call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,up)
+#endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiu_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiu_a(il:iu:iskip), &
                                        alphai-alphaoi,usolver_fft(:)%mat) ! correct diagonal term
@@ -916,7 +916,8 @@ end if
                     dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
                     dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
       call init_matrix_3d_vc(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,[.false.,.true.,.true.],lo,hiu,periods, &
-                             dxf,dxc,dyc,dyf,dzc,dzf,usolver,1,mu,alpha/visc,1._rp)
+                             dxf,dxc,dyc,dyf,dzc,dzf,usolver,1,mu,alpha/visc,1._rp,bcu%x,bcu%y,bcu%z,rhsu%x,rhsu%y,rhsu%z)
+      call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,up)
       call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,usolver)
       call setup_solver(usolver)
       call solve_helmholtz(usolver,lo,hiu,up,uo)
@@ -935,8 +936,8 @@ end if
       !$OMP WORKSHARE
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
-#endif
       call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,vp)
+#endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiv_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiv_a(il:iu:iskip), &
                                        alphai-alphaoi,vsolver_fft(:)%mat) ! correct diagonal term
@@ -961,7 +962,8 @@ end if
                     dyf_g(lo_g(2)-0),dyf_g(hi_g(2)), &
                     dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
       call init_matrix_3d_vc(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,[.true.,.false.,.true.],lo,hiv,periods, &
-                          dxc,dxf,dyf,dyc,dzc,dzf,vsolver,2,mu,alpha/visc,1._rp)
+                             dxc,dxf,dyf,dyc,dzc,dzf,vsolver,2,mu,alpha/visc,1._rp,bcv%x,bcv%y,bcv%z,rhsv%x,rhsv%y,rhsv%z)
+      call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,vp)
       call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,vsolver)
       call setup_solver(vsolver)
       call solve_helmholtz(vsolver,lo,hiv,vp,vo)
@@ -980,8 +982,8 @@ end if
       !$OMP WORKSHARE
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END WORKSHARE
-#endif
       call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,wp)
+#endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiw_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiw_a(il:iu:iskip), &
                                        alphai-alphaoi,wsolver_fft(:)%mat) ! correct diagonal term
@@ -1006,7 +1008,8 @@ end if
                     dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
                     dzf_g(lo_g(3)-0),dzf_g(hi_g(3))],shape(dl))
       call init_matrix_3d_vc(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,[.true.,.true.,.false.],lo,hiw,periods, &
-                             dxc,dxf,dyc,dyf,dzf,dzc,wsolver,3,mu,alpha/visc,1._rp)
+                             dxc,dxf,dyc,dyf,dzf,dzc,wsolver,3,mu,alpha/visc,1._rp,bcw%x,bcw%y,bcw%z,rhsw%x,rhsw%y,rhsw%z)
+      call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,wp)
       call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,wsolver)
       call setup_solver(wsolver)
       call solve_helmholtz(wsolver,lo,hiw,wp,wo)

@@ -1143,7 +1143,8 @@ module mod_solver
 #endif
 #ifdef _NON_NEWTONIAN
   subroutine init_matrix_3d_vc(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                               dx1,dx2,dy1,dy2,dz1,dz2,asolver,idir,alpha,alpha_const,diag)
+                               dx1,dx2,dy1,dy2,dz1,dz2,asolver,idir,alpha,alpha_const,diag, &
+                               bcx,bcy,bcz,rhsx,rhsy,rhsz)
     !
     ! description
     !
@@ -1163,6 +1164,12 @@ module mod_solver
     integer           , intent(in ) :: idir
     real(rp)          , intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: alpha
     real(rp)          , intent(in )                                        :: alpha_const,diag
+    real(rp)          , intent(in ), dimension(lo(2):,lo(3):,0:), optional :: bcx
+    real(rp)          , intent(in ), dimension(lo(1):,lo(3):,0:), optional :: bcy
+    real(rp)          , intent(in ), dimension(lo(1):,lo(2):,0:), optional :: bcz
+    real(rp)          , intent(out), dimension(lo(2):,lo(3):,0:), optional :: rhsx
+    real(rp)          , intent(out), dimension(lo(1):,lo(3):,0:), optional :: rhsy
+    real(rp)          , intent(out), dimension(lo(1):,lo(2):,0:), optional :: rhsz
     integer, dimension(3         ) :: qqq
     integer, dimension(3,nstencil) :: offsets
     real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
@@ -1172,6 +1179,7 @@ module mod_solver
     real(rp) :: cc,cxm,cxp,cym,cyp,czm,czp
     real(rp) :: alphaxm,alphaxp,alphaym,alphayp,alphazm,alphazp
     integer            :: comm_hypre
+    real(rp) :: r_rhs
     !
     comm_hypre = MPI_COMM_WORLD%MPI_VAL
     qqq(:) = 0
@@ -1229,6 +1237,9 @@ module mod_solver
     call HYPRE_StructVectorInitialize(sol,ierr)
     call HYPRE_StructVectorCreate(comm_hypre,grid,rhs,ierr)
     call HYPRE_StructVectorInitialize(rhs,ierr)
+    if( present(bcx) .and. present(rhsx) ) rhsx(:,:,:) = 0._rp
+    if( present(bcy) .and. present(rhsy) ) rhsy(:,:,:) = 0._rp
+    if( present(bcz) .and. present(rhsz) ) rhsz(:,:,:) = 0._rp
     q = 0
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -1274,30 +1285,48 @@ module mod_solver
           cc  = -(cxm+cxp+cym+cyp+czm+czp) + diag
           if(periods(1) == 0) then
             if(is_bound(0,1).and.i == lo(1)) then
+              r_rhs = factor(0,1)*cxm
+              if(present(bcx).and.bc(0,1)/=0._rp) r_rhs = r_rhs*bcx(j,k,0)/bc(0,1)
+              rhsx(j,k,0) = rhsx(j,k,0) + r_rhs
               cc = cc + sgn(0,1)*cxm
               cxm = 0._rp
             endif
             if(is_bound(1,1).and.i == hi(1)) then
+              r_rhs = factor(1,1)*cxp
+              if(present(bcx).and.bc(1,1)/=0._rp) r_rhs = r_rhs*bcx(j,k,1)/bc(1,1)
+              rhsx(j,k,1) = rhsx(j,k,1) + r_rhs
               cc = cc + sgn(1,1)*cxp
               cxp = 0._rp
             endif
           endif
           if(periods(2) == 0) then
             if(is_bound(0,2).and.j == lo(2)) then
+              r_rhs = factor(0,2)*cym
+              if(present(bcy).and.bc(0,2)/=0._rp) r_rhs = r_rhs*bcy(i,k,0)/bc(0,2)
+              rhsy(i,k,0) = rhsy(i,k,0) + r_rhs
               cc = cc + sgn(0,2)*cym
               cym = 0._rp
             endif
             if(is_bound(1,2).and.j == hi(2)) then
+              r_rhs = factor(1,2)*cyp
+              if(present(bcy).and.bc(1,2)/=0._rp) r_rhs = r_rhs*bcy(i,k,1)/bc(1,2)
+              rhsy(i,k,1) = rhsy(i,k,1) + r_rhs
               cc = cc + sgn(1,2)*cyp
               cyp = 0._rp
             endif
           endif
           if(periods(3) == 0) then
             if(is_bound(0,3).and.k == lo(3)) then
+              r_rhs = factor(0,3)*czm
+              if(present(bcz).and.bc(0,3)/=0._rp) r_rhs = r_rhs*bcz(i,j,0)/bc(0,3)
+              rhsz(i,j,0) = rhsz(i,j,0) + r_rhs
               cc = cc + sgn(0,3)*czm
               czm = 0._rp
             endif
             if(is_bound(1,3).and.k == hi(3)) then
+              r_rhs = factor(1,3)*czp
+              if(present(bcz).and.bc(1,3)/=0._rp) r_rhs = r_rhs*bcz(i,j,1)/bc(1,3)
+              rhsz(i,j,1) = rhsz(i,j,1) + r_rhs
               cc = cc + sgn(1,3)*czp
               czp = 0._rp
             endif
