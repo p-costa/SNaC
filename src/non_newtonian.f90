@@ -191,10 +191,10 @@ module mod_non_newtonian
                           (v(i  ,j  ,k)-v(i-1,j  ,k))/dxc(i-1) + &
                           (v(i+1,j-1,k)-v(i  ,j-1,k))/dxc(i  ) + &
                           (v(i  ,j-1,k)-v(i-1,j-1,k))/dxc(i-1) )
-          dvdz = 0.25_rp*((v(i+1,j  ,k)-v(i  ,j  ,k))/dzc(k  ) + &
-                          (v(i  ,j  ,k)-v(i-1,j  ,k))/dzc(k-1) + &
-                          (v(i+1,j-1,k)-v(i  ,j-1,k))/dzc(k  ) + &
-                          (v(i  ,j-1,k)-v(i-1,j-1,k))/dzc(k-1) )
+          dvdz = 0.25_rp*((v(i,j  ,k+1)-v(i,j  ,k  ))/dzc(k  ) + &
+                          (v(i,j  ,k  )-v(i,j  ,k-1))/dzc(k-1) + &
+                          (v(i,j-1,k+1)-v(i,j-1,k  ))/dzc(k  ) + &
+                          (v(i,j-1,k  )-v(i,j-1,k-1))/dzc(k-1) )
           dwdx = 0.25_rp*((w(i+1,j,k  )-w(i  ,j,k  ))/dxc(i  ) + &
                           (w(i  ,j,k  )-w(i-1,j,k  ))/dxc(i-1) + &
                           (w(i+1,j,k-1)-w(i  ,j,k-1))/dxc(i  ) + &
