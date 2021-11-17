@@ -625,6 +625,10 @@ end if
   enddo
 #endif
   call inflow(is_bound_inflow,lo,hi,velin_x,velin_y,velin_z,u,v,w)
+#ifdef _NON_NEWTONIAN
+   call strain_rate_norm(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,mu)
+   call compute_viscosity(lo,hi,kappa,rn,tau0,eps,mu)
+#endif
   up(:,:,:)      = 0._rp
   vp(:,:,:)      = 0._rp
   wp(:,:,:)      = 0._rp
@@ -879,7 +883,6 @@ end if
 #else
       call strain_rate_norm(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,mu)
       call compute_viscosity(lo,hi,kappa,rn,tau0,eps,mu)
-      call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,mu)
       call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce, &
                   visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,mu)
 #endif
