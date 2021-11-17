@@ -175,9 +175,9 @@ module mod_non_newtonian
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           !
-          dudx = (u(i+1,j,k)-u(i,j,k))/dxf(i)
-          dvdy = (v(i,j+1,k)-v(i,j,k))/dyf(j)
-          dwdz = (w(i,j,k+1)-w(i,j,k))/dzf(k)
+          dudx = (u(i,j,k)-u(i-1,j,k))/dxf(i)
+          dvdy = (v(i,j,k)-v(i,j-1,k))/dyf(j)
+          dwdz = (w(i,j,k)-w(i,j,k-1))/dzf(k)
           !
           dudy = 0.25_rp*((u(i  ,j+1,k)-u(i  ,j  ,k))/dyc(j  ) + &
                           (u(i  ,j  ,k)-u(i  ,j-1,k))/dyc(j-1) + &

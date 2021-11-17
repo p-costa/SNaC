@@ -5,7 +5,7 @@ BIG :=
 DBG := #-O0 -g -fbacktrace -Wall -Wextra -pedantic -fcheck=all -finit-real=snan -ffpe-trap=invalid -std=f2018
 OMP := #-fopenmp
 OPT := -O3
-OTH := -D_FFT_Y -D_NON_NEWTONIAN
+OTH := -D_FFT_ -D_NON_NEWTONIAN -D_IMPDIFF
 PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
 TARGET = snac
