@@ -3,7 +3,7 @@ module mod_bound
   use mod_types
   implicit none
   private
-  public boundp,bounduvw,updt_rhs,inflow
+  public boundp,bounduvw,updt_rhs,inflow,outflow,outflow_p
   contains
   subroutine bounduvw(cbc,lo,hi,bc,is_correc,halos,is_bound,nb, &
                       dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
@@ -265,11 +265,11 @@ module mod_bound
     end select
   end subroutine set_bc
   !
-  subroutine set_open_bc(ibound,lo,hi,idir,visc,dr,p,u,v,w,tr)
+  subroutine set_open_bc_uvw(ibound,lo,hi,idir,visc,dr,p,u,v,w,tr_x,tr_y,tr_z)
     !
-    ! a zero or estimated-traction open BC (Bozonnet et al, JCP 2021)
+    ! a zero or estimated-traction open BC (Bozonnet et al., JCP 2021)
     ! the latter serves well as a robust outflow BC;
-    ! the estimated traction is computed in subroutine
+    ! the estimated traction can be computed in subroutine
     ! `cmpt_estimated_traction`
     !
     implicit none
@@ -279,38 +279,42 @@ module mod_bound
     real(rp), intent(in   ) :: visc,dr
     real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
-    real(rp), intent(in   ), dimension(0:,:,:), optional           :: tr
-    real(rp) :: factor,sgn
+    real(rp), intent(out  ), dimension(lo(2)-1:,lo(3)-1:,0:), optional :: tr_x
+    real(rp), intent(out  ), dimension(lo(1)-1:,lo(3)-1:,0:), optional :: tr_y
+    real(rp), intent(out  ), dimension(lo(1)-1:,lo(2)-1:,0:), optional :: tr_z
+    real(rp) :: factor,norm
     integer  :: q
     logical  :: is_estimated_traction
     !
     if(    ibound == 0) then
-      sgn    = -1._rp
+      norm   =  1._rp
       q = lo(idir) - 1
     else if(ibound == 1) then
-      sgn    =  1._rp
+      norm   = -1._rp
       q = hi(idir)
     end if
-    factor = sgn*dr*2*visc
-    is_estimated_traction = .false.; if(present(tr)) is_estimated_traction = .true.
+    factor = -norm*dr/(2*visc)
+    is_estimated_traction = .false.
+    !
     select case(idir)
     case(1)
+      if(present(tr_x)) is_estimated_traction = .true.
       if     (ibound == 0) then
         !$OMP WORKSHARE
-        u(q,:,:) = u(q+1,:,:) + factor*(.5_rp*max(0._rp,sgn*u(q+1,:,:)**2) + p(q+1,:,:))
+        u(q,:,:) = u(q+1,:,:) + factor*(.5_rp*min(0._rp,norm*u(q+1,:,:))**2 + p(q+1,:,:))
         !$OMP END WORKSHARE
         if(is_estimated_traction) then
           !$OMP WORKSHARE
-          u(q,:,:) = u(q,:,:) + factor*tr(0,:,:)
+          u(q,:,:) = u(q,:,:) + factor*tr_x(:,:,ibound)
           !$OMP END WORKSHARE
         end if
       else if(ibound == 1) then
         !$OMP WORKSHARE
-        u(q,:,:) = u(q-1,:,:) + factor*(.5_rp*max(0._rp,sgn*u(q-1,:,:)**2) + p(q,:,:))
+        u(q,:,:) = u(q-1,:,:) + factor*(.5_rp*min(0._rp,norm*u(q-1,:,:))**2 + p(q  ,:,:))
         !$OMP END WORKSHARE
         if(is_estimated_traction) then
           !$OMP WORKSHARE
-          u(q,:,:) = u(q,:,:) + factor*tr(1,:,:)
+          u(q,:,:) = u(q,:,:) + factor*tr_x(:,:,ibound)
           !$OMP END WORKSHARE
         end if
         !$OMP WORKSHARE
@@ -318,22 +322,23 @@ module mod_bound
         !$OMP END WORKSHARE
       end if
     case(2)
+      if(present(tr_y)) is_estimated_traction = .true.
       if     (ibound == 0) then
         !$OMP WORKSHARE
-        v(:,q,:) = v(:,q+1,:) + factor*(.5_rp*max(0._rp,sgn*v(:,q+1,:)**2) + p(:,q+1,:))
+        v(:,q,:) = v(:,q+1,:) + factor*(.5_rp*min(0._rp,norm*v(:,q+1,:))**2 + p(:,q+1,:))
         !$OMP END WORKSHARE
         if(is_estimated_traction) then
           !$OMP WORKSHARE
-          v(:,q,:) = v(:,q,:) + factor*tr(0,:,:)
+          v(:,q,:) = v(:,q,:) + factor*tr_y(:,:,ibound)
           !$OMP END WORKSHARE
         end if
       else if(ibound == 1) then
         !$OMP WORKSHARE
-        v(:,q,:) = v(:,q-1,:) + factor*(.5_rp*max(0._rp,sgn*v(:,q-1,:)**2) + p(:,q,:))
+        v(:,q,:) = v(:,q-1,:) + factor*(.5_rp*min(0._rp,norm*v(:,q-1,:))**2 + p(:,q  ,:))
         !$OMP END WORKSHARE
         if(is_estimated_traction) then
           !$OMP WORKSHARE
-          v(:,q,:) = v(:,q,:) + factor*tr(1,:,:)
+          v(:,q,:) = v(:,q,:) + factor*tr_y(:,:,ibound)
           !$OMP END WORKSHARE
         end if
         !$OMP WORKSHARE
@@ -341,22 +346,23 @@ module mod_bound
         !$OMP END WORKSHARE
       end if
     case(3)
+      if(present(tr_z)) is_estimated_traction = .true.
       if     (ibound == 0) then
         !$OMP WORKSHARE
-        w(:,:,q) = w(:,:,q+1) + factor*(.5_rp*max(0._rp,sgn*w(:,:,q+1)**2) + p(:,:,q+1))
+        w(:,:,q) = w(:,:,q+1) + factor*(.5_rp*min(0._rp,norm*w(:,:,q+1))**2 + p(:,:,q+1))
         !$OMP END WORKSHARE
         if(is_estimated_traction) then
           !$OMP WORKSHARE
-          w(:,:,q) = w(:,:,q) + factor*tr(0,:,:)
+          w(:,:,q) = w(:,:,q) + factor*tr_z(:,:,ibound)
           !$OMP END WORKSHARE
         end if
       else if(ibound == 1) then
         !$OMP WORKSHARE
-        w(:,:,q) = w(:,:,q-1) + factor*(.5_rp*max(0._rp,sgn*w(:,:,q-1)**2) + p(:,:,q))
+        w(:,:,q) = w(:,:,q-1) + factor*(.5_rp*min(0._rp,norm*w(:,:,q-1))**2 + p(:,:,q  ))
         !$OMP END WORKSHARE
         if(is_estimated_traction) then
           !$OMP WORKSHARE
-          w(:,:,q) = w(:,:,q) + factor*tr(1,:,:)
+          w(:,:,q) = w(:,:,q) + factor*tr_z(:,:,ibound)
           !$OMP END WORKSHARE
         end if
         !$OMP WORKSHARE
@@ -364,9 +370,64 @@ module mod_bound
         !$OMP END WORKSHARE
       end if
     end select
-  end subroutine set_open_bc
+  end subroutine set_open_bc_uvw
   !
-  subroutine cmpt_estimated_traction(ibound,lo,hi,idir,visc,dr,p,u,v,w,tr)
+  subroutine set_open_bc_p(ibound,lo,hi,idir,drc,drf,alpha,p)
+    !
+    ! a zero or estimated-traction open BC (Bozonnet et al., JCP 2021)
+    ! the latter serves well as a robust outflow BC;
+    ! the estimated traction can be computed in subroutine
+    ! `cmpt_estimated_traction`
+    !
+    implicit none
+    integer , intent(in   ) :: ibound
+    integer , intent(in   ), dimension(3) :: lo,hi
+    integer , intent(in   ) :: idir
+    real(rp), intent(in   ) :: drc(0:1),drf,alpha
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
+    integer  :: q
+    !
+    if(    ibound == 0) then
+      q = lo(idir)
+    else if(ibound == 1) then
+      q = hi(idir)
+    end if
+    !
+    select case(idir)
+    case(1)
+      if     (ibound == 0) then
+        !$OMP WORKSHARE
+        p(q-1,:,:) = p(q,:,:) + alpha*drc(0)*drf*p(q,:,:) - ( p(q+1,:,:)-p(q,:,:) )*drc(0)/drc(1)
+        !$OMP END WORKSHARE
+      else if(ibound == 1) then
+        !$OMP WORKSHARE
+        p(q+1,:,:) = p(q,:,:) + alpha*drc(1)*drf*p(q,:,:) + ( p(q,:,:)-p(q-1,:,:) )*drc(1)/drc(0)
+        !$OMP END WORKSHARE
+      end if
+    case(2)
+      if     (ibound == 0) then
+        !$OMP WORKSHARE
+        p(:,q-1,:) = p(:,q,:) + alpha*drc(0)*drf*p(:,q,:) - ( p(:,q+1,:)-p(:,q,:) )*drc(0)/drc(1)
+        !$OMP END WORKSHARE
+      else if(ibound == 1) then
+        !$OMP WORKSHARE
+        p(:,q+1,:) = p(:,q,:) + alpha*drc(1)*drf*p(:,q,:) + ( p(:,q,:)-p(:,q-1,:) )*drc(1)/drc(0)
+        !$OMP END WORKSHARE
+      end if
+    case(3)
+      if     (ibound == 0) then
+        !$OMP WORKSHARE
+        p(:,:,q-1) = p(:,:,q) + alpha*drc(0)*drf*p(:,:,q) - ( p(:,:,q+1)-p(:,:,q) )*drc(0)/drc(1)
+        !$OMP END WORKSHARE
+      else if(ibound == 1) then
+        !$OMP WORKSHARE
+        p(:,:,q+1) = p(:,:,q) + alpha*drc(1)*drf*p(:,:,q) + ( p(:,:,q)-p(:,:,q-1) )*drc(1)/drc(0)
+        !$OMP END WORKSHARE
+      end if
+    end select
+  end subroutine set_open_bc_p
+  !
+  subroutine cmpt_estimated_traction(ibound,lo,hi,idir,visc,dr,p,u,v,w,tr_x,tr_y,tr_z)
     !
     ! computes the estimated traction from an interior grid cell
     ! adjacent to the boundary grid cell, to be used for computing the
@@ -379,7 +440,9 @@ module mod_bound
     real(rp), intent(in ) :: visc,dr ! dr -- grid spacing of the interior grid cell
     real(rp), intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     real(rp), intent(in ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
-    real(rp), intent(out), dimension(0:,:,:) :: tr
+    real(rp), intent(inout), dimension(lo(2)-1:,lo(3)-1:,0:), optional :: tr_x
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(3)-1:,0:), optional :: tr_y
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,0:), optional :: tr_z
     real(rp) :: factor
     integer  :: q
     !
@@ -393,31 +456,31 @@ module mod_bound
     case(1)
       if     (ibound == 0) then
         !$OMP WORKSHARE
-        tr(0,:,:) = -p(q+1,:,:) + factor*(u(q+2,:,:)-u(q+1,:,:))
+        tr_x(:,:,ibound) = -p(q+1,:,:) + factor*(u(q+2,:,:)-u(q+1,:,:))
         !$OMP END WORKSHARE
       else if(ibound == 1) then
         !$OMP WORKSHARE
-        tr(1,:,:) = -p(q-1,:,:) + factor*(u(q-1,:,:)-u(q-2,:,:))
+        tr_x(:,:,ibound) = -p(q-1,:,:) + factor*(u(q-1,:,:)-u(q-2,:,:))
         !$OMP END WORKSHARE
       end if
     case(2)
       if     (ibound == 0) then
         !$OMP WORKSHARE
-        tr(0,:,:) = -p(:,q+1,:) + factor*(v(:,q+2,:)-v(:,q+1,:))
+        tr_y(:,:,ibound) = -p(:,q+1,:) + factor*(v(:,q+2,:)-v(:,q+1,:))
         !$OMP END WORKSHARE
       else if(ibound == 1) then
         !$OMP WORKSHARE
-        tr(1,:,:) = -p(:,q-1,:) + factor*(v(:,q-1,:)-v(:,q-2,:))
+        tr_y(:,:,ibound) = -p(:,q-1,:) + factor*(v(:,q-1,:)-v(:,q-2,:))
         !$OMP END WORKSHARE
       end if
     case(3)
       if     (ibound == 0) then
         !$OMP WORKSHARE
-        tr(1,:,:) = -p(:,:,q+1) + factor*(w(:,:,q+2)-w(:,:,q+1))
+        tr_z(:,:,ibound) = -p(:,:,q+1) + factor*(w(:,:,q+2)-w(:,:,q+1))
         !$OMP END WORKSHARE
       else if(ibound == 1) then
         !$OMP WORKSHARE
-        tr(0,:,:) = -p(:,:,q-1) + factor*(w(:,:,q-1)-w(:,:,q-2))
+        tr_z(:,:,ibound) = -p(:,:,q-1) + factor*(w(:,:,q-1)-w(:,:,q-2))
         !$OMP END WORKSHARE
       end if
     end select
@@ -449,6 +512,70 @@ module mod_bound
       end do
     end do
   end subroutine inflow
+  !
+  subroutine outflow(is_outflow_bound,is_estimated_traction,lo,hi,dl,visc,tr_x,tr_y,tr_z,u,v,w,p)
+    !
+    implicit none
+    logical , intent(in   ), dimension(0:1,1:3) :: is_outflow_bound,is_estimated_traction
+    integer , intent(in   ), dimension(3      ) :: lo,hi
+    real(rp), intent(in   ), dimension(0:1,1:3) :: dl
+    real(rp), intent(in   )                     :: visc
+    real(rp), intent(inout), dimension(lo(2)-1:,lo(3)-1:,0:) :: tr_x
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(3)-1:,0:) :: tr_y
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,0:) :: tr_z
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w,p
+    integer :: ib,idir
+    !
+    do idir=1,3
+      do ib=0,1
+        if( is_outflow_bound(ib,idir) ) then
+          select case(idir)
+            case(1)
+              tr_x(:,:,ib) = 0._rp
+              if( is_estimated_traction(ib,idir) ) &
+                call cmpt_estimated_traction(ib,lo,hi,idir,visc,dl(ib,idir),p,u,v,w,tr_x=tr_x)
+              call set_open_bc_uvw(ib,lo,hi,idir,visc,dl(ib,idir),p,u,v,w,tr_x=tr_x)
+            case(2)
+              tr_y(:,:,ib) = 0._rp
+              if( is_estimated_traction(ib,idir) ) &
+                call cmpt_estimated_traction(ib,lo,hi,idir,visc,dl(ib,idir),p,u,v,w,tr_y=tr_y)
+              call set_open_bc_uvw(ib,lo,hi,idir,visc,dl(ib,idir),p,u,v,w,tr_y=tr_y)
+            case(3)
+              tr_z(:,:,ib) = 0._rp
+              if( is_estimated_traction(ib,idir) ) &
+                call cmpt_estimated_traction(ib,lo,hi,idir,visc,dl(ib,idir),p,u,v,w,tr_z=tr_z)
+              call set_open_bc_uvw(ib,lo,hi,idir,visc,dl(ib,idir),p,u,v,w,tr_z=tr_z)
+          end select
+        end if
+      end do
+    end do
+  end subroutine outflow
+  !
+  subroutine outflow_p(is_outflow_bound,lo,hi,dlc,dlf,alpha,p)
+    !
+    implicit none
+    logical , intent(in   ), dimension(0:1,1:3) :: is_outflow_bound
+    integer , intent(in   ), dimension(3      ) :: lo,hi
+    real(rp), intent(in   )                     :: dlc(0:1,0:1,1:3),dlf(0:1,1:3)
+    real(rp), intent(in   )                     :: alpha
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
+    integer :: ib,idir
+    !
+    do idir=1,3
+      do ib=0,1
+        if( is_outflow_bound(ib,idir) ) then
+          select case(idir)
+            case(1)
+              call set_open_bc_p(ib,lo,hi,idir,dlc(0:1,ib,idir),dlf(ib,idir),alpha,p)
+            case(2)
+              call set_open_bc_p(ib,lo,hi,idir,dlc(0:1,ib,idir),dlf(ib,idir),alpha,p)
+            case(3)
+              call set_open_bc_p(ib,lo,hi,idir,dlc(0:1,ib,idir),dlf(ib,idir),alpha,p)
+          end select
+        end if
+      end do
+    end do
+  end subroutine outflow_p
   !
   subroutine updt_rhs(lo,hi,is_bound,rhsbx,rhsby,rhsbz,p)
     !

@@ -43,6 +43,7 @@ real(rp)          , dimension(0:1,3,3) ::  bcvel
 character(len=1  ), dimension(0:1,  3) :: cbcpre
 real(rp)          , dimension(0:1,  3) ::  bcpre
 integer           , dimension(0:1,  3) ::  inflow_type
+integer           , dimension(0:1,  3) ::  outflow_type
 character(len=100)                     :: inivel
 !
 real(rp) :: vol_all
@@ -137,6 +138,8 @@ contains
             read(iunit,*)  bcvel(0,1,3), bcvel(1,1,3), bcvel(0,2,3), bcvel(1,2,3), bcvel(0,3,3), bcvel(1,3,3)
             read(iunit,*)  bcpre(0,1  ), bcpre(1,1  ), bcpre(0,2  ), bcpre(1,2  ), bcpre(0,3  ), bcpre(1,3  )
             read(iunit,*)  inflow_type(0,1),inflow_type(1,1),inflow_type(0,2),inflow_type(1,2),inflow_type(0,3),inflow_type(1,3)
+            read(iunit,*) outflow_type(0,1),outflow_type(1,1),outflow_type(0,2), &
+                          outflow_type(1,2),outflow_type(0,3),outflow_type(1,3)
             read(iunit,*) inivel
             my_block = iblock
             id_first = sum(nranks(1:iblock-1))

@@ -9,7 +9,7 @@ module mod_sanity
   public test_sanity_fft
 #endif
   contains
-  subroutine test_sanity(lo,hi,dims,gr,stop_type,cbcvel,cbcpre)
+  subroutine test_sanity(lo,hi,dims,gr,stop_type,cbcvel,cbcpre,periods,inflow_type,outflow_type)
     !
     ! performs some a priori checks of the input files before the calculation starts
     !
@@ -19,12 +19,15 @@ module mod_sanity
     logical         , intent(in), dimension(3      ) :: stop_type
     character(len=1), intent(in), dimension(0:1,3,3) :: cbcvel
     character(len=1), intent(in), dimension(0:1,3  ) :: cbcpre
+    integer         , intent(in), dimension(    3  ) :: periods
+    integer         , intent(in), dimension(0:1,3  ) :: inflow_type,outflow_type
     logical :: passed
     !
     call chk_grid(gr,passed);             if(.not.passed) call abortit
     call chk_stop_type(stop_type,passed); if(.not.passed) call abortit
     call chk_bc(cbcvel,cbcpre,passed);    if(.not.passed) call abortit
     call chk_dims(lo,hi,dims,passed);     if(.not.passed) call abortit
+    call chk_inoutflow(periods,inflow_type,outflow_type,passed); if(.not.passed) call abortit
   end subroutine test_sanity
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   subroutine test_sanity_fft(dims,lo,hi,lmin,lmax,gr)
@@ -121,6 +124,7 @@ module mod_sanity
         passed_loc = passed_loc.and.any(bc01v == bcs)
       end do
     end do
+    call mpi_allreduce(MPI_IN_PLACE,passed_loc,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
     if(.not.passed_loc) call write_error('velocity BCs not valid.')
     passed = passed.and.passed_loc
     !
@@ -129,6 +133,7 @@ module mod_sanity
       bc01p = cbcpre(0,idir)//cbcpre(1,idir)
       passed_loc = passed_loc.and.any(bc01p == bcs)
     end do
+    call mpi_allreduce(MPI_IN_PLACE,passed_loc,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
     if(.not.passed_loc) call write_error('pressure BCs not valid.')
     passed = passed.and.passed_loc
     !
@@ -145,11 +150,16 @@ module mod_sanity
                                     (bc01v == 'DF'.and.bc01p == 'NF').or. &
                                     (bc01v == 'FN'.and.bc01p == 'FD').or. &
                                     (bc01v == 'NF'.and.bc01p == 'DF').or. &
+                                    (bc01v == 'FN'.and.bc01p == 'FN').or. & ! for inflow/outflow
+                                    (bc01v == 'NF'.and.bc01p == 'NF').or. & ! for inflow/outflow
+                                    (bc01v == 'FN'.and.bc01p == 'FN').or. & ! for inflow/outflow
+                                    (bc01v == 'NF'.and.bc01p == 'NF').or. & ! for inflow/outflow
+                                    (bc01v == 'NN'.and.bc01p == 'NN').or. & ! for inflow/outflow
                                     (bc01v == 'NN'.and.bc01p == 'DD') )
     end do
+    call mpi_allreduce(MPI_IN_PLACE,passed_loc,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
     if(.not.passed_loc) call write_error('velocity and pressure BCs not compatible.')
     passed = passed.and.passed_loc
-    call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
     !
   end subroutine chk_bc
   !
@@ -162,6 +172,32 @@ module mod_sanity
     if(.not.passed) call write_error('MPI task partitions cannot exceed the number of grid points.')
     call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
   end subroutine chk_dims
+  !
+  subroutine chk_inoutflow(periods,inflow_type,outflow_type,passed)
+    implicit none
+    integer, intent(in ), dimension(    3) :: periods
+    integer, intent(in ), dimension(0:1,3) :: inflow_type,outflow_type
+    logical, intent(out)                   :: passed
+    logical,              dimension(0:1,3) :: is_inflow,is_outflow
+    integer :: ib,idir
+    passed = .true.
+    is_inflow( :,:) = inflow_type( :,:) > 0
+    is_outflow(:,:) = outflow_type(:,:) > 0 .and. outflow_type(:,:) <= 2
+    do idir = 1,3
+      do ib = 0,1
+        if( is_inflow( ib,idir) ) passed = passed .and. periods(idir) == 0
+        if( is_outflow(ib,idir) ) passed = passed .and. periods(idir) == 0
+      enddo
+    enddo
+    if(.not.passed) call write_error('Periodicity and in/outflow BCs cannot be combined.')
+    do idir = 1,3
+      do ib = 0,1
+        if( is_inflow( ib,idir) .and. is_outflow(ib,idir ) ) passed = passed .and. .false.
+      enddo
+    enddo
+    if(.not.passed) call write_error('BC cannot be both inflow and outflow.')
+    call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
+  end subroutine chk_inoutflow
   !
   subroutine abortit
     implicit none

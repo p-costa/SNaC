@@ -7,14 +7,15 @@ module mod_solver
   private
   public init_bc_rhs,init_matrix_3d,create_solver,setup_solver, &
          add_constant_to_diagonal,solve_helmholtz,finalize_matrix,finalize_solver, &
-         hypre_solver, &
+         hypre_solver, add_constant_to_boundary, &
          HYPRESolverSMG,HYPRESolverPFMG,HYPRESolverGMRES,HYPRESolverBiCGSTAB
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   public init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers, &
          add_constant_to_n_diagonals,solve_n_helmholtz_2d, &
          finalize_n_matrices,finalize_n_solvers,init_comm_slab, &
          init_transpose_slab_uneven,transpose_slab,alltoallw, &
-         init_n_3d_matrices,solve_n_helmholtz_3d
+         init_n_3d_matrices,solve_n_helmholtz_3d, &
+         add_constant_to_n_boundaries,add_constant_to_n_3d_boundaries
   type alltoallw
     integer            :: counts
     integer            :: disps
@@ -144,7 +145,7 @@ module mod_solver
     end do
   end subroutine init_bc_rhs
   subroutine init_matrix_3d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                            dx1,dx2,dy1,dy2,dz1,dz2,alpha,alpha_bc,asolver,lambda)
+                            dx1,dx2,dy1,dy2,dz1,dz2,alpha,alpha_bc,asolver,lambda,is_bound_outflow)
     !
     ! description
     !
@@ -164,6 +165,7 @@ module mod_solver
     real(rp)          , intent(in ), dimension(0:1,3)            :: alpha_bc
     type(hypre_solver), intent(out)                              :: asolver
     real(rp)          , intent(in ), optional, dimension(:)      :: lambda
+    logical           , intent(in ), optional, dimension(0:1,3)  :: is_bound_outflow
     integer, dimension(3         ) :: qqq
     integer, dimension(3,nstencil) :: offsets
     real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
@@ -172,6 +174,7 @@ module mod_solver
     integer :: i,j,k,q,qq
     real(rp) :: cc,cxm,cxp,cym,cyp,czm,czp
     integer            :: comm_hypre
+    logical, dimension(0:1,3) :: is_bound_outflow_aux
     !
     comm_hypre = MPI_COMM_WORLD%MPI_VAL
     qqq(:) = 0
@@ -198,6 +201,11 @@ module mod_solver
         end if
       end do
     end do
+    if(present(is_bound_outflow)) then
+      is_bound_outflow_aux(:,:) = is_bound_outflow(:,:)
+    else
+      is_bound_outflow_aux(:,:) = .false.
+    end if
     !
     ! create 3D grid object
     !
@@ -261,30 +269,54 @@ module mod_solver
             if(is_bound(0,1).and.i == lo(1)) then
               cc = cc + sgn(0,1)*cxm + alpha_bc(0,1)
               cxm = 0._rp
+              if( is_bound_outflow_aux(0,1) ) then
+                cc = cc + sgn(0,1)*cxp
+                cxp = 0._rp
+              end if
             end if
             if(is_bound(1,1).and.i == hi(1)) then
               cc = cc + sgn(1,1)*cxp + alpha_bc(1,1)
               cxp = 0._rp
+              if( is_bound_outflow_aux(1,1) ) then
+                cc = cc + sgn(1,1)*cxm
+                cxm = 0._rp
+              end if
             end if
           end if
           if(periods(2) == 0) then
             if(is_bound(0,2).and.j == lo(2)) then
               cc = cc + sgn(0,2)*cym + alpha_bc(0,2)
               cym = 0._rp
+              if( is_bound_outflow_aux(0,2) ) then
+                cc = cc + sgn(0,2)*cyp
+                cyp = 0._rp
+              end if
             end if
             if(is_bound(1,2).and.j == hi(2)) then
               cc = cc + sgn(1,2)*cyp + alpha_bc(1,2)
               cyp = 0._rp
+              if( is_bound_outflow_aux(1,2) ) then
+                cc = cc + sgn(1,2)*cym
+                cym = 0._rp
+              end if
             end if
           end if
           if(periods(3) == 0) then
             if(is_bound(0,3).and.k == lo(3)) then
               cc = cc + sgn(0,3)*czm + alpha_bc(0,3)
               czm = 0._rp
+              if( is_bound_outflow_aux(0,3) ) then
+                cc = cc + sgn(0,3)*czp
+                czp = 0._rp
+              end if
             end if
             if(is_bound(1,3).and.k == hi(3)) then
               cc = cc + sgn(1,3)*czp + alpha_bc(1,3)
               czp = 0._rp
+              if( is_bound_outflow_aux(1,3) ) then
+                cc = cc + sgn(1,3)*czm
+                czm = 0._rp
+              end if
             end if
           end if
           qq = (q-1)*nstencil
@@ -516,9 +548,78 @@ module mod_solver
     call HYPRE_StructVectorDestroy(rhs,ierr)
     call HYPRE_StructVectorDestroy(sol,ierr)
   end subroutine finalize_matrix
+  subroutine add_constant_to_boundary(lo,hi,is_bound,alpha_bc,mat)
+    implicit none
+    integer    , intent(in ), dimension(    3) :: lo,hi
+    logical    , intent(in ), dimension(0:1,3) :: is_bound
+    real(rp)   , intent(in ), dimension(0:1,3) :: alpha_bc
+    type(C_PTR), intent(inout) :: mat
+    real(rp), dimension(product(hi(:)-lo(:)+1)) :: matvalues
+    integer :: i,j,k,q
+    real(rp) :: cc
+    q = 0
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+          q=q+1
+          cc = 0._rp
+          if(is_bound(0,1).and.i == lo(1)) then
+            cc = cc + alpha_bc(0,1)
+          end if
+          if(is_bound(1,1).and.i == hi(1)) then
+            cc = cc + alpha_bc(1,1)
+          end if
+          if(is_bound(0,2).and.j == lo(2)) then
+            cc = cc + alpha_bc(0,2)
+          end if
+          if(is_bound(1,2).and.j == hi(2)) then
+            cc = cc + alpha_bc(1,2)
+          end if
+          if(is_bound(0,3).and.k == lo(3)) then
+            cc = cc + alpha_bc(0,3)
+          end if
+          if(is_bound(1,3).and.k == hi(3)) then
+            cc = cc + alpha_bc(1,3)
+          end if
+          matvalues(q) = cc
+        end do
+      end do
+    end do
+    call HYPRE_StructMatrixAddToBoxValues(mat,lo,hi,1,[0],matvalues,ierr)
+  end subroutine add_constant_to_boundary
+  subroutine add_constant_to_n_boundaries(n,lo,hi,is_bound,alpha_bc,mat)
+    implicit none
+    integer    , intent(in   )               :: n
+    integer    , intent(in   ), dimension(2) :: lo,hi
+    logical    , intent(in   ), dimension(0:1,2) :: is_bound
+    real(rp)   , intent(in   ), dimension(0:1,2) :: alpha_bc
+    type(C_PTR), intent(inout), dimension(:) :: mat
+    integer :: q
+    logical , dimension(0:1,3) :: is_bound_aux
+    real(rp), dimension(0:1,3) :: alpha_bc_aux
+    alpha_bc_aux(:,1:2) = alpha_bc(:,:)
+    alpha_bc_aux(:,  3) = 0._rp
+    is_bound_aux(:,1:2) = is_bound(:,:)
+    is_bound_aux(:,  3) = .false.
+    do q=1,n
+      call add_constant_to_boundary([lo(1),lo(2),1],[hi(1),hi(2),1],is_bound_aux,alpha_bc_aux,mat(q))
+    end do
+  end subroutine add_constant_to_n_boundaries
+  subroutine add_constant_to_n_3d_boundaries(nslices,lo_sp,hi_sp,is_bound,alpha_bc,mat)
+    implicit none
+    integer, intent(in)                       :: nslices
+    integer, intent(in), dimension(3,nslices) :: lo_sp,hi_sp
+    logical    , intent(in   ), dimension(0:1,3) :: is_bound
+    real(rp)   , intent(in   ), dimension(0:1,3) :: alpha_bc
+    type(C_PTR), intent(inout), dimension(:) :: mat
+    integer :: q
+    do q=1,nslices
+      call add_constant_to_boundary(lo_sp(:,q),hi_sp(:,q),is_bound,alpha_bc,mat(q))
+    end do
+  end subroutine add_constant_to_n_3d_boundaries
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   subroutine init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                            dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,comm,asolver)
+                            dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,comm,asolver,is_bound_outflow)
     !
     ! description
     !
@@ -537,6 +638,7 @@ module mod_solver
     real(rp)          , intent(in ), dimension(0:1,2)            :: alpha_bc
     type(MPI_COMM)    , intent(in )                   :: comm
     type(hypre_solver), intent(out)                              :: asolver
+    logical           , intent(in ), optional, dimension(0:1,2)  :: is_bound_outflow
     integer, dimension(2         ) :: qqq
     integer, dimension(2,nstencil) :: offsets
     real(rp), dimension(product(hi(:)-lo(:)+1)*nstencil) :: matvalues
@@ -545,6 +647,7 @@ module mod_solver
     integer :: i1,i2,q,qq
     real(rp) :: cc,c1m,c1p,c2m,c2p
     integer            :: comm_hypre
+    logical, dimension(0:1,2) :: is_bound_outflow_aux
     !
     comm_hypre = comm%MPI_VAL
     !
@@ -572,6 +675,11 @@ module mod_solver
         end if
       end do
     end do
+    if(present(is_bound_outflow)) then
+      is_bound_outflow_aux(:,:) = is_bound_outflow(:,:)
+    else
+      is_bound_outflow_aux(:,:) = .false.
+    end if
     !
     ! create 2D grid object
     !
@@ -613,20 +721,36 @@ module mod_solver
           if(is_bound(0,1).and.i1 == lo(1)) then
             cc = cc + sgn(0,1)*c1m + alpha_bc(0,1)
             c1m = 0._rp
+            if( is_bound_outflow_aux(0,1) ) then
+              cc = cc + sgn(0,1)*c1p
+              c1p = 0._rp
+            end if
           end if
           if(is_bound(1,1).and.i1 == hi(1)) then
             cc = cc + sgn(1,1)*c1p + alpha_bc(1,1)
             c1p = 0._rp
+            if( is_bound_outflow_aux(1,1) ) then
+              cc = cc + sgn(1,1)*c1m
+              c1m = 0._rp
+            end if
           end if
         end if
         if(periods(2) == 0) then
           if(is_bound(0,2).and.i2 == lo(2)) then
             cc = cc + sgn(0,2)*c2m + alpha_bc(0,2)
             c2m = 0._rp
+            if( is_bound_outflow_aux(0,2) ) then
+              cc = cc + sgn(0,2)*c2p
+              c2p = 0._rp
+            end if
           end if
           if(is_bound(1,2).and.i2 == hi(2)) then
             cc = cc + sgn(1,2)*c2p + alpha_bc(1,2)
             c2p = 0._rp
+            if( is_bound_outflow_aux(1,2) ) then
+              cc = cc + sgn(1,2)*c2m
+              c2m = 0._rp
+            end if
           end if
         end if
         q  = q + 1
@@ -671,7 +795,7 @@ module mod_solver
       sol     => asolver(n)%sol
       stype   => asolver(n)%stype
       !
-      ! setup soluction and rhs vectors
+      ! setup solution and rhs vectors
       !
 #ifdef _FFT_Z
       call HYPRE_StructVectorSetBoxValues(rhs,lo,hi, p(lo(1):hi(1),lo(2):hi(2),i_out),ierr)
@@ -787,7 +911,7 @@ module mod_solver
     end do
   end subroutine solve_n_helmholtz_3d
   subroutine init_n_2d_matrices(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_out,hi_out,lo,hi,periods, &
-                                dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,lambda,comm,asolver)
+                                dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,lambda,comm,asolver,is_bound_outflow)
     character(len=1)  , intent(in   ), dimension(0:1,2) :: cbc
     real(rp)          , intent(in   ), dimension(0:1,2) ::  bc
     real(rp)          , intent(in   ), dimension(0:1,2) ::  dl
@@ -803,19 +927,24 @@ module mod_solver
     real(rp)          , intent(in   ), dimension(:) :: lambda
     type(MPI_COMM)    , intent(in   ), dimension(:) :: comm
     type(hypre_solver), intent(inout), dimension(:) :: asolver
+    logical           , intent(in   ), optional, dimension(0:1,2)  :: is_bound_outflow
     type(hypre_solver) :: asolver_aux
     integer :: i_out,q
+    logical, dimension(0:1,2) :: is_bound_outflow_aux
+    is_bound_outflow_aux(:,:) = .false.
+    if( present(is_bound_outflow) ) is_bound_outflow_aux(:,:) = is_bound_outflow(:,:)
     do i_out=lo_out,hi_out
       q = i_out-lo_out+1
       asolver_aux = asolver(q)
       call init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
-                          dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,comm(q),asolver_aux)
+                          dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,comm(q),asolver_aux,is_bound_outflow_aux)
       call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],lambda(q),asolver_aux%mat)
       asolver(q) = asolver_aux
     end do
   end subroutine init_n_2d_matrices
   subroutine init_n_3d_matrices(idir,nslice,cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,periods, &
-                                lo_sp,hi_sp,dl1_1,dl1_2,dl2_1,dl2_2,dl3_1,dl3_2,alpha,alpha_bc,lambda,asolver)
+                                lo_sp,hi_sp,dl1_1,dl1_2,dl2_1,dl2_2,dl3_1,dl3_2,alpha,alpha_bc,lambda,asolver, &
+                                is_bound_outflow)
     integer           , intent(in   )                   :: idir,nslice
     character(len=1)  , intent(in   ), dimension(0:1,3) :: cbc
     real(rp)          , intent(in   ), dimension(0:1,3) ::  bc
@@ -832,8 +961,12 @@ module mod_solver
     real(rp)          , intent(in   ), dimension(0:1,3)            :: alpha_bc
     real(rp)          , intent(in   ), dimension(:) :: lambda
     type(hypre_solver), intent(inout), dimension(:) :: asolver
+    logical           , intent(in   ), optional, dimension(0:1,3)  :: is_bound_outflow
     type(hypre_solver) :: asolver_aux
     integer :: q
+    logical, dimension(0:1,3) :: is_bound_outflow_aux
+    is_bound_outflow_aux(:,:) = .false.
+    if( present(is_bound_outflow) ) is_bound_outflow_aux(:,:) = is_bound_outflow(:,:)
     do q=1,nslice
       asolver_aux = asolver(q)
       call init_matrix_3d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_sp(:,q),hi_sp(:,q),periods, &
@@ -841,7 +974,8 @@ module mod_solver
                           dl2_1(lo_sp(2,q)-1:hi_sp(2,q)+1),dl2_2(lo_sp(2,q)-1:hi_sp(2,q)+1), &
                           dl3_1(lo_sp(3,q)-1:hi_sp(3,q)+1),dl3_2(lo_sp(3,q)-1:hi_sp(3,q)+1), &
                           alpha,alpha_bc, & 
-                          asolver_aux,lambda(lo_sp(idir,q)-lo(idir)+1:hi_sp(idir,q)-lo(idir)+1))
+                          asolver_aux,lambda(lo_sp(idir,q)-lo(idir)+1:hi_sp(idir,q)-lo(idir)+1), &
+                          is_bound_outflow_aux)
       asolver(q) = asolver_aux
     end do
   end subroutine init_n_3d_matrices
