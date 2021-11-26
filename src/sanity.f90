@@ -152,9 +152,9 @@ module mod_sanity
                                     (bc01v == 'NF'.and.bc01p == 'DF').or. &
                                     (bc01v == 'FN'.and.bc01p == 'FN').or. & ! for inflow/outflow
                                     (bc01v == 'NF'.and.bc01p == 'NF').or. & ! for inflow/outflow
-                                    (bc01v == 'FN'.and.bc01p == 'FN').or. & ! for inflow/outflow
-                                    (bc01v == 'NF'.and.bc01p == 'NF').or. & ! for inflow/outflow
                                     (bc01v == 'NN'.and.bc01p == 'NN').or. & ! for inflow/outflow
+                                    (bc01v == 'DN'.and.bc01p == 'NN').or. & ! for inflow/outflow
+                                    (bc01v == 'ND'.and.bc01p == 'NN').or. & ! for inflow/outflow
                                     (bc01v == 'NN'.and.bc01p == 'DD') )
     end do
     call mpi_allreduce(MPI_IN_PLACE,passed_loc,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
