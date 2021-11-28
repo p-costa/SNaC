@@ -112,7 +112,7 @@ module mod_solver
                 if(is_bound(ib,idir)) then
                   rhs = factor(ib,idir)/(dx1(i-(1-ib)+qqq(idir))*dx2(i))
                   if(present(bcx).and.bc(ib,idir)/=0._rp) rhs = rhs*bcx(j,k,ib)/bc(ib,idir)
-                  rhsx(j,k,ib) = rhsx(j,k,ib) + rhs
+                  rhsx(j,k,ib) = rhs
                 end if
               case(2)
                 if(     j == lo(idir)) then
@@ -123,7 +123,7 @@ module mod_solver
                 if(is_bound(ib,idir)) then
                   rhs = factor(ib,idir)/(dy1(j-(1-ib)+qqq(idir))*dy2(j))
                   if(present(bcy).and.bc(ib,idir)/=0._rp) rhs = rhs*bcy(i,k,ib)/bc(ib,idir)
-                  rhsy(i,k,ib) = rhsy(i,k,ib) + rhs
+                  rhsy(i,k,ib) = rhs
                 end if
               case(3)
                 if(     k == lo(idir)) then
@@ -134,7 +134,7 @@ module mod_solver
                 if(is_bound(ib,idir)) then
                   rhs = factor(ib,idir)/(dz1(k-(1-ib)+qqq(idir))*dz2(k))
                   if(present(bcz).and.bc(ib,idir)/=0._rp) rhs = rhs*bcz(i,j,ib)/bc(ib,idir)
-                  rhsz(i,j,ib) = rhsz(i,j,ib) + rhs
+                  rhsz(i,j,ib) = rhs
                 end if
               end select
             end if
