@@ -49,7 +49,7 @@ program snac
                                  icheck,iout0d,iout1d,iout2d,iout3d,isave, &
                                  dims,lo,hi,lmin,lmax,                     &
                                  gt,gr,                                    &
-                                 cbcvel,bcvel,cbcpre,bcpre,                &
+                                 cbcvel,bcvel,cbcpre,bcpre,cbcmu,bcmu,     &
                                  inflow_type,                              &
                                  bforce,periods,inivel,                    &
                                  vol_all,my_block,id_first,nblocks,nrank,  &
@@ -629,7 +629,7 @@ end if
 #ifdef _NON_NEWTONIAN
    call strain_rate_norm(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,mu)
    call compute_viscosity(lo,hi,kappa,rn,tau0,eps,mu)
-   call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,mu)
+   call boundp(cbcmu,lo,hi,bcmu,halos,is_bound,nb,dxc,dyc,dzc,mu)
 #endif
   up(:,:,:)      = 0._rp
   vp(:,:,:)      = 0._rp
@@ -885,7 +885,7 @@ end if
 #else
       call strain_rate_norm(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,mu)
       call compute_viscosity(lo,hi,kappa,rn,tau0,eps,mu)
-      call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,mu)
+      call boundp(cbcmu,lo,hi,bcmu,halos,is_bound,nb,dxc,dyc,dzc,mu)
       call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce, &
                   visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp,mu)
 #endif
@@ -1084,8 +1084,8 @@ end if
       if(myid == 0) write(stdout,*) 'Checking stability and divergence...'
       !
 #ifdef _NON_NEWTONIAN
-      visc = minval(mu(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      call MPI_ALLREDUCE(MPI_IN_PLACE,visc,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD)
+      visc = maxval(mu(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call MPI_ALLREDUCE(MPI_IN_PLACE,visc,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
 #endif
       call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
       visc = kappa

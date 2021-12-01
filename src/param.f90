@@ -46,6 +46,10 @@ character(len=1  ), dimension(0:1,3,3) :: cbcvel
 real(rp)          , dimension(0:1,3,3) ::  bcvel
 character(len=1  ), dimension(0:1,  3) :: cbcpre
 real(rp)          , dimension(0:1,  3) ::  bcpre
+#ifdef _NON_NEWTONIAN
+character(len=1  ), dimension(0:1,  3) :: cbcmu
+real(rp)          , dimension(0:1,  3) ::  bcmu
+#endif
 integer           , dimension(0:1,  3) ::  inflow_type
 character(len=100)                     :: inivel
 !
@@ -193,6 +197,11 @@ contains
       l_periodic(:) = 0._rp
       periods(:)    = 0
     end where
+#ifdef _NON_NEWTONIAN
+   cbcmu(:,:) = cbcpre(:,:)
+   where(cbcmu(:,:) /= 'F') cbcmu(:,:) = 'N'
+   bcmu(:,:) = 0._rp
+#endif
     !
     ! read iterative solver parameter file hypre.in, if it exists
     !
