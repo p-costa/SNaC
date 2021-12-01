@@ -1,0 +1,2 @@
+1.0 10.  0.01            ! n,tau0,eps
+321.238001484052 1. 1.     ! dpdl_nn(1:3) -- target pressure gradient to calculate laminar inflow profile
