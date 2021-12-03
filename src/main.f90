@@ -52,6 +52,7 @@ program snac
                                  hypre_tol,hypre_maxiter,hypre_solver_i
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
+  use mod_post           , only: cmpt_wall_forces, updt_wall_forces
   use mod_sanity         , only: test_sanity
   use mod_solver         , only: init_bc_rhs,init_matrix_3d,create_solver,setup_solver, &
                                  add_constant_to_diagonal,solve_helmholtz,finalize_solver,finalize_matrix, &
@@ -162,6 +163,9 @@ program snac
   integer, allocatable, dimension(:,:) :: lo_sp,hi_sp
 #endif
 #endif
+  real(rp), dimension(0:1,3) :: tau_x    ,tau_y    ,tau_z    , &
+                                tau_x_o  ,tau_y_o  ,tau_z_o  , &
+                                tau_x_acc,tau_y_acc,tau_z_acc
   !
   real(rp), dimension(100) :: var
   character(len=3  ) :: cblock
@@ -618,6 +622,9 @@ end if
   wo(:,:,:) = 0._rp
   alphaoi = 0._rp
 #endif
+  tau_x_o(:,:) = 0._rp
+  tau_y_o(:,:) = 0._rp
+  tau_z_o(:,:) = 0._rp
   !
   ! post-process and write initial condition
   !
@@ -842,11 +849,16 @@ end if
     istep = istep + 1
     time  = time  + dt
     if(myid == 0) write(stdout,*) 'Timestep #', istep, 'Time = ', time
+    tau_x_acc(:,:) = 0._rp; tau_y_acc(:,:) = 0._rp; tau_z_acc(:,:) = 0._rp
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
       alpha = -visc*dtrk/2._rp
       call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce, &
                   visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp)
+      call cmpt_wall_forces(hi(:)-lo(:)+1,is_bound,dxc,dxf,dyc,dyf,dzc,dzf,visc, &
+                            u,v,w,p,bforce,tau_x,tau_y,tau_z)
+      call updt_wall_forces(rkcoeff(:,irk),tau_x,tau_y,tau_z,tau_x_o,tau_y_o,tau_z_o, &
+                            tau_x_acc,tau_y_acc,tau_z_acc)
 #ifdef _IMPDIFF
       alphai = alpha**(-1)
       !
@@ -1062,7 +1074,8 @@ end if
       var(1) = 1._rp*istep
       var(2) = dt
       var(3) = time
-      call out0d(trim(datadir)//'time.out',3,var)
+      call out0d(trim(datadir)//'time.out',3,myid,var)
+      include 'out0d.h90'
     end if
     write(fldnum,'(i7.7)') istep
     if(mod(istep,iout1d) == 0) then
