@@ -251,6 +251,7 @@ This line sets the initial velocity field for the block in question.
 `initvel` **chooses the initial velocity field**. The following options are available:
 
 * `zer`: zero velocity field
+* `uni`: uniform velocity field equal to `uref`                                     ; streamwise direction in `x`
 * `cou`: plane Couette flow profile with symmetric wall velocities equal to `uref/2`; streamwise direction in `x`
 * `poi`: plane Poiseuille flow profile with mean velocity `uref`                    ; streamwise direction in `x`
 * `log`: logarithmic profile with mean velocity `uref`                              ; streamwise direction in `x`

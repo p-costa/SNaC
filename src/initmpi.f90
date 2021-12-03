@@ -31,6 +31,8 @@ module mod_initmpi
     integer                 :: i,j,k,idir,iidir,inb,irank
     logical                 :: is_nb,found_friend
     integer(i8)             :: ntot,ntot_max,ntot_min,ntot_sum
+    integer                 :: isize
+    type(MPI_DATATYPE)      :: MPI_INTEGER_I8
     !
     call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank)
     call MPI_COMM_SPLIT(MPI_COMM_WORLD,my_block,myid,comm_block)
@@ -169,9 +171,11 @@ module mod_initmpi
     ! check distribution of grid points over the different tasks
     !
     ntot = product(hi(:)-lo(:)+1_i8)
-    call MPI_ALLREDUCE(ntot,ntot_min,1,MPI_LONG,MPI_MIN,MPI_COMM_WORLD)
-    call MPI_ALLREDUCE(ntot,ntot_max,1,MPI_LONG,MPI_MAX,MPI_COMM_WORLD)
-    call MPI_ALLREDUCE(ntot,ntot_sum,1,MPI_LONG,MPI_SUM,MPI_COMM_WORLD)
+    call MPI_SIZEOF(1_i8,isize)
+    call MPI_TYPE_MATCH_SIZE(MPI_TYPECLASS_INTEGER,isize,MPI_INTEGER_I8)
+    call MPI_ALLREDUCE(ntot,ntot_min,1,MPI_INTEGER_I8,MPI_MIN,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(ntot,ntot_max,1,MPI_INTEGER_I8,MPI_MAX,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(ntot,ntot_sum,1,MPI_INTEGER_I8,MPI_SUM,MPI_COMM_WORLD)
     write(stdout,*) 'Maximum, minimum, average, and normalized average number of grid points for task ',myid, &
                     '(block',my_block,'): ',ntot_max, &
                                             ntot_min, &

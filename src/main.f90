@@ -94,6 +94,7 @@ program snac
   real(rp), dimension(0:1,0:1,3) :: dlc_outflow
   logical :: outflow_exists
 #ifdef _IMPDIFF
+  real(rp), dimension(0:1,3) :: dlu,dlv,dlw
   integer , dimension(    3) :: hiu,hiv,hiw
 #endif
   type(hypre_solver) :: psolver
@@ -737,17 +738,17 @@ end if
   call setup_solver(psolver)
 #endif
 #ifdef _IMPDIFF
-  dl = reshape([dxf_g(lo_g(1)-0),dxf_g(hi_g(1)), &
-                dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
-                dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
+  dlu = reshape([dxf_g(lo_g(1)-0),dxf_g(hi_g(1)), &
+                 dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
+                 dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dlu))
   hiu(:) = hi(:)
   if(is_bound(1,1)) hiu(:) = hiu(:)-[1,0,0]
   is_centered(:) = [.false.,.true.,.true.]
-  call init_bc_rhs(cbcvel(:,:,1),bcvel(:,:,1),dl,is_bound,is_centered,lo,hiu,periods, &
+  call init_bc_rhs(cbcvel(:,:,1),bcvel(:,:,1),dlu,is_bound,is_centered,lo,hiu,periods, &
                    dxf,dxc,dyc,dyf,dzc,dzf,rhsu%x,rhsu%y,rhsu%z,bcu%x,bcu%y,bcu%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   allocate(lambda_u(hi(idir)-lo(idir)+1))
-  call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,1),is_centered(idir),dl(0,idir),arrplan_u,normfft_u,lambda_u)
+  call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,1),is_centered(idir),dlu(0,idir),arrplan_u,normfft_u,lambda_u)
   alpha_lambda_u = 0._rp
   allocate(lambda_u_a(hi_a(idir)-lo_a(idir)+1))
   allocate(usolver_fft(hi_a(idir)-lo_a(idir)+1))
@@ -759,25 +760,25 @@ end if
   hiu_a(:) = hi_s(:)
   if(periods(1) == 0) hiu_a(:) = hiu_a(:)-[1,0,0]
 #endif
-  call init_n_2d_matrices(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dl(:,il:iu:iskip), &
+  call init_n_2d_matrices(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dlu(:,il:iu:iskip), &
                           is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiu_a(idir),lo_a(il:iu:iskip),hiu_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlu1_1,dlu1_2,dlu2_1,dlu2_2,alpha,alpha_bc,lambda_u_a,comms_fft,usolver_fft)
 #else
-  call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dl,is_uniform_grid,is_bound,is_centered,lo,hiu,periods, &
+  call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dlu,is_uniform_grid,is_bound,is_centered,lo,hiu,periods, &
                       dxf,dxc,dyc,dyf,dzc,dzf,alpha,alpha_bc,usolver)
 #endif
-  dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
-                dyf_g(lo_g(2)-0),dyf_g(hi_g(2)), &
-                dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dl))
+  dlv = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
+                 dyf_g(lo_g(2)-0),dyf_g(hi_g(2)), &
+                 dzc_g(lo_g(3)-1),dzc_g(hi_g(3))],shape(dlv))
   hiv(:) = hi(:)
   if(is_bound(1,2)) hiv(:) = hiv(:)-[0,1,0]
   is_centered(:) = [.true.,.false.,.true.]
-  call init_bc_rhs(cbcvel(:,:,2),bcvel(:,:,2),dl,is_bound,is_centered,lo,hiv,periods, &
+  call init_bc_rhs(cbcvel(:,:,2),bcvel(:,:,2),dlv,is_bound,is_centered,lo,hiv,periods, &
                    dxc,dxf,dyf,dyc,dzc,dzf,rhsv%x,rhsv%y,rhsv%z,bcv%x,bcv%y,bcv%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   allocate(lambda_v(hi(idir)-lo(idir)+1))
-  call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,2),is_centered(idir),dl(0,idir),arrplan_v,normfft_v,lambda_v)
+  call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,2),is_centered(idir),dlv(0,idir),arrplan_v,normfft_v,lambda_v)
   alpha_lambda_v = 0._rp
   allocate(lambda_v_a(hi_a(idir)-lo_a(idir)+1))
   allocate(vsolver_fft(hi_a(idir)-lo_a(idir)+1))
@@ -789,25 +790,25 @@ end if
   hiv_a(:) = hi_s(:)
   if(periods(2) == 0) hiv_a(:) = hiv_a(:)-[0,1,0]
 #endif
-  call init_n_2d_matrices(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dl(:,il:iu:iskip), &
+  call init_n_2d_matrices(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dlv(:,il:iu:iskip), &
                           is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiv_a(idir),lo_a(il:iu:iskip),hiv_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlv1_1,dlv1_2,dlv2_1,dlv2_2,alpha,alpha_bc,lambda_v_a,comms_fft,vsolver_fft)
 #else
-  call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dl,is_uniform_grid,is_bound,is_centered,lo,hiv,periods, &
+  call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dlv,is_uniform_grid,is_bound,is_centered,lo,hiv,periods, &
                       dxc,dxf,dyf,dyc,dzc,dzf,alpha,alpha_bc,vsolver)
 #endif
-  dl = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
-                dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
-                dzf_g(lo_g(3)-0),dzf_g(hi_g(3))],shape(dl))
+  dlw = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
+                 dyc_g(lo_g(2)-1),dyc_g(hi_g(2)), &
+                 dzf_g(lo_g(3)-0),dzf_g(hi_g(3))],shape(dlw))
   hiw(:) = hi(:)
   if(is_bound(1,3)) hiw(:) = hiw(:)-[0,0,1]
   is_centered(:) = [.true.,.true.,.false.]
-  call init_bc_rhs(cbcvel(:,:,3),bcvel(:,:,3),dl,is_bound,is_centered,lo,hiw,periods, &
+  call init_bc_rhs(cbcvel(:,:,3),bcvel(:,:,3),dlw,is_bound,is_centered,lo,hiw,periods, &
                    dxc,dxf,dyc,dyf,dzf,dzc,rhsw%x,rhsw%y,rhsw%z,bcw%x,bcw%y,bcw%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   allocate(lambda_w(hi(idir)-lo(idir)+1))
-  call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,3),is_centered(idir),dl(0,idir),arrplan_w,normfft_w,lambda_w)
+  call init_fft_reduction(idir,hi(:)-lo(:)+1,cbcvel(:,idir,3),is_centered(idir),dlw(0,idir),arrplan_w,normfft_w,lambda_w)
   alpha_lambda_w = 0._rp
   allocate(lambda_w_a(hi_a(idir)-lo_a(idir)+1))
   allocate(wsolver_fft(hi_a(idir)-lo_a(idir)+1))
@@ -819,12 +820,12 @@ end if
   hiw_a(:) = hi_s(:)
   if(periods(3) == 0) hiw_a(:) = hiw_a(:)-[0,0,1]
 #endif
-  call init_n_2d_matrices(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dl(:,il:iu:iskip), &
+  call init_n_2d_matrices(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dlw(:,il:iu:iskip), &
                           is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiw_a(idir),lo_a(il:iu:iskip),hiw_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlw1_1,dlw1_2,dlw2_1,dlw2_2,alpha,alpha_bc,lambda_w_a,comms_fft,wsolver_fft)
 #else
-  call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dl,is_uniform_grid,is_bound,is_centered,lo,hiw,periods, &
+  call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dlw,is_uniform_grid,is_bound,is_centered,lo,hiw,periods, &
                       dxc,dxf,dyc,dyf,dzf,dzc,alpha,alpha_bc,wsolver)
 #endif
 #endif
