@@ -26,7 +26,7 @@ module mod_initflow
     real(rp), allocatable, dimension(:) :: u1d
     integer  :: i,j,k
     logical  :: is_noise,is_mean,is_pair
-    real(rp) :: reb,retau
+    real(rp) :: reb,retau,lambda
     real(rp) :: xcl,xfl,ycl,yfl,zcl,zfl
     !
     allocate(u1d(lo(3):hi(3)))
@@ -70,6 +70,25 @@ module mod_initflow
           end do
         end do
       end do
+    case('kov')
+      reb = uref*lref/visc
+      lambda = reb/2-sqrt(reb**2/4+4*pi**2)
+      do k=lo(3),hi(3)
+        zcl = zc(k)
+        zfl = zf(k)
+        do j=lo(2),hi(2)
+          ycl = yc(j)
+          yfl = yf(j)
+          do i=lo(1),hi(1)
+            xcl = xc(i)
+            xfl = xf(i)
+            u(i,j,k) = 1._rp            -exp(lambda*xfl)*cos(2*pi*zcl)
+            v(i,j,k) = 0._rp
+            w(i,j,k) = lambda/(2._rp*pi)*exp(lambda*xcl)*sin(2*pi*zfl)
+            p(i,j,k) = 0._rp !.5_rp*(1._rp-exp(2._rp*lambda*xcl))
+          end do
+        end do
+      end do
     case('pdc')
       if(is_wallturb) then ! turbulent flow
         retau  = sqrt(bforce*lref)*uref/visc
@@ -88,7 +107,7 @@ module mod_initflow
       call MPI_FINALIZE()
       error stop
     end select
-    if(inivel /= 'tgv') then
+    if(all(inivel /= ['tgv','kov'])) then
       do k=lo(3),hi(3)
         do j=lo(2),hi(2)
           do i=lo(1),hi(1)
@@ -268,7 +287,8 @@ module mod_initflow
     vel = 6._rp*(rr*(1._rp-rr))
   end function poiseuille_square
   !
-  subroutine init_inflow(periods,lo,hi,lmin,lmax,x1c,x2c,uref,vel)
+  subroutine init_inflow(inflow_type,periods,lo,hi,lmin,lmax,x1c,x1f,x2c,x2f, &
+                         uref,lref,visc,veln,velt1,velt2)
     !
     ! below an inflow is calculated for a 2d plane
     ! later this subroutine can be generalized with other shapes of
@@ -278,27 +298,55 @@ module mod_initflow
     ! there is no danger of experiencing a singularity '0._rp**0'.
     !
     implicit none
+    integer , parameter :: INFLOW_POISEUILLE = 1, &
+                           INFLOW_KOVASZNAY  = 2
+    !
+    integer , intent(in )                      :: inflow_type
     integer , intent(in ), dimension(2       ) :: periods
     integer , intent(in ), dimension(2       ) :: lo,hi
     real(rp), intent(in ), dimension(2       ) :: lmin,lmax
-    real(rp), intent(in ), dimension(lo(1)-1:) :: x1c
-    real(rp), intent(in ), dimension(lo(2)-1:) :: x2c
-    real(rp), intent(in ) :: uref ! target bulk velocity
-    real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:) :: vel
+    real(rp), intent(in ), dimension(lo(1)-1:) :: x1c,x1f
+    real(rp), intent(in ), dimension(lo(2)-1:) :: x2c,x2f
+    real(rp), intent(in ) :: uref,lref,visc ! target bulk velocity
+    real(rp), intent(out), dimension(lo(1)-1:,lo(2)-1:) :: veln,velt1,velt2
     integer, dimension(2) :: q
     integer :: i1,i2
-    ! real(rp), external :: poiseuille_square
-    ! procedure (), pointer :: inflow_function => null()
-    ! if(inflow_type == POISEUILLE) inflow_function => poiseuille_square
+    real(rp) :: lambda,reb,x0
     !
-    q(:) = 1
-    where(periods(:) /= 0) q(:) = 0
-    do i2 = lo(2)-1,hi(2)+1
-      do i1 = lo(1)-1,hi(1)+1
-        vel(i1,i2) = uref*poiseuille_square(x1c(i1),lmin(1),lmax(1))**q(1) * &
-                          poiseuille_square(x2c(i2),lmin(2),lmax(2))**q(2)
+    select case(inflow_type)
+    case(INFLOW_POISEUILLE)
+      q(:) = 1
+      where(periods(:) /= 0) q(:) = 0
+      do i2 = lo(2)-1,hi(2)+1
+        do i1 = lo(1)-1,hi(1)+1
+          veln(i1,i2) = uref*poiseuille_square(x1c(i1),lmin(1),lmax(1))**q(1) * &
+                             poiseuille_square(x2c(i2),lmin(2),lmax(2))**q(2)
+          velt1(i1,i2) = 0._rp
+          velt2(i1,i2) = 0._rp
+        end do
       end do
-    end do
+    case(INFLOW_KOVASZNAY)
+      reb = uref*lref/visc
+      lambda = reb/2-sqrt(reb**2/4+4*pi**2)
+      x0 = -0.5
+      do i2 = lo(2)-1,hi(2)+1
+        do i1 = lo(1)-1,hi(1)+1
+          veln( i1,i2) = 1._rp-            exp(lambda*x0)*cos(2*pi*x2c(i2))
+          velt1(i1,i2) = 0._rp
+          velt2(i1,i2) = lambda/(2._rp*pi)*exp(lambda*x0)*sin(2*pi*x2f(i2))
+        end do
+      end do
+    case default
+      q(:) = 1
+      where(periods(:) /= 0) q(:) = 0
+      do i2 = lo(2)-1,hi(2)+1
+        do i1 = lo(1)-1,hi(1)+1
+          veln(i1,i2) = 0._rp
+          velt1(i1,i2) = 0._rp
+          velt2(i1,i2) = 0._rp
+        end do
+      end do
+    end select
   end subroutine init_inflow
   !
   subroutine log_profile(lo,hi,zc,l,uref,lref,visc,p)

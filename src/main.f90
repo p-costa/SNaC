@@ -87,6 +87,7 @@ program snac
     real(rp), allocatable, dimension(:,:,:) :: z
   end type rhs_bound
   type(rhs_bound) :: rhsp
+  type(rhs_bound) :: u_in,v_in,w_in
   real(rp) :: alpha,alpha_bc(0:1,1:3),alpha_bc_o(0:1,1:3)
 #ifdef _IMPDIFF
   type(rhs_bound) :: rhsu,rhsv,rhsw,bcu,bcv,bcw
@@ -227,9 +228,15 @@ program snac
            wp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            pp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            po(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
-  allocate(velin_x( lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1,0:1), &
-           velin_y( lo(1)-1:hi(1)+1,lo(3)-1:hi(3)+1,0:1), &
-           velin_z( lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,0:1))
+  allocate(u_in%x(lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1,0:1), &
+           u_in%y(lo(1)-1:hi(1)+1,lo(3)-1:hi(3)+1,0:1), &
+           u_in%z(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,0:1), &
+           v_in%x(lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1,0:1), &
+           v_in%y(lo(1)-1:hi(1)+1,lo(3)-1:hi(3)+1,0:1), &
+           v_in%z(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,0:1), &
+           w_in%x(lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1,0:1), &
+           w_in%y(lo(1)-1:hi(1)+1,lo(3)-1:hi(3)+1,0:1), &
+           w_in%z(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,0:1))
 #ifdef _IMPDIFF
   allocate(uo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            vo(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
@@ -528,9 +535,15 @@ end if
   call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
                 dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
   call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
-  velin_x(:,:,:) = 0._rp
-  velin_y(:,:,:) = 0._rp
-  velin_z(:,:,:) = 0._rp
+  u_in%x(:,:,:) = 0._rp
+  v_in%x(:,:,:) = 0._rp
+  w_in%x(:,:,:) = 0._rp
+  u_in%y(:,:,:) = 0._rp
+  v_in%y(:,:,:) = 0._rp
+  w_in%y(:,:,:) = 0._rp
+  u_in%z(:,:,:) = 0._rp
+  v_in%z(:,:,:) = 0._rp
+  w_in%z(:,:,:) = 0._rp
 #ifdef _IMPDIFF
   do ib=0,1
     bcu%x(:,:,ib) = bcvel(ib,1,1)
@@ -554,30 +567,41 @@ end if
         select case(idir)
         case(1)
           il = 2;iu = 3;iskip = 1
-          call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
-                           yc,zc,bcvel(ib,idir,idir),velin_x(:,:,ib))
+          call init_inflow(inflow_type(ib,idir),periods(il:iu:iskip), &
+                           lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                           yc,yf,zc,zf,bcvel(ib,idir,idir),lref,visc,u_in%x(:,:,ib),v_in%x(:,:,ib),w_in%x(:,:,ib))
 #ifdef _IMPDIFF
-  bcu%x(:,:,ib) = velin_x(lo(2):hi(2),lo(3):hi(3),ib)
+  bcu%x(:,:,ib) = u_in%x(lo(2):hi(2),lo(3):hi(3),ib)
+  bcv%x(:,:,ib) = v_in%x(lo(2):hi(2),lo(3):hi(3),ib)
+  bcw%x(:,:,ib) = w_in%x(lo(2):hi(2),lo(3):hi(3),ib)
 #endif
         case(2)
           il = 1;iu = 3;iskip = 2
-          call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
-                           xc,zc,bcvel(ib,idir,idir),velin_y(:,:,ib))
+          call init_inflow(inflow_type(ib,idir),periods(il:iu:iskip), &
+                           lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                           xc,xf,zc,zf,bcvel(ib,idir,idir),lref,visc,v_in%y(:,:,ib),u_in%y(:,:,ib),w_in%y(:,:,ib))
 #ifdef _IMPDIFF
-  bcv%y(:,:,ib) = velin_y(lo(1):hi(1),lo(3):hi(3),ib)
+  bcu%y(:,:,ib) = u_in%y(lo(1):hi(1),lo(3):hi(3),ib)
+  bcv%y(:,:,ib) = v_in%y(lo(1):hi(1),lo(3):hi(3),ib)
+  bcw%y(:,:,ib) = w_in%y(lo(1):hi(1),lo(3):hi(3),ib)
 #endif
         case(3)
           il = 1;iu = 2;iskip = 1
-          call init_inflow(periods(il:iu:iskip),lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
-                           xc,yc,bcvel(ib,idir,idir),velin_z(:,:,ib))
+          call init_inflow(inflow_type(ib,idir),periods(il:iu:iskip), &
+                           lo(il:iu:iskip),hi(il:iu:iskip),lmin(il:iu:iskip),lmax(il:iu:iskip), &
+                           xc,xf,yc,yf,bcvel(ib,idir,idir),lref,visc,w_in%z(:,:,ib),u_in%z(:,:,ib),v_in%z(:,:,ib))
 #ifdef _IMPDIFF
-  bcw%z(:,:,ib) = velin_z(lo(1):hi(1),lo(2):hi(2),ib)
+  bcu%z(:,:,ib) = u_in%z(lo(1):hi(1),lo(2):hi(2),ib)
+  bcv%z(:,:,ib) = v_in%z(lo(1):hi(1),lo(2):hi(2),ib)
+  bcw%z(:,:,ib) = w_in%z(lo(1):hi(1),lo(2):hi(2),ib)
 #endif
         end select
       end if
     end do
   end do
-  call inflow(is_bound_inflow,lo,hi,velin_x,velin_y,velin_z,u,v,w)
+  call inflow(is_bound_inflow,.false.,lo,hi,u_in%x,v_in%x,w_in%x, &
+                                            u_in%y,v_in%y,w_in%y, &
+                                            u_in%z,v_in%z,w_in%z,u,v,w)
   !
   ! outflow BCs
   !
@@ -956,7 +980,9 @@ end if
 #endif
       call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,up,vp,wp)
-      call inflow(is_bound_inflow,lo,hi,velin_x,velin_y,velin_z,up,vp,wp)
+      call inflow(is_bound_inflow,.false.,lo,hi,u_in%x,v_in%x,w_in%x, &
+                                                u_in%y,v_in%y,w_in%y, &
+                                                u_in%z,v_in%z,w_in%z,up,vp,wp)
       call outflow(is_bound_outflow,is_estimated_traction,lo,hi,dl_outflow,visc,tr_x,tr_y,tr_z,u,v,w,p)
 #if !defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
       dtrk  = dt
@@ -1026,6 +1052,9 @@ end if
       call correc(lo,hi,dxc,dyc,dzc,dtrk,pp,up,vp,wp,u,v,w)
       call bounduvw(cbcvel,lo,hi,bcvel,.true.,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
+      call inflow(is_bound_inflow,.true.,lo,hi,u_in%x,v_in%x,w_in%x, &
+                                               u_in%y,v_in%y,w_in%y, &
+                                               u_in%z,v_in%z,w_in%z,u,v,w)
       call updt_pressure(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,pp,p)
       call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
       call chkdiv(lo,hi,dxf,dyf,dzf,u,v,w,vol_all,MPI_COMM_WORLD,divtot,divmax)
