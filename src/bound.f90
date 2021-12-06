@@ -423,27 +423,41 @@ module mod_bound
     end select
   end subroutine cmpt_estimated_traction
   !
-  subroutine inflow(is_inflow_bound,lo,hi,velx,vely,velz,u,v,w)
+  subroutine inflow(is_inflow_bound,is_correc,lo,hi,uin_x,vin_x,win_x, &
+                                                    uin_y,vin_y,win_y, &
+                                                    uin_z,vin_z,win_z,u,v,w)
     !
     implicit none
     logical , intent(in   ), dimension(0:1,1:3) :: is_inflow_bound
+    logical , intent(in   )                     :: is_correc
     integer , intent(in   ), dimension(3      ) :: lo,hi
-    real(rp), intent(in   ), dimension(lo(2)-1:,lo(3)-1:,0:) :: velx
-    real(rp), intent(in   ), dimension(lo(1)-1:,lo(3)-1:,0:) :: vely
-    real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,0:) :: velz
+    real(rp), intent(in   ), dimension(lo(2)-1:,lo(3)-1:,0:) :: uin_x,vin_x,win_x
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(3)-1:,0:) :: uin_y,vin_y,win_y
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,0:) :: uin_z,vin_z,win_z
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
-    integer :: ibound,idir,q
+    integer :: ibound,idir,qn,qt,dq
     do idir=1,3
       do ibound=0,1
         if(is_inflow_bound(ibound,idir)) then
-          q = (1-ibound)*(lo(idir)-1)+ibound*hi(idir)
+          qn = (1-ibound)*(lo(idir)-1)+ibound*(hi(idir)  )
+          qt = (1-ibound)*(lo(idir)-1)+ibound*(hi(idir)+1)
+          if(ibound == 0) dq = 1; if(ibound == 1) dq = -1
           select case(idir)
             case(1)
-              u(q,:,:) = velx(:,:,ibound)
+              if(.not.is_correc) &
+                u(qn,:,:) =                     uin_x(:,:,ibound)
+              v(qt,:,:) = -v(qt+dq,:,:) + 2._rp*vin_x(:,:,ibound)
+              w(qt,:,:) = -w(qt+dq,:,:) + 2._rp*win_x(:,:,ibound)
             case(2)
-              v(:,q,:) = vely(:,:,ibound)
+              u(:,qt,:) = -u(:,qt+dq,:) + 2._rp*uin_y(:,:,ibound)
+              if(.not.is_correc) &
+                v(:,qn,:) =                     vin_y(:,:,ibound)
+              w(:,qt,:) = -w(:,qt+dq,:) + 2._rp*win_y(:,:,ibound)
             case(3)
-              w(:,:,q) = velz(:,:,ibound)
+              u(:,:,qt) = -u(:,:,qt+dq) + 2._rp*uin_z(:,:,ibound)
+              v(:,:,qt) = -v(:,:,qt+dq) + 2._rp*vin_z(:,:,ibound)
+              if(.not.is_correc) &
+                w(:,:,qn) =                     win_z(:,:,ibound)
           end select
         end if
       end do
