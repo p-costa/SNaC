@@ -294,7 +294,7 @@ program snac
 #endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #ifdef _FFT_USE_SLICED_PENCILS
-nslices = max(16,ng(idir))
+nslices = min(16,ng(idir))
 if(nslices > ng(idir)) then
   if(myid == 0) write(stderr,*) 'ERROR: number of pencil slices cannot exceed the number of grid points along the FFT direction.'
   call MPI_FINALIZE()
