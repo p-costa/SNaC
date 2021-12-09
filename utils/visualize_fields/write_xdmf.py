@@ -6,6 +6,10 @@ import glob
 #
 iseek      = 0              # number of bytes to skip relative to the origin of the binary file (0 for SNaC)
 iprecision = 8              # precision of real-valued data
+if(    iprecision == 4):
+    my_dtype = 'float32'
+else:
+    my_dtype = 'float64'
 r0_g = np.array([0.,0.,0.]) # domain origin
 non_uniform_grid = True
 #
@@ -74,22 +78,13 @@ for iblock in range(1,nblocks+1):
     if os.path.exists(zgridfile): os.remove(zgridfile)
     if(non_uniform_grid):
         f   = open('grid_x'+blockname+'.bin','rb')
-        if(    iprecision == 4):
-            grid_x = np.fromfile(f,dtype='float32')
-        else:
-            grid_x = np.fromfile(f,dtype='float64')
+        grid_x = np.fromfile(f,dtype=my_dtype)
         f.close()
         f   = open('grid_y'+blockname+'.bin','rb')
-        if(    iprecision == 4):
-            grid_y = np.fromfile(f,dtype='float32')
-        else:
-            grid_y = np.fromfile(f,dtype='float64')
+        grid_y = np.fromfile(f,dtype=my_dtype)
         f.close()
         f   = open('grid_z'+blockname+'.bin','rb')
-        if(    iprecision == 4):
-            grid_z = np.fromfile(f,dtype='float32')
-        else:
-            grid_z = np.fromfile(f,dtype='float64')
+        grid_z = np.fromfile(f,dtype=my_dtype)
         f.close()
         grid_x = np.reshape(grid_x,(ng[0],4),order='F')
         grid_y = np.reshape(grid_y,(ng[1],4),order='F')
@@ -97,9 +92,9 @@ for iblock in range(1,nblocks+1):
         x = r0_g[0] + grid_x[:,1]
         y = r0_g[1] + grid_y[:,1]
         z = r0_g[2] + grid_z[:,1]
-    x[nmin[0]-1:nmax[0]:nstep[0]].astype('float64').tofile(xgridfile)
-    y[nmin[1]-1:nmax[1]:nstep[1]].astype('float64').tofile(ygridfile)
-    z[nmin[2]-1:nmax[2]:nstep[2]].astype('float64').tofile(zgridfile)
+    x[nmin[0]-1:nmax[0]:nstep[0]].astype(my_dtype).tofile(xgridfile)
+    y[nmin[1]-1:nmax[1]:nstep[1]].astype(my_dtype).tofile(ygridfile)
+    z[nmin[2]-1:nmax[2]:nstep[2]].astype(my_dtype).tofile(zgridfile)
     #
     # write xml file
     #

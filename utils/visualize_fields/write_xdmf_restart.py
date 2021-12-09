@@ -9,6 +9,10 @@ import struct
 # define some custom parameters, not defined in the DNS code
 #
 iprecision = 8              # precision of the real-valued data
+if(    iprecision == 4):
+    my_dtype = 'float32'
+else:
+    my_dtype = 'float64'
 r0_g = np.array([0.,0.,0.]) # domain origin
 non_uniform_grid = True
 #
@@ -44,11 +48,15 @@ for iblock in range(1,nblocks+1):
     isteps = np.zeros(nsaves,dtype=int)
     iseek   = n[0]*n[1]*n[2]*iprecision*nflds # file offset in bytes with respect to the origin
                                               # (to retrieve the simulation time and time step number)
+    if(iprecision == 4):
+        my_format = '2f'
+    else:
+        my_format = '2d'
     for i in range(nsaves):
         with open(files[i], 'rb') as f:
             raw   = f.read()[iseek:iseek+iprecision*2]
-        rtimes[i] =     struct.unpack('2d',raw)[0]
-        isteps[i] = int(struct.unpack('2d',raw)[1])
+        rtimes[i] =     struct.unpack(my_format,raw)[0]
+        isteps[i] = int(struct.unpack(my_format,raw)[1])
         f.close()
     #
     # remove duplicates
@@ -75,22 +83,13 @@ for iblock in range(1,nblocks+1):
     if os.path.exists(zgridfile): os.remove(zgridfile)
     if(non_uniform_grid):
         f   = open('grid_x'+blockname+'.bin','rb')
-        if(    iprecision == 4):
-            grid_x = np.fromfile(f,dtype='float32')
-        else:
-            grid_x = np.fromfile(f,dtype='float64')
+        grid_x = np.fromfile(f,dtype=my_dtype)
         f.close()
         f   = open('grid_y'+blockname+'.bin','rb')
-        if(    iprecision == 4):
-            grid_y = np.fromfile(f,dtype='float32')
-        else:
-            grid_y = np.fromfile(f,dtype='float64')
+        grid_y = np.fromfile(f,dtype=my_dtype)
         f.close()
         f   = open('grid_z'+blockname+'.bin','rb')
-        if(    iprecision == 4):
-            grid_z = np.fromfile(f,dtype='float32')
-        else:
-            grid_z = np.fromfile(f,dtype='float64')
+        grid_z = np.fromfile(f,dtype=my_dtype)
         f.close()
         grid_x = np.reshape(grid_x,(ng[0],4),order='F')
         grid_y = np.reshape(grid_y,(ng[1],4),order='F')
@@ -98,9 +97,9 @@ for iblock in range(1,nblocks+1):
         x = r0_g[0] + grid_x[:,1]
         y = r0_g[1] + grid_y[:,1]
         z = r0_g[2] + grid_z[:,1]
-    x[0:n[0]].astype('float64').tofile(xgridfile)
-    y[0:n[1]].astype('float64').tofile(ygridfile)
-    z[0:n[2]].astype('float64').tofile(zgridfile)
+    x[0:n[0]].astype(my_dtype).tofile(xgridfile)
+    y[0:n[1]].astype(my_dtype).tofile(ygridfile)
+    z[0:n[2]].astype(my_dtype).tofile(zgridfile)
     #
     # write xml file
     #
