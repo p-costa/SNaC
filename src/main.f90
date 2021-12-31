@@ -76,7 +76,7 @@ program snac
   type(MPI_DATATYPE) , dimension(    3) :: halos
   integer , dimension(    3) :: ng,lo_g,hi_g,lo_1,hi_1
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
-  real(rp), allocatable, dimension(:,:,:) :: velin_x,velin_y,velin_z,tr_x,tr_y,tr_z
+  real(rp), allocatable, dimension(:,:,:) :: tr_x,tr_y,tr_z
 #ifdef _IMPDIFF
   real(rp), allocatable, dimension(:,:,:) :: uo,vo,wo
 #endif
@@ -92,7 +92,7 @@ program snac
 #ifdef _IMPDIFF
   type(rhs_bound) :: rhsu,rhsv,rhsw,bcu,bcv,bcw
 #endif
-  real(rp), dimension(    0:1,3) :: dl,dl_outflow
+  real(rp), dimension(    0:1,3) :: dl,dl_outflow,dl_outflow_h
   real(rp), dimension(0:1,0:1,3) :: dlc_outflow
   logical :: outflow_exists
 #ifdef _IMPDIFF
@@ -100,9 +100,13 @@ program snac
   integer , dimension(    3) :: hiu,hiv,hiw
 #endif
   type(hypre_solver) :: psolver
+  logical                             :: is_symm_matrix_p
 #ifdef _IMPDIFF
   type(hypre_solver) :: usolver,vsolver,wsolver
   real(rp)           :: alphai,alphaoi
+  logical                             :: is_symm_matrix_u, &
+                                         is_symm_matrix_v, &
+                                         is_symm_matrix_w
 #endif
   !
   real(rp) :: dt,dtmax,time,dtrk,divtot,divmax
@@ -294,7 +298,7 @@ program snac
 #endif
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #ifdef _FFT_USE_SLICED_PENCILS
-nslices = max(16,ng(idir))
+nslices = min(16,ng(idir))
 if(nslices > ng(idir)) then
   if(myid == 0) write(stderr,*) 'ERROR: number of pencil slices cannot exceed the number of grid points along the FFT direction.'
   call MPI_FINALIZE()
@@ -605,15 +609,18 @@ end if
   !
   ! outflow BCs
   !
-  allocate(tr_x,mold=velin_x)
-  allocate(tr_y,mold=velin_y)
-  allocate(tr_z,mold=velin_z)
+  allocate(tr_x,mold=u_in%x)
+  allocate(tr_y,mold=v_in%y)
+  allocate(tr_z,mold=w_in%z)
   tr_x(:,:,:) = 0._rp
   tr_y(:,:,:) = 0._rp
   tr_z(:,:,:) = 0._rp
   dl_outflow = reshape([dxf_g(lo_g(1)),dxf_g(hi_g(1)), &
                         dyf_g(lo_g(2)),dyf_g(hi_g(2)), &
                         dzf_g(lo_g(3)),dzf_g(hi_g(3))],shape(dl_outflow))
+  dl_outflow_h   = reshape([dxf_g(lo_g(1)+1),dxf_g(hi_g(1)-1), &
+                            dyf_g(lo_g(2)+1),dyf_g(hi_g(2)-1), &
+                            dzf_g(lo_g(3)+1),dzf_g(hi_g(3)-1)],shape(dl_outflow))
   dlc_outflow(0,:,:) = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)-1), &
                                 dyc_g(lo_g(2)-1),dyc_g(hi_g(2)-1), &
                                 dzc_g(lo_g(3)-1),dzc_g(hi_g(3)-1)],shape(dl_outflow))
@@ -628,7 +635,6 @@ end if
     end do
   end do
   call MPI_ALLREDUCE(any(is_bound_outflow(:,:)),outflow_exists,1,MPI_LOGICAL,MPI_LOR,MPI_COMM_WORLD)
-  call outflow(is_bound_outflow,is_estimated_traction,lo,hi,dl_outflow,visc,tr_x,tr_y,tr_z,u,v,w,p)
   alpha_bc(  :,:) = 0._rp
   alpha_bc_o(:,:) = alpha_bc(:,:)
   !
@@ -739,6 +745,7 @@ end if
   allocate(comms_fft(hi_a(idir)-lo_a(idir)+1))
   allocate(lambda_p_a(hi_a(idir)-lo_a(idir)+1))
   is_bound_a(:,:) = is_bound(:,:)
+  is_symm_matrix_p = is_uniform_grid.and..not.outflow_exists
 #ifndef _FFT_USE_SLABS
   comms_fft(:) = MPI_COMM_WORLD
   lambda_p_a(:) = lambda_p
@@ -753,17 +760,17 @@ end if
 #endif
 #ifndef _FFT_USE_SLICED_PENCILS
   call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
-                          is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          is_symm_matrix_p,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hi_a(idir),lo_a(il:iu:iskip),hi_a(il:iu:iskip),periods(il:iu:iskip), &
                           dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,lambda_p_a,comms_fft,psolver_fft)
 #else
-  call init_n_3d_matrices(idir,nslices,cbcpre,bcpre,dl,is_uniform_grid,is_bound,is_centered,lo,periods, &
+  call init_n_3d_matrices(idir,nslices,cbcpre,bcpre,dl,is_symm_matrix_p,is_bound,is_centered,lo,periods, &
                           lo_sp,hi_sp,dxc,dxf,dyc,dyf,dzc,dzf,alpha,alpha_bc,lambda_p_a,psolver_fft)
 #endif
   call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,hypre_solver_i,psolver_fft)
   call setup_n_solvers(npsolvers,psolver_fft)
 #else
-  call init_matrix_3d(cbcpre,bcpre,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
+  call init_matrix_3d(cbcpre,bcpre,dl,is_symm_matrix_p,is_bound,is_centered,lo,hi,periods, &
                       dxc,dxf,dyc,dyf,dzc,dzf,alpha,alpha_bc,psolver,is_bound_outflow=is_bound_outflow)
   call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,psolver)
   call setup_solver(psolver)
@@ -775,6 +782,7 @@ end if
   hiu(:) = hi(:)
   if(is_bound(1,1)) hiu(:) = hiu(:)-[1,0,0]
   is_centered(:) = [.false.,.true.,.true.]
+  is_symm_matrix_u = is_uniform_grid
   call init_bc_rhs(cbcvel(:,:,1),bcvel(:,:,1),dlu,is_bound,is_centered,lo,hiu,periods, &
                    dxf,dxc,dyc,dyf,dzc,dzf,rhsu%x,rhsu%y,rhsu%z,bcu%x,bcu%y,bcu%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
@@ -792,11 +800,11 @@ end if
   if(periods(1) == 0) hiu_a(:) = hiu_a(:)-[1,0,0]
 #endif
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dlu(:,il:iu:iskip), &
-                          is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          is_symm_matrix_u,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiu_a(idir),lo_a(il:iu:iskip),hiu_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlu1_1,dlu1_2,dlu2_1,dlu2_2,alpha,alpha_bc,lambda_u_a,comms_fft,usolver_fft)
 #else
-  call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dlu,is_uniform_grid,is_bound,is_centered,lo,hiu,periods, &
+  call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dlu,is_symm_matrix_u,is_bound,is_centered,lo,hiu,periods, &
                       dxf,dxc,dyc,dyf,dzc,dzf,alpha,alpha_bc,usolver)
 #endif
   dlv = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
@@ -820,13 +828,14 @@ end if
   lambda_v_a(:) = lambda_v(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
   hiv_a(:) = hi_s(:)
   if(periods(2) == 0) hiv_a(:) = hiv_a(:)-[0,1,0]
+  is_symm_matrix_v = is_uniform_grid
 #endif
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dlv(:,il:iu:iskip), &
-                          is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          is_symm_matrix_v,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiv_a(idir),lo_a(il:iu:iskip),hiv_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlv1_1,dlv1_2,dlv2_1,dlv2_2,alpha,alpha_bc,lambda_v_a,comms_fft,vsolver_fft)
 #else
-  call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dlv,is_uniform_grid,is_bound,is_centered,lo,hiv,periods, &
+  call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dlv,is_symm_matrix_v,is_bound,is_centered,lo,hiv,periods, &
                       dxc,dxf,dyf,dyc,dzc,dzf,alpha,alpha_bc,vsolver)
 #endif
   dlw = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
@@ -850,13 +859,14 @@ end if
   lambda_w_a(:) = lambda_w(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
   hiw_a(:) = hi_s(:)
   if(periods(3) == 0) hiw_a(:) = hiw_a(:)-[0,0,1]
+  is_symm_matrix_w = is_uniform_grid
 #endif
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dlw(:,il:iu:iskip), &
-                          is_uniform_grid,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          is_symm_matrix_w,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiw_a(idir),lo_a(il:iu:iskip),hiw_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlw1_1,dlw1_2,dlw2_1,dlw2_2,alpha,alpha_bc,lambda_w_a,comms_fft,wsolver_fft)
 #else
-  call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dlw,is_uniform_grid,is_bound,is_centered,lo,hiw,periods, &
+  call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dlw,is_symm_matrix_w,is_bound,is_centered,lo,hiw,periods, &
                       dxc,dxf,dyc,dyf,dzf,dzc,alpha,alpha_bc,wsolver)
 #endif
 #endif
@@ -983,7 +993,7 @@ end if
       call inflow(is_bound_inflow,.false.,lo,hi,u_in%x,v_in%x,w_in%x, &
                                                 u_in%y,v_in%y,w_in%y, &
                                                 u_in%z,v_in%z,w_in%z,up,vp,wp)
-      call outflow(is_bound_outflow,is_estimated_traction,lo,hi,dl_outflow,visc,tr_x,tr_y,tr_z,u,v,w,p)
+      call outflow(is_bound_outflow,is_estimated_traction,lo,hi,dl_outflow,dl_outflow_h,visc,u,v,w,p,tr_x,tr_y,tr_z,up,vp,wp)
 #if !defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
       dtrk  = dt
       if(irk < 3) then ! pressure correction only at the last RK step
@@ -1040,6 +1050,7 @@ end if
 #else
       if(outflow_exists) then
         call add_constant_to_boundary(lo,hi,is_bound_outflow,alpha_bc-alpha_bc_o,psolver%mat)
+endif
         call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,psolver)
         call setup_solver(psolver)
       endif
@@ -1057,7 +1068,6 @@ end if
                                                u_in%z,v_in%z,w_in%z,u,v,w)
       call updt_pressure(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,pp,p)
       call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,p)
-      call chkdiv(lo,hi,dxf,dyf,dzf,u,v,w,vol_all,MPI_COMM_WORLD,divtot,divmax)
     end do
     !
     ! check simulation stopping criteria
