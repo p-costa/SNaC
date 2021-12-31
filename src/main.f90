@@ -21,7 +21,7 @@
 program snac
   use iso_c_binding      , only: C_PTR
   use mpi_f08
-  use mod_bound          , only: bounduvw,boundp,updt_rhs,inflow,outflow,outflow_p
+  use mod_bound          , only: bounduvw,boundp,updt_rhs,inflow
   use mod_chkdiv         , only: chkdiv
   use mod_chkdt          , only: chkdt
   use mod_common_mpi     , only: myid,myid_block,comm_block
@@ -44,7 +44,7 @@ program snac
                                  dims,lo,hi,lmin,lmax,                     &
                                  gt,gr,                                    &
                                  cbcvel,bcvel,cbcpre,bcpre,                &
-                                 inflow_type, outflow_type,                &
+                                 inflow_type,                              &
                                  bforce,periods,inivel,                    &
                                  vol_all,my_block,id_first,nblocks,nrank,  &
                                  is_periodic,l_periodic,                   &
@@ -56,12 +56,11 @@ program snac
   use mod_sanity         , only: test_sanity
   use mod_solver         , only: init_bc_rhs,init_matrix_3d,create_solver,setup_solver, &
                                  add_constant_to_diagonal,solve_helmholtz,finalize_solver,finalize_matrix, &
-                                 add_constant_to_boundary,hypre_solver
+                                 hypre_solver
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   use mod_solver         , only: init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers,solve_n_helmholtz_2d, &
                                  init_n_3d_matrices,solve_n_helmholtz_3d, &
-                                 add_constant_to_n_diagonals,finalize_n_solvers,finalize_n_matrices, &
-                                 add_constant_to_n_boundaries,add_constant_to_n_3d_boundaries
+                                 add_constant_to_n_diagonals,finalize_n_solvers,finalize_n_matrices
 #ifdef _FFT_USE_SLABS
   use mod_solver         , only: alltoallw,init_comm_slab,init_transpose_slab_uneven,transpose_slab
 #endif
@@ -72,11 +71,10 @@ program snac
   !$ use omp_lib
   implicit none
   integer , dimension(0:1,3) :: nb
-  logical , dimension(0:1,3) :: is_bound,is_bound_inflow,is_bound_outflow,is_estimated_traction
+  logical , dimension(0:1,3) :: is_bound,is_bound_inflow
   type(MPI_DATATYPE) , dimension(    3) :: halos
   integer , dimension(    3) :: ng,lo_g,hi_g,lo_1,hi_1
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
-  real(rp), allocatable, dimension(:,:,:) :: tr_x,tr_y,tr_z
 #ifdef _IMPDIFF
   real(rp), allocatable, dimension(:,:,:) :: uo,vo,wo
 #endif
@@ -92,9 +90,7 @@ program snac
 #ifdef _IMPDIFF
   type(rhs_bound) :: rhsu,rhsv,rhsw,bcu,bcv,bcw
 #endif
-  real(rp), dimension(    0:1,3) :: dl,dl_outflow,dl_outflow_h
-  real(rp), dimension(0:1,0:1,3) :: dlc_outflow
-  logical :: outflow_exists
+  real(rp), dimension(    0:1,3) :: dl
 #ifdef _IMPDIFF
   real(rp), dimension(0:1,3) :: dlu,dlv,dlw
   integer , dimension(    3) :: hiu,hiv,hiw
@@ -197,7 +193,7 @@ program snac
   !
   ! check sanity of input file
   !
-  call test_sanity(lo,hi,dims,gr,stop_type,cbcvel,cbcpre,periods,inflow_type,outflow_type)
+  call test_sanity(lo,hi,dims,gr,stop_type,cbcvel,cbcpre,periods,inflow_type)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #if   defined(_FFT_X) && !(defined(_FFT_Y) || defined(_FFT_Z))
   idir = 1
@@ -606,35 +602,6 @@ end if
   call inflow(is_bound_inflow,.false.,lo,hi,u_in%x,v_in%x,w_in%x, &
                                             u_in%y,v_in%y,w_in%y, &
                                             u_in%z,v_in%z,w_in%z,u,v,w)
-  !
-  ! outflow BCs
-  !
-  allocate(tr_x,mold=u_in%x)
-  allocate(tr_y,mold=v_in%y)
-  allocate(tr_z,mold=w_in%z)
-  tr_x(:,:,:) = 0._rp
-  tr_y(:,:,:) = 0._rp
-  tr_z(:,:,:) = 0._rp
-  dl_outflow = reshape([dxf_g(lo_g(1)),dxf_g(hi_g(1)), &
-                        dyf_g(lo_g(2)),dyf_g(hi_g(2)), &
-                        dzf_g(lo_g(3)),dzf_g(hi_g(3))],shape(dl_outflow))
-  dl_outflow_h   = reshape([dxf_g(lo_g(1)+1),dxf_g(hi_g(1)-1), &
-                            dyf_g(lo_g(2)+1),dyf_g(hi_g(2)-1), &
-                            dzf_g(lo_g(3)+1),dzf_g(hi_g(3)-1)],shape(dl_outflow))
-  dlc_outflow(0,:,:) = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)-1), &
-                                dyc_g(lo_g(2)-1),dyc_g(hi_g(2)-1), &
-                                dzc_g(lo_g(3)-1),dzc_g(hi_g(3)-1)],shape(dl_outflow))
-  dlc_outflow(1,:,:) = reshape([dxc_g(lo_g(1)  ),dxc_g(hi_g(1)  ), &
-                                dyc_g(lo_g(2)  ),dyc_g(hi_g(2)  ), &
-                                dzc_g(lo_g(3)  ),dzc_g(hi_g(3)  )],shape(dl_outflow))
-  is_bound_outflow(:,:) = .false.
-  do idir = 1,3
-    do ib = 0,1
-      if( any(outflow_type(ib,idir) == [1,2]) ) is_bound_outflow(     ib,idir) = is_bound(ib,idir)
-      if(     outflow_type(ib,idir) == 2      ) is_estimated_traction(ib,idir) = is_bound(ib,idir)
-    end do
-  end do
-  call MPI_ALLREDUCE(any(is_bound_outflow(:,:)),outflow_exists,1,MPI_LOGICAL,MPI_LOR,MPI_COMM_WORLD)
   alpha_bc(  :,:) = 0._rp
   alpha_bc_o(:,:) = alpha_bc(:,:)
   !
@@ -745,7 +712,7 @@ end if
   allocate(comms_fft(hi_a(idir)-lo_a(idir)+1))
   allocate(lambda_p_a(hi_a(idir)-lo_a(idir)+1))
   is_bound_a(:,:) = is_bound(:,:)
-  is_symm_matrix_p = is_uniform_grid.and..not.outflow_exists
+  is_symm_matrix_p = is_uniform_grid
 #ifndef _FFT_USE_SLABS
   comms_fft(:) = MPI_COMM_WORLD
   lambda_p_a(:) = lambda_p
@@ -771,7 +738,7 @@ end if
   call setup_n_solvers(npsolvers,psolver_fft)
 #else
   call init_matrix_3d(cbcpre,bcpre,dl,is_symm_matrix_p,is_bound,is_centered,lo,hi,periods, &
-                      dxc,dxf,dyc,dyf,dzc,dzf,alpha,alpha_bc,psolver,is_bound_outflow=is_bound_outflow)
+                      dxc,dxf,dyc,dyf,dzc,dzf,alpha,alpha_bc,psolver)
   call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,psolver)
   call setup_solver(psolver)
 #endif
@@ -993,7 +960,6 @@ end if
       call inflow(is_bound_inflow,.false.,lo,hi,u_in%x,v_in%x,w_in%x, &
                                                 u_in%y,v_in%y,w_in%y, &
                                                 u_in%z,v_in%z,w_in%z,up,vp,wp)
-      call outflow(is_bound_outflow,is_estimated_traction,lo,hi,dl_outflow,dl_outflow_h,visc,u,v,w,p,tr_x,tr_y,tr_z,up,vp,wp)
 #if !defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
       dtrk  = dt
       if(irk < 3) then ! pressure correction only at the last RK step
@@ -1007,40 +973,17 @@ end if
 #endif
       call fillps(lo,hi,dxf,dyf,dzf,dtrk,up,vp,wp,pp)
       call updt_rhs(lo,hi,is_bound,rhsp%x,rhsp%y,rhsp%z,pp)
-      where( is_bound_outflow(:,:) ) alpha_bc(:,:) = -1._rp/(2._rp*visc*dtrk)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call fft(arrplan_p(1),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
 #ifndef _FFT_USE_SLABS
 #ifdef _FFT_USE_SLICED_PENCILS
-      if(outflow_exists) then
-        call add_constant_to_n_3d_boundaries(nslices,lo_sp,hi_sp,is_bound_outflow,alpha_bc-alpha_bc_o,psolver_fft(:)%mat)
-        call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,hypre_solver_i,psolver_fft)
-        call setup_n_solvers(npsolvers,psolver_fft)
-      endif
       call solve_n_helmholtz_3d(psolver_fft,nslices,lo_sp,hi_sp,1,lo,hi,pp,po)
-      if(outflow_exists) call finalize_n_solvers(npsolvers,psolver_fft)
 #else
-      if(outflow_exists) then
-        call add_constant_to_n_boundaries(hi_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hi_a(il:iu:iskip), &
-                                          is_bound_outflow(:,il:iu:iskip), &
-                                          alpha_bc(:,il:iu:iskip)-alpha_bc_o(:,il:iu:iskip),psolver_fft(:)%mat)
-        call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,hypre_solver_i,psolver_fft)
-        call setup_n_solvers(npsolvers,psolver_fft)
-      endif
       call solve_n_helmholtz_2d(psolver_fft,lo(idir),hi(idir),1,lo(il:iu:iskip),hi(il:iu:iskip),pp,po)
-      if(outflow_exists) call finalize_n_solvers(npsolvers,psolver_fft)
 #endif
 #else
       call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,pp,pp_s)
-      if(outflow_exists) then
-        call add_constant_to_n_boundaries(hi_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hi_a(il:iu:iskip), &
-                                          is_bound_outflow(:,il:iu:iskip), &
-                                          alpha_bc(:,il:iu:iskip)-alpha_bc_o(:,il:iu:iskip),psolver_fft(:)%mat)
-        call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,hypre_solver_i,psolver_fft)
-        call setup_n_solvers(npsolvers,psolver_fft)
-      endif
       call solve_n_helmholtz_2d(psolver_fft,lo_s(idir),hi_s(idir),0,lo_s(il:iu:iskip),hi_s(il:iu:iskip),pp_s,po)
-      if(outflow_exists) call finalize_n_solvers(npsolvers,psolver_fft)
       call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,pp_s,pp)
 #endif
       call fft(arrplan_p(2),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
@@ -1048,17 +991,10 @@ end if
       pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_p
       !$OMP END WORKSHARE
 #else
-      if(outflow_exists) then
-        call add_constant_to_boundary(lo,hi,is_bound_outflow,alpha_bc-alpha_bc_o,psolver%mat)
-        call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,psolver)
-        call setup_solver(psolver)
-      endif
       call solve_helmholtz(psolver,lo,hi,pp,po)
-      if(outflow_exists) call finalize_solver(psolver)
 #endif
       alpha_bc_o(:,:) = alpha_bc(:,:)
       call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,pp)
-      call outflow_p(is_bound_outflow,lo,hi,dlc_outflow,dl_outflow,-1._rp/(2*visc*dtrk),pp)
       call correc(lo,hi,dxc,dyc,dzc,dtrk,pp,up,vp,wp,u,v,w)
       call bounduvw(cbcvel,lo,hi,bcvel,.true.,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
@@ -1152,13 +1088,9 @@ end if
   end do
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   call finalize_n_matrices(npsolvers,psolver_fft)
-  if(.not.outflow_exists) &
-    call finalize_n_solvers(npsolvers,psolver_fft)
   call fftend(arrplan_p)
 #else
   call finalize_matrix(psolver)
-  if(.not.outflow_exists) &
-    call finalize_solver(psolver)
 #endif
 #ifdef _IMPDIFF
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
