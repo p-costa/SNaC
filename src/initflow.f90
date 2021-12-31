@@ -120,9 +120,9 @@ module mod_initflow
       end do
     end if
     if(is_noise) then
-      call add_noise(lo,hi,lo_g,hi_g,123,.5_rp,u)
-      call add_noise(lo,hi,lo_g,hi_g,456,.5_rp,v)
-      call add_noise(lo,hi,lo_g,hi_g,789,.5_rp,w)
+      call add_noise(lo,hi,lo_g,hi_g,123,.05_rp,u)
+      call add_noise(lo,hi,lo_g,hi_g,456,.05_rp,v)
+      call add_noise(lo,hi,lo_g,hi_g,789,.05_rp,w)
     end if
     if(is_mean) then
       call set_mean(lo,hi,l,dxc,dyf,dzf,uref,u)
