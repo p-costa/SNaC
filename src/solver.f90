@@ -14,8 +14,7 @@ module mod_solver
          add_constant_to_n_diagonals,solve_n_helmholtz_2d, &
          finalize_n_matrices,finalize_n_solvers,init_comm_slab, &
          init_transpose_slab_uneven,transpose_slab,alltoallw, &
-         init_n_3d_matrices,solve_n_helmholtz_3d, &
-         add_constant_to_n_boundaries,add_constant_to_n_3d_boundaries
+         init_n_3d_matrices,solve_n_helmholtz_3d
   type alltoallw
     integer            :: counts
     integer            :: disps

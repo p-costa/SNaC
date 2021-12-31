@@ -3,7 +3,7 @@ module mod_bound
   use mod_types
   implicit none
   private
-  public boundp,bounduvw,updt_rhs,inflow,outflow,outflow_p
+  public boundp,bounduvw,updt_rhs,inflow
   contains
   subroutine bounduvw(cbc,lo,hi,bc,is_correc,halos,is_bound,nb, &
                       dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)

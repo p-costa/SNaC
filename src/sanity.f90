@@ -9,7 +9,7 @@ module mod_sanity
   public test_sanity_fft
 #endif
   contains
-  subroutine test_sanity(lo,hi,dims,gr,stop_type,cbcvel,cbcpre,periods,inflow_type,outflow_type)
+  subroutine test_sanity(lo,hi,dims,gr,stop_type,cbcvel,cbcpre,periods,inflow_type)
     !
     ! performs some a priori checks of the input files before the calculation starts
     !
@@ -20,14 +20,14 @@ module mod_sanity
     character(len=1), intent(in), dimension(0:1,3,3) :: cbcvel
     character(len=1), intent(in), dimension(0:1,3  ) :: cbcpre
     integer         , intent(in), dimension(    3  ) :: periods
-    integer         , intent(in), dimension(0:1,3  ) :: inflow_type,outflow_type
+    integer         , intent(in), dimension(0:1,3  ) :: inflow_type
     logical :: passed
     !
     call chk_grid(gr,passed);             if(.not.passed) call abortit
     call chk_stop_type(stop_type,passed); if(.not.passed) call abortit
     call chk_bc(cbcvel,cbcpre,passed);    if(.not.passed) call abortit
     call chk_dims(lo,hi,dims,passed);     if(.not.passed) call abortit
-    call chk_inoutflow(periods,inflow_type,outflow_type,passed); if(.not.passed) call abortit
+    call chk_inflow(periods,inflow_type,passed); if(.not.passed) call abortit
   end subroutine test_sanity
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   subroutine test_sanity_fft(dims,lo,hi,lmin,lmax,gr)
@@ -173,31 +173,23 @@ module mod_sanity
     call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
   end subroutine chk_dims
   !
-  subroutine chk_inoutflow(periods,inflow_type,outflow_type,passed)
+  subroutine chk_inflow(periods,inflow_type,passed)
     implicit none
     integer, intent(in ), dimension(    3) :: periods
-    integer, intent(in ), dimension(0:1,3) :: inflow_type,outflow_type
+    integer, intent(in ), dimension(0:1,3) :: inflow_type
     logical, intent(out)                   :: passed
-    logical,              dimension(0:1,3) :: is_inflow,is_outflow
+    logical,              dimension(0:1,3) :: is_inflow
     integer :: ib,idir
     passed = .true.
     is_inflow( :,:) = inflow_type( :,:) > 0
-    is_outflow(:,:) = outflow_type(:,:) > 0 .and. outflow_type(:,:) <= 2
     do idir = 1,3
       do ib = 0,1
         if( is_inflow( ib,idir) ) passed = passed .and. periods(idir) == 0
-        if( is_outflow(ib,idir) ) passed = passed .and. periods(idir) == 0
       enddo
     enddo
-    if(.not.passed) call write_error('Periodicity and in/outflow BCs cannot be combined.')
-    do idir = 1,3
-      do ib = 0,1
-        if( is_inflow( ib,idir) .and. is_outflow(ib,idir ) ) passed = passed .and. .false.
-      enddo
-    enddo
-    if(.not.passed) call write_error('BC cannot be both inflow and outflow.')
+    if(.not.passed) call write_error('Periodicity and inflow BCs cannot be combined.')
     call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
-  end subroutine chk_inoutflow
+  end subroutine chk_inflow
   !
   subroutine abortit
     implicit none
