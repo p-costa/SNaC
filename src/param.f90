@@ -64,6 +64,7 @@ contains
   character(len=100) :: filename
   character(len=  3) :: cblock
   integer :: q
+  nsaves_max = 0 ! a good default, for backward compatibility
     open(newunit=iunit,file='dns.in',status='old',action='read',iostat=ierr)
       if( ierr == 0 ) then
         read(iunit,*) cfl,dtmin
