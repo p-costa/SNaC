@@ -38,7 +38,7 @@ program snac
                                  rkcoeff,    &
                                  cfl,dtmin,uref,lref,rey,visc,             &
                                  nstep,time_max,tw_max,stop_type,          &
-                                 restart,is_overwrite_save,                &
+                                 restart,is_overwrite_save,nsaves_max,     &
                                  nthreadsmax,                              &
                                  icheck,iout0d,iout1d,iout2d,iout3d,isave, &
                                  dims,lo,hi,lmin,lmax,                     &
@@ -171,10 +171,12 @@ program snac
   real(rp), dimension(100) :: var
   character(len=3  ) :: cblock
   character(len=7  ) :: fldnum
+  character(len=4  ) :: chkptnum
   character(len=100) :: filename
   integer :: iunit
   !
   real(rp) :: twi,tw
+  integer  :: savecounter
   logical  :: is_done,kill
 #ifdef _TIMING
   real(rp) :: dt12,dt12av,dt12min,dt12max
@@ -184,6 +186,7 @@ program snac
   call MPI_INIT()
   call MPI_COMM_RANK(MPI_COMM_WORLD, myid)
   twi = MPI_WTIME()
+  savecounter = 0
   !
   ! read parameter file
   !
@@ -1065,7 +1068,16 @@ end if
       if(is_overwrite_save) then
         filename = 'fld_b_'//cblock//'.bin'
       else
-        filename = 'fld_'//fldnum//'_b_'//cblock//'.bin'
+        if(nsaves_max > 0) then
+          if(savecounter >= nsaves_max) savecounter = 0
+          savecounter = savecounter + 1
+          write(chkptnum,'(i4.4)') savecounter
+          filename = 'fld_'//chkptnum//'_b_'//cblock//'.bin'
+          var(1) = 1.*istep
+          var(2) = time
+          var(3) = 1.*savecounter
+          call out0d(trim(datadir)//'log_saves.out',3,myid,var)
+        endif
       end if
       call load('w',trim(datadir)//trim(filename),comm_block,ng,[1,1,1],lo_1,hi_1,u,v,w,p,po,time,istep)
       if(.not.is_overwrite_save) then

@@ -27,6 +27,7 @@ integer                :: nstep
 real(rp)               :: time_max,tw_max
 logical , dimension(3) :: stop_type
 logical                :: restart,is_overwrite_save
+integer                :: nsaves_max
 integer                :: icheck,iout0d,iout1d,iout2d,iout3d,isave
 real(rp), dimension(3) :: bforce
 integer                :: nthreadsmax
@@ -69,7 +70,7 @@ contains
         read(iunit,*) uref,lref,rey
         read(iunit,*) nstep, time_max,tw_max
         read(iunit,*) stop_type(1),stop_type(2),stop_type(3)
-        read(iunit,*) restart,is_overwrite_save
+        read(iunit,*) restart,is_overwrite_save,nsaves_max
         read(iunit,*) icheck,iout0d,iout1d,iout2d,iout3d,isave
         read(iunit,*)  bforce(1),bforce(2),bforce(3)
         read(iunit,*) nthreadsmax
