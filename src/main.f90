@@ -176,7 +176,7 @@ program snac
   integer :: iunit
   !
   real(rp) :: twi,tw
-  integer  :: savecounter
+  integer  :: savecounter,ichkptnum
   logical  :: is_done,kill
 #ifdef _TIMING
   real(rp) :: dt12,dt12av,dt12min,dt12max
@@ -1069,13 +1069,13 @@ end if
         filename = 'fld_b_'//cblock//'.bin'
       else
         if(nsaves_max > 0) then
-          if(savecounter >= nsaves_max) savecounter = 0
           savecounter = savecounter + 1
-          write(chkptnum,'(i4.4)') savecounter
+          ichkptnum = mod(savecounter,nsaves_max) + 1
+          write(chkptnum,'(i4.4)') ichkptnum
           filename = 'fld_'//chkptnum//'_b_'//cblock//'.bin'
           var(1) = 1.*istep
           var(2) = time
-          var(3) = 1.*savecounter
+          var(3) = 1.*ichkptnum
           call out0d(trim(datadir)//'log_saves.out',3,myid,var)
         endif
       end if
