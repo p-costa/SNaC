@@ -2,9 +2,9 @@
 FC   = mpifort
 # flags
 BIG :=
-DBG := -O0 -g -fbacktrace -Wall -Wextra #-pedantic -fcheck=all -finit-real=snan -ffpe-trap=invalid -std=f2018
+DBG := #-O0 -g -fbacktrace -Wall -Wextra #-pedantic -fcheck=all -finit-real=snan -ffpe-trap=invalid -std=f2018
 OMP :=
-OPT := #-O3
+OPT := -O3
 OTH := -D_FFT_Z
 PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
