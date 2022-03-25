@@ -211,9 +211,9 @@ module mod_mom
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           uwip  = 0.25_rp*(u(i  ,j  ,k)*dzf(k)*dyf(j)+u(i  ,j  ,k+1)*dzf(k+1)*dyf(j))*w(i+1,j,k)
-          uwim  = 0.25_rp*(u(i-1,j  ,k)*dzf(k)*dyf(j)+u(i-1,j  ,k+1)*dzf(k+1)*dyf(j))*w(i+1,j,k)
+          uwim  = 0.25_rp*(u(i-1,j  ,k)*dzf(k)*dyf(j)+u(i-1,j  ,k+1)*dzf(k+1)*dyf(j))*w(i-1,j,k)
           vwjp  = 0.25_rp*(v(i  ,j  ,k)*dzf(k)*dxf(i)+v(i  ,j  ,k+1)*dzf(k+1)*dxf(i))*w(i,j+1,k)
-          vwjm  = 0.25_rp*(v(i  ,j-1,k)*dzf(k)*dxf(i)+v(i  ,j-1,k+1)*dzf(k+1)*dxf(i))*w(i,j+1,k)
+          vwjm  = 0.25_rp*(v(i  ,j-1,k)*dzf(k)*dxf(i)+v(i  ,j-1,k+1)*dzf(k+1)*dxf(i))*w(i,j-1,k)
           wwkp  = 0.25_rp*(w(i  ,j  ,k)*dxf(i)*dyf(j)+w(i  ,j  ,k+1)*dxf(i  )*dyf(j))*w(i,j,k+1)
           wwkm  = 0.25_rp*(w(i  ,j  ,k)*dxf(i)*dyf(j)+w(i  ,j  ,k-1)*dxf(i  )*dyf(j))*w(i,j,k-1)
           !
