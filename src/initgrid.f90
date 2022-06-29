@@ -10,8 +10,6 @@ module mod_initgrid
     !
     ! initializes a non-uniform grid
     !
-    ! NEEDS TO BE PROBABLY SLIGHTLY ADAPTED IN CASE IT IS IN THE MIDDLE OF A BLOCK
-    !
     implicit none
     integer, parameter :: CLUSTER_TWO_END              = 0, &
                           CLUSTER_ONE_END              = 1, &
@@ -175,7 +173,7 @@ module mod_initgrid
   end subroutine gridpoint_cluster_one_end
   subroutine gridpoint_cluster_one_end_r(alpha,r0,r)
     !
-    ! clustered at the lower side
+    ! clustered at the upper side
     !
     implicit none
     real(rp), intent(in ) :: alpha,r0
@@ -249,7 +247,7 @@ module mod_initgrid
   end subroutine gridpoint_cluster_geometric_two_ends
   subroutine gridpoint_cluster_geometric_middle(alpha,r0,r)
     !
-    ! geometric progression towards each end
+    ! geometric progression towards the middle
     !
     implicit none
     real(rp), intent(in ) :: alpha,r0
