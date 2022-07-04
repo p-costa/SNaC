@@ -88,16 +88,19 @@ module mod_initgrid
     real(rp), intent(out), dimension(lo  -1:) :: grid
     grid(lo-1:hi+1) = grid_g(lo-1:hi+1)
   end subroutine distribute_grid
-  subroutine bound_grid(lo_g,hi_g,lo,hi,nb,is_periodic,lo_min,hi_max,grid_f,grid_c)
+  subroutine bound_grid(lo_g,hi_g,lo,hi,nb,is_periodic,grid_f,grid_c)
     implicit none
     integer , intent(in   )                   :: lo_g,hi_g,lo,hi
     integer , intent(in   ), dimension(0:1)   :: nb
     logical , intent(in   )                   :: is_periodic
-    integer , intent(in   )                   :: lo_min,hi_max
     real(rp), intent(inout), dimension(lo-1:) :: grid_f,grid_c
+    integer                                   :: lo_min,hi_max
     integer                                   :: shift
     type(MPI_REQUEST), dimension(4)           :: requests
     integer                                   :: nrequests
+    !
+    call MPI_ALLREDUCE(lo,lo_min,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(hi,hi_max,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD)
     nrequests = 0
     shift = 0
     if(lo == lo_g) then

@@ -35,7 +35,7 @@ integer                :: nthreadsmax
 ! parameters specific to each block
 !
 integer           , dimension(      3) :: dims
-integer           , dimension(      3) :: lo,hi
+integer           , dimension(      3) :: ng
 real(rp)          , dimension(      3) :: lmin,lmax
 integer           , dimension(      3) :: gt
 real(rp)          , dimension(      3) :: gr
@@ -51,7 +51,7 @@ integer  :: my_block,id_first,nblocks,nrank
 logical , dimension(3) :: is_periodic
 integer , dimension(3) :: periods
 real(rp), dimension(3) :: l_periodic
-integer , dimension(3) :: lo_min,hi_max
+integer , dimension(3) :: ng_sum 
 real(rp), dimension(3) :: lmin_min,lmax_max
 contains
   subroutine read_input()
@@ -124,8 +124,7 @@ contains
           if( myid >= sum(nranks(1:iblock-1)).and. &
               myid <  sum(nranks(1:iblock  )) ) then
             read(iunit,*) dims(1),dims(2),dims(3)
-            read(iunit,*) lo(1),lo(2),lo(3)
-            read(iunit,*) hi(1),hi(2),hi(3)
+            read(iunit,*) ng(1),ng(2),ng(3)
             read(iunit,*) lmin(1),lmin(2),lmin(3)
             read(iunit,*) lmax(1),lmax(2),lmax(3)
             read(iunit,*) gt(1),gt(2),gt(3)
@@ -166,11 +165,10 @@ contains
     !
     call MPI_ALLREDUCE(lmin(1),lmin_min(1),3,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
     call MPI_ALLREDUCE(lmax(1),lmax_max(1),3,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
-    call MPI_ALLREDUCE(lo(1)  ,lo_min(1)  ,3,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD,ierr)
-    call MPI_ALLREDUCE(hi(1)  ,hi_max(1)  ,3,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD,ierr)
+    call MPI_ALLREDUCE(ng(1)  ,ng_sum(1)  ,3,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr)
     where(is_periodic(:))
       l_periodic(:) = lmax_max(:)-lmin_min(:)
-      periods(:)    = hi_max(:)-lo_min(:)+1
+      periods(:)    = ng_sum(:)
     elsewhere
       l_periodic(:) = 0._rp
       periods(:)    = 0
