@@ -41,14 +41,14 @@ program snac
                                  restart,is_overwrite_save,nsaves_max,     &
                                  nthreadsmax,                              &
                                  icheck,iout0d,iout1d,iout2d,iout3d,isave, &
-                                 dims,lo,hi,lmin,lmax,                     &
+                                 dims,ng,lmin,lmax,                        &
                                  gt,gr,                                    &
                                  cbcvel,bcvel,cbcpre,bcpre,                &
                                  inflow_type,                              &
                                  bforce,periods,inivel,                    &
                                  vol_all,my_block,id_first,nblocks,nrank,  &
                                  is_periodic,l_periodic,                   &
-                                 lmax_max,lmin_min,lo_min,hi_max,          &
+                                 lmax_max,lmin_min,                        &
                                  hypre_tol,hypre_maxiter,hypre_solver_i
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom
@@ -73,7 +73,7 @@ program snac
   integer , dimension(0:1,3) :: nb
   logical , dimension(0:1,3) :: is_bound,is_bound_inflow
   type(MPI_DATATYPE) , dimension(    3) :: halos
-  integer , dimension(    3) :: ng,lo_g,hi_g,lo_1,hi_1
+  integer , dimension(    3) :: lo,hi,lo_g,hi_g,lo_1,hi_1
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
 #ifdef _IMPDIFF
   real(rp), allocatable, dimension(:,:,:) :: uo,vo,wo
@@ -191,12 +191,10 @@ program snac
   ! read parameter file
   !
   call read_input()
-  lo_g(:) = lo(:)
-  hi_g(:) = hi(:)
   !
   ! check sanity of input file
   !
-  call test_sanity(lo,hi,dims,gr,stop_type,cbcvel,cbcpre,periods,inflow_type)
+  call test_sanity(ng,dims,gr,stop_type,cbcvel,cbcpre,periods,inflow_type)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #if   defined(_FFT_X) && !(defined(_FFT_Y) || defined(_FFT_Z))
   idir = 1
@@ -210,13 +208,14 @@ program snac
   call MPI_FINALIZE
   error stop
 #endif
-  call test_sanity_fft(dims(idir),lo(idir),hi(idir),lmin(idir),lmax(idir),gr(idir))
+  call test_sanity_fft(dims(idir),ng(idir),lmin(idir),lmax(idir),gr(idir))
 #endif
   !
   ! initialize MPI/OpenMP
   !
   !!$call omp_set_num_threads(nthreadsmax) ! ! overwrites the input, disable for now
-  call initmpi(my_block,id_first,dims,cbcpre,bcpre,periods,lmin,lmax,gt,gr,lo,hi,ng,nb,is_bound,halos)
+  call initmpi(my_block,nblocks,id_first,dims,cbcpre,bcpre,is_periodic,periods, &
+               lmin,lmax,gt,gr,lo,hi,lo_g,hi_g,ng,nb,is_bound,halos)
   lo_1(:) = lo(:) - lo_g(:) + 1 ! lo(:) with 1 as first index in the beginning of each block
   hi_1(:) = hi(:) - lo_g(:) + 1 ! hi(:) with 1 as first index in the beginning of each block
   !
@@ -430,9 +429,9 @@ end if
   call distribute_grid(lo_g(3),lo(3),hi(3),dzf_g,dzf)
   call distribute_grid(lo_g(3),lo(3),hi(3), zc_g, zc)
   call distribute_grid(lo_g(3),lo(3),hi(3), zf_g, zf)
-  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),is_periodic(1),lo_min(1),hi_max(1),dxf,dxc)
-  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),is_periodic(2),lo_min(2),hi_max(2),dyf,dyc)
-  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),is_periodic(3),lo_min(3),hi_max(3),dzf,dzc)
+  call bound_grid(lo_g(1),hi_g(1),lo(1),hi(1),nb(0:1,1),is_periodic(1),dxf,dxc)
+  call bound_grid(lo_g(2),hi_g(2),lo(2),hi(2),nb(0:1,2),is_periodic(2),dyf,dyc)
+  call bound_grid(lo_g(3),hi_g(3),lo(3),hi(3),nb(0:1,3),is_periodic(3),dzf,dzc)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #ifdef _FFT_USE_SLABS
   dxc_g(lo_g(1)-1) = 0._rp

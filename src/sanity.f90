@@ -9,12 +9,12 @@ module mod_sanity
   public test_sanity_fft
 #endif
   contains
-  subroutine test_sanity(lo,hi,dims,gr,stop_type,cbcvel,cbcpre,periods,inflow_type)
+  subroutine test_sanity(ng,dims,gr,stop_type,cbcvel,cbcpre,periods,inflow_type)
     !
     ! performs some a priori checks of the input files before the calculation starts
     !
     implicit none
-    integer         , intent(in), dimension(3      ) :: lo,hi,dims
+    integer         , intent(in), dimension(3      ) :: ng,dims
     real(rp)        , intent(in), dimension(3      ) :: gr
     logical         , intent(in), dimension(3      ) :: stop_type
     character(len=1), intent(in), dimension(0:1,3,3) :: cbcvel
@@ -26,15 +26,15 @@ module mod_sanity
     call chk_grid(gr,passed);             if(.not.passed) call abortit
     call chk_stop_type(stop_type,passed); if(.not.passed) call abortit
     call chk_bc(cbcvel,cbcpre,passed);    if(.not.passed) call abortit
-    call chk_dims(lo,hi,dims,passed);     if(.not.passed) call abortit
+    call chk_dims(ng,dims,passed);        if(.not.passed) call abortit
     call chk_inflow(periods,inflow_type,passed); if(.not.passed) call abortit
   end subroutine test_sanity
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  subroutine test_sanity_fft(dims,lo,hi,lmin,lmax,gr)
-    integer , intent(in ) :: dims,lo,hi
+  subroutine test_sanity_fft(dims,ng,lmin,lmax,gr)
+    integer , intent(in ) :: dims,ng
     real(rp), intent(in ) :: lmin,lmax,gr
     logical :: passed
-    call chk_grid_fft(dims,lo,hi,lmin,lmax,gr,passed); if(.not.passed) call abortit
+    call chk_grid_fft(dims,ng,lmin,lmax,gr,passed); if(.not.passed) call abortit
   end subroutine test_sanity_fft
 #endif
   !
@@ -63,13 +63,13 @@ module mod_sanity
     call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
   end subroutine chk_grid
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  subroutine chk_grid_fft(dims,lo,hi,lmin,lmax,gr,passed)
+  subroutine chk_grid_fft(dims,ng,lmin,lmax,gr,passed)
     implicit none
-    integer , intent(in ) :: dims,lo,hi
+    integer , intent(in ) :: dims,ng
     real(rp), intent(in ) :: lmin,lmax,gr
     logical , intent(out) :: passed
     logical :: passed_loc
-    integer  :: lo_min  ,lo_max  ,hi_min  ,hi_max
+    integer  :: ng_min  ,ng_max
     real(rp) :: lmin_min,lmin_max,lmax_min,lmax_max
     passed = .true.
     passed_loc = dims == 1
@@ -78,16 +78,13 @@ module mod_sanity
       call write_error('no domain decomposition allowed in the uniform (FFT) direction')
     passed = passed.and.passed_loc
     !
-    call MPI_ALLREDUCE(lo  ,lo_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD)
-    call MPI_ALLREDUCE(lo  ,lo_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD)
-    call MPI_ALLREDUCE(hi  ,hi_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD)
-    call MPI_ALLREDUCE(hi  ,hi_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(ng  ,ng_min  ,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(ng  ,ng_max  ,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD)
     call MPI_ALLREDUCE(lmin,lmin_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD)
     call MPI_ALLREDUCE(lmin,lmin_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
     call MPI_ALLREDUCE(lmax,lmax_min,1,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD)
     call MPI_ALLREDUCE(lmax,lmax_max,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
-    passed_loc = (lo_min == lo).and.(lo_max == lo).and. &
-                 (hi_min == hi).and.(hi_max == hi)
+    passed_loc = (ng_min == ng).and.(ng_max == ng)
     passed_loc = passed_loc.and. &
                  (lmin_min == lmin).and.(lmin_max == lmin).and. &
                  (lmax_min == lmax).and.(lmax_max == lmax)
@@ -163,12 +160,12 @@ module mod_sanity
     !
   end subroutine chk_bc
   !
-  subroutine chk_dims(lo,hi,dims,passed)
+  subroutine chk_dims(ng,dims,passed)
     implicit none
-    integer, intent(in), dimension(3) :: lo,hi,dims
+    integer, intent(in), dimension(3) :: ng,dims
     logical         , intent(out) :: passed
     passed = .true.
-    passed = passed.and.(all(dims(:) <= hi(:)-lo(:)+1))
+    passed = passed.and.(all(dims(:) <= ng(:)))
     if(.not.passed) call write_error('MPI task partitions cannot exceed the number of grid points.')
     call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
   end subroutine chk_dims

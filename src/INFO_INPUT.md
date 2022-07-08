@@ -16,7 +16,7 @@ Let us start with block-independent parameters in `dns.in`. Consider the followi
  100    100. 0.1             ! nstep,time_max,tw_max
  T F F                       ! stop_type(1:3)
  F T                         ! restart,is_overwrite_save
-10 10 20 5000 10000 2000     ! icheck, iout0d, iout1d, iout2d, iout3d, isave
+ 10 10 20 5000 10000 2000    ! icheck, iout0d, iout1d, iout2d, iout3d, isave
  0. 0. 0.                    ! bforce(1:3)
  4                           ! nthreadsmax
 ~~~
@@ -114,8 +114,7 @@ The geometry, boundary and initial conditions, domain decompositions is set in a
 `geo/block.001`:
 ~~~
 1 1 1                    ! dims(1:3)
-1  1  1                  ! lo(1:3)
-32 32 64                 ! hi(1:3)
+32 32 64                 ! ng(1:3)
 0. 0. 0.                 ! lmin(1:3)
 .5 .5 1.                 ! lmax(1:3)
 0 0 0                    ! gt(1:3)
@@ -135,8 +134,7 @@ zer                      ! inivel
 `geo/block.002`:
 ~~~
 1 1 1                    ! dims(1:3)
-1  33 1                  ! lo(1:3)
-32 64 64                 ! hi(1:3)
+32 32 64                 ! ng(1:3)
 0. .5 0.                 ! lmin(1:3)
 .5 1. 1.                 ! lmax(1:3)
 0 0 0                    ! gt(1:3)
@@ -156,8 +154,7 @@ zer                      ! inivel
 `geo/block.003`:
 ~~~
 2 1 1                    ! dims(1:3)
-33  33 1                 ! lo(1:3)
-128 64 64                ! hi(1:3)
+96 32 64                 ! ng(1:3)
 .5 .5 0.                 ! lmin(1:3)
 2.0 1. 1.                ! lmax(1:3)
 0 0 0                    ! gt(1:3)
@@ -180,8 +177,7 @@ zer                      ! inivel
 
 ~~~
 1 1 1                    ! dims(1:3)
-1  1  1                  ! lo(1:3)
-32 32 64                 ! hi(1:3)
+32 32 64                 ! ng(1:3)
 0. 0. 0.                 ! lmin(1:3)
 .5 .5 1.                 ! lmax(1:3)
 0 0 0                    ! gt(1:3)
@@ -192,7 +188,7 @@ These lines set the domain decomposition and computational grid for each block.
 `dims` is the **number of computational** subdomains in each direction.
 
 
-`lo(1:3)` and `hi(1:3)` are the **coordinates of the lower and upper corners** of the block in question, **in index space**.
+`ng(1:3)` is the **number of grid points along each direction** of the block in question.
 
 `lmin(1:3)` and `lmax(1:3)` are the **physical coordinates of the lower and upper corners** of the block in question.
 
