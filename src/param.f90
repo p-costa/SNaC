@@ -51,7 +51,6 @@ integer  :: my_block,id_first,nblocks,nrank
 logical , dimension(3) :: is_periodic
 integer , dimension(3) :: periods
 real(rp), dimension(3) :: l_periodic
-integer , dimension(3) :: ng_sum 
 real(rp), dimension(3) :: lmin_min,lmax_max
 contains
   subroutine read_input()
