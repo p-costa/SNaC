@@ -1,0 +1,1 @@
+1 1.e-3 50  ! hypre_solver_i,hypre_tol,hypre_maxiter | note: hypre_solver_i = [1->SMG;2->PFMG;3->GMRES;4->BiCGSTAB]
