@@ -6,9 +6,9 @@ module mod_initmpi
   private
   public initmpi
   contains
-  subroutine initmpi(my_block,id_first,dims,cbc,bc,periods,lmin,lmax,gt,gr,lo,hi,ng,nb,is_bound,halos)
+  subroutine initmpi(my_block,nblocks,id_first,dims,cbc,bc,periods,lmin,lmax,gt,gr,lo,hi,lo_g,hi_g,ng,nb,is_bound,halos)
     implicit none
-    integer         , intent(in   )                   :: my_block,id_first
+    integer         , intent(in   )                   :: my_block,nblocks,id_first
     integer         , intent(inout), dimension(    3) :: dims
     character(len=1), intent(in   ), dimension(0:1,3) :: cbc
     real(rp)        , intent(in   ), dimension(0:1,3) ::  bc
@@ -16,23 +16,25 @@ module mod_initmpi
     real(rp)        , intent(in   ), dimension(    3) :: lmin,lmax
     integer         , intent(in   ), dimension(    3) :: gt
     real(rp)        , intent(in   ), dimension(    3) :: gr
-    integer         , intent(inout), dimension(    3) :: lo,hi
+    integer         , intent(inout), dimension(    3) :: lo,hi,lo_g,hi_g
     integer         , intent(out  ), dimension(    3) :: ng
     integer         , intent(out  ), dimension(0:1,3) :: nb
     logical         , intent(out  ), dimension(0:1,3) :: is_bound
     type(MPI_DATATYPE), intent(out  ), dimension(    3) :: halos
     integer                 :: nrank
-    integer , dimension(  3) :: n,start,coords,lo_g,hi_g
-    integer , allocatable, dimension(:,:) :: lo_all,hi_all,gt_all,l,lo_g_all,hi_g_allo_g_all,hi_g_all
+    integer , dimension(  3) :: n,start,coords
+    integer , allocatable, dimension(:,:) :: ng_all,lo_all,hi_all,gt_all,l,lo_g_all,hi_g_allo_g_all,hi_g_all
     real(rp), allocatable, dimension(:,:) :: lmin_all,lmax_all,gr_all
     integer , allocatable, dimension(:) :: blocks_all
+    logical , allocatable, dimension(:) :: is_done,is_unlocked
     real(rp)        , allocatable, dimension(:,:,:) ::  bc_all
     character(len=1), allocatable, dimension(:,:,:) :: cbc_all
-    integer                 :: i,j,k,idir,iidir,inb,irank
+    integer                 :: i,j,k,idir,iidir,inb,irank,iblock,ifriend,ioffset,idir_t(2)
     logical                 :: is_nb,found_friend
     integer(i8)             :: ntot,ntot_max,ntot_min,ntot_sum
     integer                 :: isize
     type(MPI_DATATYPE)      :: MPI_INTEGER_I8
+    type(MPI_COMM ) :: comm_leaders
     !
     call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank)
     call MPI_COMM_SPLIT(MPI_COMM_WORLD,my_block,myid,comm_block)
@@ -40,9 +42,61 @@ module mod_initmpi
     !
     ! generate Cartesian topology
     !
-    hi_g(:) = hi(:)
-    lo_g(:) = lo(:)
-    ng(:) = hi_g(:)-lo_g(:)+1
+    ! determine lo_g and hi_g from the prescribed decomposition
+    !
+    call MPI_COMM_SPLIT(MPI_COMM_WORLD,myid_block,myid,comm_leaders)
+    if(myid_block == 0) then
+      !
+      ! gather block size and connectivity information
+      !
+      allocate(lo_all(3,nblocks),ng_all(3,nblocks),cbc_all(0:1,3,nblocks),bc_all(0:1,3,nblocks),lmin_all(3,nblocks))
+      call MPI_ALLGATHER(ng ,3,MPI_INTEGER  ,ng_all ,3,MPI_INTEGER  ,comm_leaders)
+      call MPI_ALLGATHER(cbc,6,MPI_CHARACTER,cbc_all,6,MPI_CHARACTER,comm_leaders)
+      call MPI_ALLGATHER( bc,6,MPI_REAL_RP  , bc_all,6,MPI_REAL_RP  ,comm_leaders)
+      !
+      ! determine lower bounds, taking block #1 as reference
+      !
+      allocate(is_done(nblocks),is_unlocked(nblocks))
+      is_done(:)     = .false.
+      is_unlocked(:) = .false.
+      iblock = 1
+      lo_all(:,iblock) = 1
+      is_unlocked(iblock) = .true.
+      do while(.not.all(is_done))
+        if(iblock < 1 .or. iblock > nblocks) then
+          iblock = findloc(.not.is_done,.true.,1)
+            write(stderr,*) 'ERROR: invalid connectivity for block ', iblock, '.'
+            write(stderr,*) ''
+            error stop
+        endif
+        do idir=1,3
+          idir_t(:) = pack([1,2,3],[1,2,3] /= idir) ! extract tangential directions
+          do inb=0,1
+            if(cbc_all(inb,idir,iblock) == 'F') then
+              ifriend = nint(bc_all(inb,idir,iblock))
+              if(.not.is_unlocked(ifriend)) then
+                ! periodicity check
+                if(inb == 0 .and. lmin_all(idir,ifriend) > lmin_all(idir,iblock)) cycle
+                if(inb == 1 .and. lmin_all(idir,ifriend) < lmin_all(idir,iblock)) cycle
+                ! normal direction
+                ! inb = 0 -> shift - ng_all(idir,ifriend) | inb = 1 -> shift + ng_all(idir,iblock )
+                ioffset = -(1-inb)*ng_all(idir,ifriend) + inb*ng_all(idir,iblock)
+                lo_all(idir,ifriend) = lo_all(idir,iblock) + ioffset
+                ! tangential directions
+                lo_all(idir_t(:),ifriend) = lo_all(idir_t(:),iblock)
+                is_unlocked(ifriend) = .true.
+              end if
+            end if
+          end do
+        end do
+        is_done(iblock) = .true.
+        iblock = findloc(.not.is_done.and.is_unlocked,.true.,1)
+      end do
+      lo_g(:) = lo_all(:,my_block)
+      deallocate(lo_all,ng_all,cbc_all,bc_all,lmin_all)
+    endif
+    call MPI_BCAST(lo_g,3,MPI_INTEGER,0,comm_block)
+    hi_g(:) = lo_g(:)+ng(:)-1
     !
     ! determine array extents for possibly uneven data
     !
