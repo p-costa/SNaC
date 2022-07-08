@@ -6,13 +6,15 @@ module mod_initmpi
   private
   public initmpi
   contains
-  subroutine initmpi(my_block,nblocks,id_first,dims,cbc,bc,periods,lmin,lmax,gt,gr,lo,hi,lo_g,hi_g,ng,nb,is_bound,halos)
+  subroutine initmpi(my_block,nblocks,id_first,dims,cbc,bc,is_periodic,periods, &
+                     lmin,lmax,gt,gr,lo,hi,lo_g,hi_g,ng,nb,is_bound,halos)
     implicit none
     integer         , intent(in   )                   :: my_block,nblocks,id_first
     integer         , intent(inout), dimension(    3) :: dims
     character(len=1), intent(in   ), dimension(0:1,3) :: cbc
     real(rp)        , intent(in   ), dimension(0:1,3) ::  bc
-    integer         , intent(in   ), dimension(    3) :: periods
+    logical         , intent(in   ), dimension(    3) :: is_periodic
+    integer         , intent(inout), dimension(    3) :: periods
     real(rp)        , intent(in   ), dimension(    3) :: lmin,lmax
     integer         , intent(in   ), dimension(    3) :: gt
     real(rp)        , intent(in   ), dimension(    3) :: gr
@@ -29,6 +31,7 @@ module mod_initmpi
     logical , allocatable, dimension(:) :: is_done,is_unlocked
     real(rp)        , allocatable, dimension(:,:,:) ::  bc_all
     character(len=1), allocatable, dimension(:,:,:) :: cbc_all
+    integer                 :: lo_g_min(3),hi_g_max(3)
     integer                 :: i,j,k,idir,iidir,inb,irank,iblock,ifriend,ioffset,idir_t(2)
     logical                 :: is_nb,found_friend
     integer(i8)             :: ntot,ntot_max,ntot_min,ntot_sum
@@ -50,9 +53,10 @@ module mod_initmpi
       ! gather block size and connectivity information
       !
       allocate(lo_all(3,nblocks),ng_all(3,nblocks),cbc_all(0:1,3,nblocks),bc_all(0:1,3,nblocks),lmin_all(3,nblocks))
-      call MPI_ALLGATHER(ng ,3,MPI_INTEGER  ,ng_all ,3,MPI_INTEGER  ,comm_leaders)
-      call MPI_ALLGATHER(cbc,6,MPI_CHARACTER,cbc_all,6,MPI_CHARACTER,comm_leaders)
-      call MPI_ALLGATHER( bc,6,MPI_REAL_RP  , bc_all,6,MPI_REAL_RP  ,comm_leaders)
+      call MPI_ALLGATHER(ng  ,3,MPI_INTEGER  ,ng_all   ,3,MPI_INTEGER  ,comm_leaders)
+      call MPI_ALLGATHER(cbc ,6,MPI_CHARACTER,cbc_all  ,6,MPI_CHARACTER,comm_leaders)
+      call MPI_ALLGATHER( bc ,6,MPI_REAL_RP  , bc_all  ,6,MPI_REAL_RP  ,comm_leaders)
+      call MPI_ALLGATHER(lmin,3,MPI_REAL_RP  , lmin_all,3,MPI_REAL_RP  ,comm_leaders)
       !
       ! determine lower bounds, taking block #1 as reference
       !
@@ -65,9 +69,9 @@ module mod_initmpi
       do while(.not.all(is_done))
         if(iblock < 1 .or. iblock > nblocks) then
           iblock = findloc(.not.is_done,.true.,1)
-            write(stderr,*) 'ERROR: invalid connectivity for block ', iblock, '.'
-            write(stderr,*) ''
-            error stop
+          write(stderr,*) 'ERROR: invalid connectivity for block ', iblock, '.'
+          write(stderr,*) ''
+          error stop
         endif
         do idir=1,3
           idir_t(:) = pack([1,2,3],[1,2,3] /= idir) ! extract tangential directions
@@ -97,6 +101,17 @@ module mod_initmpi
     endif
     call MPI_BCAST(lo_g,3,MPI_INTEGER,0,comm_block)
     hi_g(:) = lo_g(:)+ng(:)-1
+    !
+    ! determine size of the domain in the periodic direction
+    !
+    call MPI_ALLREDUCE(lo_g(1),lo_g_min(1),3,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD)
+    call MPI_ALLREDUCE(hi_g(1),hi_g_max(1),3,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD)
+    where(is_periodic(:))
+      periods(:)    = hi_g_max(:)-lo_g_min(:)+1
+    elsewhere
+      periods(:)    = 0
+    end where
+
     !
     ! determine array extents for possibly uneven data
     !

@@ -161,17 +161,14 @@ contains
     vol_all = product(lmax(:)-lmin(:))/product(dims(:))
     call mpi_allreduce(MPI_IN_PLACE,vol_all,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
     !
-    ! determine size and length of the domain in the periodic direction
+    ! determine length of the domain in the periodic direction
     !
     call MPI_ALLREDUCE(lmin(1),lmin_min(1),3,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
     call MPI_ALLREDUCE(lmax(1),lmax_max(1),3,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
-    call MPI_ALLREDUCE(ng(1)  ,ng_sum(1)  ,3,MPI_INTEGER,MPI_SUM,MPI_COMM_WORLD,ierr)
     where(is_periodic(:))
       l_periodic(:) = lmax_max(:)-lmin_min(:)
-      periods(:)    = ng_sum(:)
     elsewhere
       l_periodic(:) = 0._rp
-      periods(:)    = 0
     end where
     !
     ! read iterative solver parameter file hypre.in, if it exists

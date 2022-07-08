@@ -214,7 +214,8 @@ program snac
   ! initialize MPI/OpenMP
   !
   !!$call omp_set_num_threads(nthreadsmax) ! ! overwrites the input, disable for now
-  call initmpi(my_block,nblocks,id_first,dims,cbcpre,bcpre,periods,lmin,lmax,gt,gr,lo,hi,lo_g,hi_g,ng,nb,is_bound,halos)
+  call initmpi(my_block,nblocks,id_first,dims,cbcpre,bcpre,is_periodic,periods, &
+               lmin,lmax,gt,gr,lo,hi,lo_g,hi_g,ng,nb,is_bound,halos)
   lo_1(:) = lo(:) - lo_g(:) + 1 ! lo(:) with 1 as first index in the beginning of each block
   hi_1(:) = hi(:) - lo_g(:) + 1 ! hi(:) with 1 as first index in the beginning of each block
   !
