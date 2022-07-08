@@ -111,7 +111,6 @@ module mod_initmpi
     elsewhere
       periods(:)    = 0
     end where
-
     !
     ! determine array extents for possibly uneven data
     !
