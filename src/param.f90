@@ -161,7 +161,7 @@ contains
     vol_all = product(lmax(:)-lmin(:))/product(dims(:))
     call mpi_allreduce(MPI_IN_PLACE,vol_all,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
     !
-    ! determine length of the domain in the periodic direction
+    ! determine length of the domain in the periodic directions
     !
     call MPI_ALLREDUCE(lmin(1),lmin_min(1),3,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
     call MPI_ALLREDUCE(lmax(1),lmax_max(1),3,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)

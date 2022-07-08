@@ -102,7 +102,7 @@ module mod_initmpi
     call MPI_BCAST(lo_g,3,MPI_INTEGER,0,comm_block)
     hi_g(:) = lo_g(:)+ng(:)-1
     !
-    ! determine size of the domain in the periodic direction
+    ! determine size of the domain in the periodic directions
     !
     call MPI_ALLREDUCE(lo_g(1),lo_g_min(1),3,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD)
     call MPI_ALLREDUCE(hi_g(1),hi_g_max(1),3,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD)
