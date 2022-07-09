@@ -187,11 +187,11 @@ module mod_post
       if(ib == 0) then
         i    = 1
         norm =  1.
-      endif
+      end if
       if(ib == 1) then
         i    = n(idir) + 1
         norm = -1.
-      endif
+      end if
       if(is_bound(ib,idir)) then
         do k=1,n(3)
           do j=1,n(2)
@@ -201,17 +201,17 @@ module mod_post
           end do
         end do
       end if
-    enddo
+    end do
     idir = 2
     do ib = 0,1
       if(ib == 0) then
         j   = 1
         sgn =  1.
-      endif
+      end if
       if(ib == 1) then
         j   = n(idir) + 1
         sgn = -1.
-      endif
+      end if
       if(is_bound(ib,idir)) then
         do k=1,n(3)
           do i=1,n(1)
@@ -226,11 +226,11 @@ module mod_post
       if(ib == 0) then
         k   = 1
         sgn =  1.
-      endif
+      end if
       if(ib == 1) then
         k   = n(idir) + 1
         sgn = -1.
-      endif
+      end if
       if(is_bound(ib,idir)) then
         do j=1,n(2)
           do i=1,n(1)
@@ -248,11 +248,11 @@ module mod_post
       if(ib == 0) then
         j    = 1
         norm =  1.
-      endif
+      end if
       if(ib == 1) then
         j    = n(idir) + 1
         norm = -1.
-      endif
+      end if
       if(is_bound(ib,idir)) then
         do k=1,n(3)
           do i=1,n(1)
@@ -262,17 +262,17 @@ module mod_post
           end do
         end do
       end if
-    enddo
+    end do
     idir = 3
     do ib = 0,1
       if(ib == 0) then
         k   = 1
         sgn =  1.
-      endif
+      end if
       if(ib == 1) then
         k   = n(idir) + 1
         sgn = -1.
-      endif
+      end if
       if(is_bound(ib,idir)) then
         do j=1,n(2)
           do i=1,n(1)
@@ -287,11 +287,11 @@ module mod_post
       if(ib == 0) then
         i   = 1
         sgn =  1.
-      endif
+      end if
       if(ib == 1) then
         i   = n(idir) + 1
         sgn = -1.
-      endif
+      end if
       if(is_bound(ib,idir)) then
         do k=1,n(3)
           do j=1,n(2)
@@ -309,11 +309,11 @@ module mod_post
       if(ib == 0) then
         k    = 1
         norm =  1.
-      endif
+      end if
       if(ib == 1) then
         k    = n(idir) + 1
         norm = -1.
-      endif
+      end if
       if(is_bound(ib,idir)) then
         do j=1,n(2)
           do i=1,n(1)
@@ -323,17 +323,17 @@ module mod_post
           end do
         end do
       end if
-    enddo
+    end do
     idir = 1
     do ib = 0,1
       if(ib == 0) then
         i   = 1
         sgn =  1.
-      endif
+      end if
       if(ib == 1) then
         i   = n(idir) + 1
         sgn = -1.
-      endif
+      end if
       if(is_bound(ib,idir)) then
         do k=1,n(3)
           do j=1,n(2)
@@ -348,11 +348,11 @@ module mod_post
       if(ib == 0) then
         j   = 1
         sgn =  1.
-      endif
+      end if
       if(ib == 1) then
         j   = n(idir) + 1
         sgn = -1.
-      endif
+      end if
       if(is_bound(ib,idir)) then
         do k=1,n(3)
           do i=1,n(1)

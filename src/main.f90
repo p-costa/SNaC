@@ -1076,7 +1076,7 @@ end if
           var(2) = time
           var(3) = 1.*ichkptnum
           call out0d(trim(datadir)//'log_saves.out',3,myid,var)
-        endif
+        end if
       end if
       call load('w',trim(datadir)//trim(filename),comm_block,ng,[1,1,1],lo_1,hi_1,u,v,w,p,po,time,istep)
       if(.not.is_overwrite_save) then

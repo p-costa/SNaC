@@ -182,8 +182,8 @@ module mod_sanity
     do idir = 1,3
       do ib = 0,1
         if( is_inflow( ib,idir) ) passed = passed .and. periods(idir) == 0
-      enddo
-    enddo
+      end do
+    end do
     if(.not.passed) call write_error('Periodicity and inflow BCs cannot be combined.')
     call mpi_allreduce(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
   end subroutine chk_inflow

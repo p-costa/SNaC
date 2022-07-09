@@ -72,7 +72,7 @@ module mod_initmpi
           write(stderr,*) 'ERROR: invalid connectivity for block ', iblock, '.'
           write(stderr,*) ''
           error stop
-        endif
+        end if
         do idir=1,3
           idir_t(:) = pack([1,2,3],[1,2,3] /= idir) ! extract tangential directions
           do inb=0,1
@@ -98,7 +98,7 @@ module mod_initmpi
       end do
       lo_g(:) = lo_all(:,my_block)
       deallocate(lo_all,ng_all,cbc_all,bc_all,lmin_all)
-    endif
+    end if
     call MPI_BCAST(lo_g,3,MPI_INTEGER,0,comm_block)
     hi_g(:) = lo_g(:)+ng(:)-1
     !
@@ -107,9 +107,9 @@ module mod_initmpi
     call MPI_ALLREDUCE(lo_g(1),lo_g_min(1),3,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD)
     call MPI_ALLREDUCE(hi_g(1),hi_g_max(1),3,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD)
     where(is_periodic(:))
-      periods(:)    = hi_g_max(:)-lo_g_min(:)+1
+      periods(:) = hi_g_max(:)-lo_g_min(:)+1
     elsewhere
-      periods(:)    = 0
+      periods(:) = 0
     end where
     !
     ! determine array extents for possibly uneven data
@@ -130,6 +130,8 @@ module mod_initmpi
       lo(:) = lo(:) +    mod(ng(:),dims(:))
       hi(:) = hi(:) +    mod(ng(:),dims(:))
     end where
+    !
+    ! determine neighbors and check connectivity
     !
     allocate(lo_all(3,0:nrank-1),hi_all(3,0:nrank-1),lo_g_all(3,0:nrank-1),hi_g_all(3,0:nrank-1), &
              lmin_all(3,0:nrank-1),lmax_all(3,0:nrank-1),gr_all(3,0:nrank-1),gt_all(3,0:nrank-1), &
