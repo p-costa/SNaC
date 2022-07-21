@@ -1118,5 +1118,4 @@ end if
 #endif
   if(myid == 0.and.(.not.kill)) write(stdout,*) '*** Fim ***'
   call MPI_FINALIZE()
-  stop
 end program snac
