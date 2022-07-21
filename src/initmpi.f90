@@ -68,7 +68,7 @@ module mod_initmpi
       is_unlocked(iblock) = .true.
       do while(.not.all(is_done))
         if(iblock < 1 .or. iblock > nblocks) then
-          iblock = findloc(.not.is_done,.true.,1)
+          iblock = findloc_l(.not.is_done,.true.)
           write(stderr,*) 'ERROR: invalid connectivity for block ', iblock, '.'
           write(stderr,*) ''
           error stop
@@ -94,7 +94,7 @@ module mod_initmpi
           end do
         end do
         is_done(iblock) = .true.
-        iblock = findloc(.not.is_done.and.is_unlocked,.true.,1)
+        iblock = findloc_l(.not.is_done.and.is_unlocked,.true.)
       end do
       lo_g(:) = lo_all(:,my_block)
       deallocate(lo_all,ng_all,cbc_all,bc_all,lmin_all)
@@ -300,4 +300,16 @@ module mod_initmpi
     integer, intent(in) :: i,j
     eye = (i/j)*(j/i)
   end function eye
+  pure function findloc_l(l_arr,l_key) result(iloc)
+    logical, intent(in) :: l_arr(:),l_key
+    integer :: iloc
+    integer :: i
+    iloc = 0
+    do i=1,size(l_arr)
+      if(l_arr(i) .eqv. l_key) then
+        iloc = i
+        exit
+      endif
+    enddo
+  end function findloc_l
 end module mod_initmpi
