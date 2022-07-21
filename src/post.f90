@@ -15,10 +15,8 @@ module mod_post
     real(rp), intent(in ), dimension(0:,0:,0:) :: ux ,uy ,uz
     real(rp), intent(out), dimension( :, :, :) :: vox,voy,voz
     integer :: i,j,k
-    !$OMP PARALLEL DEFAULT(none) &
-    !$OMP SHARED(n,dxc,dyc,dzc,ux,uy,uz,vox,voy,voz) &
-    !$OMP PRIVATE(i,j,k)
-    !$OMP DO
+    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP SHARED(n,dxc,dyc,dzc,ux,uy,uz,vox,voy,voz)
     do k=1,n(3)
       do j=1,n(2)
         do i=1,n(1)
@@ -52,7 +50,6 @@ module mod_post
         end do
       end do
     end do
-    !$OMP END PARALLEL
   end subroutine cmpt_vorticity
   !
   subroutine cmpt_strain_rate(n,dxc,dyc,dzc,dxf,dyf,dzf,ux,uy,uz,str)
@@ -67,10 +64,9 @@ module mod_post
     !
     ! compute sijsij, where sij = (1/2)(du_i/dx_j + du_j/dx_i)
     !
-    !$OMP PARALLEL DEFAULT(none) &
+    !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP SHARED(n,dxc,dyc,dzc,dxf,dyf,dzf,ux,uy,uz,str) &
-    !$OMP PRIVATE(i,j,k,s11,s12,s13,s22,s23,s33)
-    !$OMP DO
+    !$OMP PRIVATE(s11,s12,s13,s22,s23,s33)
     do k=1,n(3)
       do j=1,n(2)
         do i=1,n(1)
@@ -99,7 +95,6 @@ module mod_post
         end do
       end do
     end do
-    !$OMP END PARALLEL
   end subroutine cmpt_strain_rate
   !
   subroutine cmpt_rotation_rate(n,dxc,dyc,dzc,ux,uy,uz,ens)
@@ -113,10 +108,9 @@ module mod_post
     !
     ! compute wijwij, where wij = (1/2)(du_i/dx_j - du_j/dx_i)
     !
-    !$OMP PARALLEL DEFAULT(none) &
+    !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP SHARED(n,dxc,dyc,dzc,ux,uy,uz,ens) &
-    !$OMP PRIVATE(i,j,k,e12,e13,e23)
-    !$OMP DO
+    !$OMP PRIVATE(e12,e13,e23)
     do k=1,n(3)
       do j=1,n(2)
         do i=1,n(1)
@@ -142,7 +136,6 @@ module mod_post
         end do
       end do
     end do
-    !$OMP END PARALLEL
   end subroutine cmpt_rotation_rate
   !
   subroutine cmpt_q_criterion(n,ens,str,qcr)
@@ -151,10 +144,8 @@ module mod_post
     real(rp), intent(in ), dimension(1:,1:,1:) :: ens,str
     real(rp), intent(out), dimension(1:,1:,1:) :: qcr
     integer  :: i,j,k
-    !$OMP PARALLEL DEFAULT(none) &
-    !$OMP SHARED(n,ens,str,qcr) &
-    !$OMP PRIVATE(i,j,k)
-    !$OMP DO
+    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP SHARED(n,ens,str,qcr)
     do k=1,n(3)
       do j=1,n(2)
         do i=1,n(1)
@@ -162,7 +153,6 @@ module mod_post
         end do
       end do
     end do
-    !$OMP END PARALLEL
   end subroutine cmpt_q_criterion
   !
   subroutine cmpt_wall_forces(n,is_bound,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,p,bforce, &

@@ -30,7 +30,6 @@ logical                :: restart,is_overwrite_save
 integer                :: nsaves_max
 integer                :: icheck,iout0d,iout1d,iout2d,iout3d,isave
 real(rp), dimension(3) :: bforce
-integer                :: nthreadsmax
 !
 ! parameters specific to each block
 !
@@ -73,7 +72,6 @@ contains
         read(iunit,*) restart,is_overwrite_save,nsaves_max
         read(iunit,*) icheck,iout0d,iout1d,iout2d,iout3d,isave
         read(iunit,*)  bforce(1),bforce(2),bforce(3)
-        read(iunit,*) nthreadsmax
       else
         if(myid == 0) write(stderr,*) '*** Error reading the input file *** '
         if(myid == 0) write(stderr,*) 'Aborting...'

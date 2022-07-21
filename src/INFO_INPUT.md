@@ -18,7 +18,6 @@ Let us start with block-independent parameters in `dns.in`. Consider the followi
  F T                         ! restart,is_overwrite_save
  10 10 20 5000 10000 2000    ! icheck, iout0d, iout1d, iout2d, iout3d, isave
  0. 0. 0.                    ! bforce(1:3)
- 4                           ! nthreadsmax
 ~~~
 
 ---
@@ -95,16 +94,6 @@ These lines set the frequency of time step checking and output:
 ~~~
 
 `bforce`, is a constant **body force density term** in the direction in question (e.g. the negative of a constant pressure gradient) that can be added to the right-hand side of the momentum equation. The three values correspond to three domain directions. NOTE: in a pressure-driven wall-bounded flow, only one type of flow forcing should be selected (bulk velocity or pressure gradient). If the streamwise bulk velocity is forced (by setting the is_forced parameter below `T`), bforce should be zero, and vice-versa.
-
----
-
-~~~
-4                        ! nthreadsmax
-~~~
-
-These lines set the grid of computational subdomains and maximum number of threads.
-
-`nthreadsmax ` is the **maximum number OpenMP threads**.
 
 ---
 ---

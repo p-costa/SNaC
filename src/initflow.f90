@@ -219,7 +219,6 @@ module mod_initflow
     !
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP SHARED(lo,hi,l,dx,dy,dz,p) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP REDUCTION(+:meanold)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -228,7 +227,6 @@ module mod_initflow
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,meanold,1,MPI_REAL_RP,MPI_SUM,comm_block)
     if(meanold /= 0._rp) then
       !$OMP WORKSHARE

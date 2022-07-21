@@ -17,7 +17,6 @@ module mod_scal
     integer  :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dsdxp,dsdxm,dsdyp,dsdym,dsdzp,dsdzm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,s,dsdt)
     do k=lo(3),hi(3)
@@ -37,7 +36,6 @@ module mod_scal
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine scal_d
   subroutine scal_a(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdt)
     implicit none
@@ -51,7 +49,6 @@ module mod_scal
     integer  :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(usip,usim,vsjp,vsjm,wskp,wskm) &
     !$OMP SHARED(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdt)
     do k=lo(3),hi(3)
@@ -71,6 +68,5 @@ module mod_scal
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine scal_a
 end module mod_scal

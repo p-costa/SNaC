@@ -23,7 +23,6 @@ module mod_debug
     mean = 0._rp
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP SHARED(lo,hi,p,dx,dy,dz,vol) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP REDUCTION(+:mean)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -32,7 +31,6 @@ module mod_debug
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,mean,1,MPI_REAL_RP,MPI_SUM,comm)
   end subroutine chkmean
   subroutine chk_helmholtz(lo,hi,is_centered,dx1,dx2,dy1,dy2,dz1,dz2,alpha,fpp,fp,diffmax)

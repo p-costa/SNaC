@@ -19,8 +19,7 @@ module mod_correc
     integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP SHARED(lo,hi,dt,dxc,u,up,p) &
-    !$OMP PRIVATE(i,j,k)
+    !$OMP SHARED(lo,hi,dt,dxc,u,up,p)
     do k=lo(3)-1,hi(3)+1
       do j=lo(2)-1,hi(2)+1
         do i=lo(1)-1,hi(1)
@@ -28,10 +27,8 @@ module mod_correc
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP SHARED(lo,hi,dt,dyc,v,vp,p) &
-    !$OMP PRIVATE(i,j,k)
+    !$OMP SHARED(lo,hi,dt,dyc,v,vp,p)
     do k=lo(3)-1,hi(3)+1
       do j=lo(2)-1,hi(2)
         do i=lo(1)-1,hi(1)+1
@@ -39,10 +36,8 @@ module mod_correc
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP SHARED(lo,hi,dt,dzc,w,wp,p) &
-    !$OMP PRIVATE(i,j,k)
+    !$OMP SHARED(lo,hi,dt,dzc,w,wp,p)
     do k=lo(3)-1,hi(3)
       do j=lo(2)-1,hi(2)+1
         do i=lo(1)-1,hi(1)+1
@@ -50,6 +45,5 @@ module mod_correc
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine correc
 end module mod_correc

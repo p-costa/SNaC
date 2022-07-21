@@ -24,7 +24,6 @@ module mod_chkdt
     dti = 0._rp
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP SHARED(lo,hi,u,v,w,dxc,dxf,dyc,dyf,dzc,dzf) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(ux,uy,uz,vx,vy,vz,wx,wy,wz,dtix,dtiy,dtiz) &
     !$OMP REDUCTION(max:dti)
     do k=lo(3),hi(3)
@@ -46,7 +45,6 @@ module mod_chkdt
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,dti,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
     if(dti == 0._rp) dti = 1._rp
     dtmax = sqrt(3._rp)/dti

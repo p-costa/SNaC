@@ -19,7 +19,6 @@ module mod_updt_pressure
     integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,p,pp)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -28,10 +27,8 @@ module mod_updt_pressure
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
 #ifdef _IMPDIFF
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k)            &
     !$OMP SHARED(lo,hi,p,pp,dxc,dxf,dyc,dyf,dzc,dzf,alpha)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -46,7 +43,6 @@ module mod_updt_pressure
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
 #endif
   end subroutine updt_pressure
 end module mod_updt_pressure

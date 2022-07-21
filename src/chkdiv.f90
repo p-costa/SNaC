@@ -25,7 +25,7 @@ module mod_chkdiv
     divmax = 0._rp
     !$OMP PARALLEL DO DEFAULT(none) &
     !$OMP SHARED(lo,hi,u,v,w,dxf,dyf,dzf,vol) &
-    !$OMP PRIVATE(i,j,k,div) &
+    !$OMP PRIVATE(div) &
     !$OMP REDUCTION(+:divtot) &
     !$OMP REDUCTION(max:divmax)
     do k=lo(3),hi(3)
@@ -39,7 +39,6 @@ module mod_chkdiv
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
     call mpi_allreduce(MPI_IN_PLACE,divtot,1,MPI_REAL_RP,MPI_SUM,comm)
     call mpi_allreduce(MPI_IN_PLACE,divmax,1,MPI_REAL_RP,MPI_MAX,comm)
   end subroutine chkdiv

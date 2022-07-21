@@ -25,8 +25,7 @@ module mod_fillps
     integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP SHARED(lo,hi,p,up,vp,wp,dt,dxf,dyf,dzf) &
-    !$OMP PRIVATE(i,j,k)
+    !$OMP SHARED(lo,hi,p,up,vp,wp,dt,dxf,dyf,dzf)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
@@ -38,6 +37,5 @@ module mod_fillps
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine fillps
 end module mod_fillps

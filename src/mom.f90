@@ -16,7 +16,6 @@ module mod_mom
     integer  :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uuip,uuim,uvjp,uvjm,uwkp,uwkm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudt)
     do k=lo(3),hi(3)
@@ -38,7 +37,6 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momx_a
   !
   subroutine momy_a(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdt)
@@ -53,7 +51,6 @@ module mod_mom
     integer  :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uvip,uvim,vvjp,vvjm,wvkp,wvkm) &
     !$OMP SHARED(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdt)
     do k=lo(3),hi(3)
@@ -75,7 +72,6 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momy_a
   !
   subroutine momz_a(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdt)
@@ -90,7 +86,6 @@ module mod_mom
     integer  :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uwip,uwim,vwjp,vwjm,wwkp,wwkm) &
     !$OMP SHARED(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdt)
     do k=lo(3),hi(3)
@@ -112,7 +107,6 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momz_a
   !
   subroutine momx_a_vv(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudt)
@@ -127,7 +121,6 @@ module mod_mom
     integer  :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uuip,uuim,uvjp,uvjm,uwkp,uwkm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudt)
     do k=lo(3),hi(3)
@@ -150,7 +143,6 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momx_a_vv
   !
   subroutine momy_a_vv(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdt)
@@ -165,7 +157,6 @@ module mod_mom
     integer  :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uvip,uvim,vvjp,vvjm,wvkp,wvkm) &
     !$OMP SHARED(lo,hi,dxf,dyc,dyf,dzf,u,v,w,dvdt)
     do k=lo(3),hi(3)
@@ -189,7 +180,6 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momy_a_vv
   !
   subroutine momz_a_vv(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdt)
@@ -204,7 +194,6 @@ module mod_mom
     integer  :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(uwip,uwim,vwjp,vwjm,wwkp,wwkm) &
     !$OMP SHARED(lo,hi,dxf,dyf,dzc,dzf,u,v,w,dwdt)
     do k=lo(3),hi(3)
@@ -227,7 +216,6 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momz_a_vv
   !
   subroutine momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudt)
@@ -243,7 +231,6 @@ module mod_mom
     integer  :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dudxp,dudxm,dudyp,dudym,dudzp,dudzm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudt)
     do k=lo(3),hi(3)
@@ -265,7 +252,6 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momx_d
   !
   subroutine momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdt)
@@ -281,7 +267,6 @@ module mod_mom
     integer  :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dvdxp,dvdxm,dvdyp,dvdym,dvdzp,dvdzm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdt)
     do k=lo(3),hi(3)
@@ -303,7 +288,6 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momy_d
   !
   subroutine momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdt)
@@ -319,7 +303,6 @@ module mod_mom
     integer  :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP PRIVATE(dwdxp,dwdxm,dwdyp,dwdym,dwdzp,dwdzm) &
     !$OMP SHARED(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdt)
     do k=lo(3),hi(3)
@@ -341,7 +324,6 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momz_d
   subroutine momx_p(lo,hi,dxc,bforce,p,dudt)
     implicit none
@@ -353,7 +335,6 @@ module mod_mom
     integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,dxc,bforce,p,dudt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -362,7 +343,6 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momx_p
   !
   subroutine momy_p(lo,hi,dyc,bforce,p,dvdt)
@@ -375,7 +355,6 @@ module mod_mom
     integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,dyc,bforce,p,dvdt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -384,7 +363,6 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momy_p
   !
   subroutine momz_p(lo,hi,dzc,bforce,p,dwdt)
@@ -397,7 +375,6 @@ module mod_mom
     integer :: i,j,k
     !
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP PRIVATE(i,j,k) &
     !$OMP SHARED(lo,hi,dzc,bforce,p,dwdt)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
@@ -406,6 +383,5 @@ module mod_mom
         end do
       end do
     end do
-    !$OMP END PARALLEL DO
   end subroutine momz_p
 end module mod_mom
