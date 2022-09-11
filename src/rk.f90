@@ -30,21 +30,21 @@ module mod_rk
     factor1 = rkpar(1)*dt
     factor2 = rkpar(2)*dt
     factor12 = factor1 + factor2
-    !$OMP WORKSHARE
+    !$OMP PARALLEL WORKSHARE
     dudtrk(:,:,:) = 0._rp
     dvdtrk(:,:,:) = 0._rp
     dwdtrk(:,:,:) = 0._rp
-    !$OMP END WORKSHARE
+    !$OMP END PARALLEL WORKSHARE
 #ifndef _IMPDIFF
     call momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudtrk)
     call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrk)
     call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrk)
 #else
-    !$OMP WORKSHARE
+    !$OMP PARALLEL WORKSHARE
     dudtrkd(:,:,:) = 0._rp
     dvdtrkd(:,:,:) = 0._rp
     dwdtrkd(:,:,:) = 0._rp
-    !$OMP END WORKSHARE
+    !$OMP END PARALLEL WORKSHARE
     call momx_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,dudtrkd)
     call momy_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,v,dvdtrkd)
     call momz_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,w,dwdtrkd)
@@ -75,11 +75,11 @@ module mod_rk
         end do
       end do
     end do
-    !$OMP WORKSHARE
+    !$OMP PARALLEL WORKSHARE
     dudtrk(:,:,:) = 0._rp
     dvdtrk(:,:,:) = 0._rp
     dwdtrk(:,:,:) = 0._rp
-    !$OMP END WORKSHARE
+    !$OMP END PARALLEL WORKSHARE
     call momx_p(lo,hi,dxc,bforce(1),p,dudtrk)
     call momy_p(lo,hi,dyc,bforce(2),p,dvdtrk)
     call momz_p(lo,hi,dzc,bforce(3),p,dwdtrk) ! we could perform the pressure gradient calculation in the loop below instead, but I

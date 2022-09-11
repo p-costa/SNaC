@@ -864,9 +864,9 @@ end if
 #ifdef _IMPDIFF
       alphai = alpha**(-1)
       !
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
       call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,up)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiu_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiu_a(il:iu:iskip), &
@@ -882,9 +882,9 @@ end if
       call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,up_s,up)
 #endif
       call fft(arrplan_u(2),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_u
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
       call finalize_n_solvers(hiu_a(idir)-lo_a(idir)+1,usolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiu,alphai-alphaoi,usolver%mat) ! correct diagonal term
@@ -894,9 +894,9 @@ end if
       call finalize_solver(usolver)
 #endif
       !
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
       call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,vp)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiv_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiv_a(il:iu:iskip), &
@@ -912,9 +912,9 @@ end if
       call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,vp_s,vp)
 #endif
       call fft(arrplan_v(2),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_v
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
       call finalize_n_solvers(hiv_a(idir)-lo_a(idir)+1,vsolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiv,alphai-alphaoi,vsolver%mat) ! correct diagonal term
@@ -924,9 +924,9 @@ end if
       call finalize_solver(vsolver)
 #endif
       !
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
       call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,wp)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiw_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiw_a(il:iu:iskip), &
@@ -942,9 +942,9 @@ end if
       call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,wp_s,wp)
 #endif
       call fft(arrplan_w(2),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_w
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
       call finalize_n_solvers(hiw_a(idir)-lo_a(idir)+1,wsolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiw,alphai-alphaoi,wsolver%mat) ! correct diagonal term
@@ -964,11 +964,11 @@ end if
 #if !defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
       dtrk  = dt
       if(irk < 3) then ! pressure correction only at the last RK step
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         u(:,:,:) = up(:,:,:)
         v(:,:,:) = vp(:,:,:)
         w(:,:,:) = wp(:,:,:)
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
         cycle
       end if
 #endif
@@ -988,9 +988,9 @@ end if
       call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,pp_s,pp)
 #endif
       call fft(arrplan_p(2),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_p
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
 #else
       call solve_helmholtz(psolver,lo,hi,pp,po)
 #endif

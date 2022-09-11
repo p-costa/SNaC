@@ -134,131 +134,131 @@ module mod_bound
     case('P')
       select case(idir)
       case(1)
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         p(lo(idir)-1,:,:) = p(hi(idir),:,:)
         p(hi(idir)+1,:,:) = p(lo(idir),:,:)
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       case(2)
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         p(:,lo(idir)-1,:) = p(:,hi(idir),:)
         p(:,hi(idir)+1,:) = p(:,lo(idir),:)
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       case(3)
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         p(:,:,lo(idir)-1) = p(:,:,hi(idir))
         p(:,:,hi(idir)+1) = p(:,:,lo(idir))
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       end select
     case('D','N')
       if(centered) then
         select case(idir)
         case(1)
           if     (ibound == 0) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(lo(idir)-1,:,:) = factor+sgn*p(lo(idir),:,:)
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           else if(ibound == 1) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(hi(idir)+1,:,:) = factor+sgn*p(hi(idir),:,:)
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           end if
         case(2)
           if     (ibound == 0) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(:,lo(idir)-1,:) = factor+sgn*p(:,lo(idir),:)
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           else if(ibound == 1) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(:,hi(idir)+1,:) = factor+sgn*p(:,hi(idir),:)
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           end if
         case(3)
           if     (ibound == 0) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(:,:,lo(idir)-1) = factor+sgn*p(:,:,lo(idir))
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           else if(ibound == 1) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(:,:,hi(idir)+1) = factor+sgn*p(:,:,hi(idir))
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           end if
         end select
       else if(.not.centered.and.ctype == 'D') then
         select case(idir)
         case(1)
           if     (ibound == 0) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(lo(idir)-1,:,:) = factor
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           else if(ibound == 1) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(hi(idir)  ,:,:) = factor
             p(hi(idir)+1,:,:) = p(hi(idir)-1,:,:)
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           end if
         case(2)
           if     (ibound == 0) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(:,lo(idir)-1,:) = factor
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           else if(ibound == 1) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(:,hi(idir)  ,:) = factor
             p(:,hi(idir)+1,:) = p(:,hi(idir)-1,:)
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           end if
         case(3)
           if     (ibound == 0) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(:,:,lo(idir)-1) = factor
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           else if(ibound == 1) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             p(:,:,hi(idir)  ) = factor
             p(:,:,hi(idir)+1) = p(:,:,hi(idir)-1)
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           end if
         end select
       else if(.not.centered.and.ctype == 'N') then
         select case(idir)
         case(1)
           if     (ibound == 0) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             !p(0,:,:) = 1./3.*(-2.*factor+4.*p(1  ,:,:)-p(2  ,:,:))
             p(lo(idir)-1,:,:) = factor + p(lo(idir)  ,:,:)
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           else if(ibound == 1) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             !p(n,:,:) = 1./3.*(-2.*factor+4.*p(n-1,:,:)-p(n-2,:,:))
             p(hi(idir)  ,:,:) = factor + p(hi(idir)-1,:,:)
             p(hi(idir)+1,:,:) =          p(hi(idir)  ,:,:) ! not needed
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           end if
         case(2)
           if     (ibound == 0) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             !p(:,0  ,:) = 1./3.*(-2.*factor+4.*p(:,1,:)-p(:,2  ,:))
             p(:,lo(idir)-1,:) = factor + p(:,lo(idir)  ,:)
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           else if(ibound == 1) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             !p(:,n,:) = 1./3.*(-2.*factor+4.*p(:,n-1,:)-p(:,n-2,:))
             p(:,hi(idir)  ,:) = factor + p(:,hi(idir)-1,:)
             p(:,hi(idir)+1,:) =          p(:,hi(idir)  ,:) ! not needed
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           end if
         case(3)
           if     (ibound == 0) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             !p(:,:,0) = 1./3.*(-2.*factor+4.*p(:,:,1  )-p(:,:,2  ))
             p(:,:,lo(idir)-1) = factor + p(:,:,lo(idir)  )
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           else if(ibound == 1) then
-            !$OMP WORKSHARE
+            !$OMP PARALLEL WORKSHARE
             !p(:,:,n) = 1./3.*(-2.*factor+4.*p(:,:,n-1)-p(:,:,n-2))
             p(:,:,hi(idir)  ) = factor + p(:,:,hi(idir)-1)
             p(:,:,hi(idir)+1) =          p(:,:,hi(idir)  ) ! not needed
-            !$OMP END WORKSHARE
+            !$OMP END PARALLEL WORKSHARE
           end if
         end select
       end if
@@ -297,48 +297,48 @@ module mod_bound
     select case(idir)
     case(1)
       if     (ibound == 0) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_x(:,:,ibound) = tr_x(:,:,ibound) + .5_rp*min(0._rp,norm*u(q+1,:,:))**2
         up(q,:,:) = up(q+1,:,:) + factor*(tr_x(:,:,ibound) + p(q+1,:,:))
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_x(:,:,ibound) = tr_x(:,:,ibound) + .5_rp*min(0._rp,norm*u(q-1,:,:))**2
         up(q,:,:) = up(q-1,:,:) + factor*(tr_x(:,:,ibound) + p(q  ,:,:))
-        !$OMP END WORKSHARE
-        !$OMP WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         up(hi(idir)+1,:,:) = up(hi(idir)  ,:,:) ! not needed
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       end if
     case(2)
       if     (ibound == 0) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_y(:,:,ibound) = tr_y(:,:,ibound) + .5_rp*min(0._rp,norm*v(:,q+1,:))**2
         vp(:,q,:) = vp(:,q+1,:) + factor*(tr_y(:,:,ibound) + p(:,q+1,:))
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_y(:,:,ibound) = tr_y(:,:,ibound) + .5_rp*min(0._rp,norm*v(:,q-1,:))**2
         vp(:,q,:) = vp(:,q-1,:) + factor*(tr_y(:,:,ibound) + p(:,q  ,:))
-        !$OMP END WORKSHARE
-        !$OMP WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         vp(:,hi(idir)+1,:) = vp(:,hi(idir)  ,:) ! not needed
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       end if
     case(3)
       if     (ibound == 0) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_z(:,:,ibound) = tr_z(:,:,ibound) + .5_rp*min(0._rp,norm*w(:,:,q+1))**2
         wp(:,:,q) = wp(:,:,q+1) + factor*(tr_z(:,:,ibound) + p(:,:,q+1))
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_z(:,:,ibound) = tr_z(:,:,ibound) + .5_rp*min(0._rp,norm*w(:,:,q-1))**2
         wp(:,:,q) = wp(:,:,q-1) + factor*(tr_z(:,:,ibound) + p(:,:,q  ))
-        !$OMP END WORKSHARE
-        !$OMP WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         wp(:,:,hi(idir)+1) = wp(:,:,hi(idir)  ) ! not needed
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       end if
     end select
   end subroutine set_open_bc_uvw
@@ -364,33 +364,33 @@ module mod_bound
     select case(idir)
     case(1)
       if     (ibound == 0) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         p(q-1,:,:) = p(q,:,:) + alpha*drc(0)*drf*p(q,:,:) - ( p(q+1,:,:)-p(q,:,:) )*drc(0)/drc(1)
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         p(q+1,:,:) = p(q,:,:) + alpha*drc(1)*drf*p(q,:,:) + ( p(q,:,:)-p(q-1,:,:) )*drc(1)/drc(0)
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       end if
     case(2)
       if     (ibound == 0) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         p(:,q-1,:) = p(:,q,:) + alpha*drc(0)*drf*p(:,q,:) - ( p(:,q+1,:)-p(:,q,:) )*drc(0)/drc(1)
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         p(:,q+1,:) = p(:,q,:) + alpha*drc(1)*drf*p(:,q,:) + ( p(:,q,:)-p(:,q-1,:) )*drc(1)/drc(0)
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       end if
     case(3)
       if     (ibound == 0) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         p(:,:,q-1) = p(:,:,q) + alpha*drc(0)*drf*p(:,:,q) - ( p(:,:,q+1)-p(:,:,q) )*drc(0)/drc(1)
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         p(:,:,q+1) = p(:,:,q) + alpha*drc(1)*drf*p(:,:,q) + ( p(:,:,q)-p(:,:,q-1) )*drc(1)/drc(0)
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       end if
     end select
   end subroutine set_open_bc_p
@@ -422,33 +422,33 @@ module mod_bound
     select case(idir)
     case(1)
       if     (ibound == 0) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_x(:,:,ibound) = -p(q+1,:,:) + factor*(u(q+2,:,:)-u(q+1,:,:))
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_x(:,:,ibound) = -p(q-1,:,:) + factor*(u(q-1,:,:)-u(q-2,:,:))
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       end if
     case(2)
       if     (ibound == 0) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_y(:,:,ibound) = -p(:,q+1,:) + factor*(v(:,q+2,:)-v(:,q+1,:))
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_y(:,:,ibound) = -p(:,q-1,:) + factor*(v(:,q-1,:)-v(:,q-2,:))
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       end if
     case(3)
       if     (ibound == 0) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_z(:,:,ibound) = -p(:,:,q+1) + factor*(w(:,:,q+2)-w(:,:,q+1))
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
-        !$OMP WORKSHARE
+        !$OMP PARALLEL WORKSHARE
         tr_z(:,:,ibound) = -p(:,:,q-1) + factor*(w(:,:,q-1)-w(:,:,q-2))
-        !$OMP END WORKSHARE
+        !$OMP END PARALLEL WORKSHARE
       end if
     end select
   end subroutine cmpt_estimated_traction
@@ -572,34 +572,34 @@ module mod_bound
     real(rp), intent(in   ), dimension(lo(1):,lo(2):,0:) :: rhsbz
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     if(is_bound(0,1)) then
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       p(lo(1),lo(2):hi(2),lo(3):hi(3)) = p(lo(1),lo(2):hi(2),lo(3):hi(3)) + rhsbx(lo(2):hi(2),lo(3):hi(3),0)
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
     end if
     if(is_bound(1,1)) then
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       p(hi(1),lo(2):hi(2),lo(3):hi(3)) = p(hi(1),lo(2):hi(2),lo(3):hi(3)) + rhsbx(lo(2):hi(2),lo(3):hi(3),1)
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
     end if
     if(is_bound(0,2)) then
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       p(lo(1):hi(1),lo(2),lo(3):hi(3)) = p(lo(1):hi(1),lo(2),lo(3):hi(3)) + rhsby(lo(1):hi(1),lo(3):hi(3),0)
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
     end if
     if(is_bound(1,2)) then
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       p(lo(1):hi(1),hi(2),lo(3):hi(3)) = p(lo(1):hi(1),hi(2),lo(3):hi(3)) + rhsby(lo(1):hi(1),lo(3):hi(3),1)
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
     end if
     if(is_bound(0,3)) then
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       p(lo(1):hi(1),lo(2):hi(2),lo(3)) = p(lo(1):hi(1),lo(2):hi(2),lo(3)) + rhsbz(lo(1):hi(1),lo(2):hi(2),0)
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
     end if
     if(is_bound(1,3)) then
-      !$OMP WORKSHARE
+      !$OMP PARALLEL WORKSHARE
       p(lo(1):hi(1),lo(2):hi(2),hi(3)) = p(lo(1):hi(1),lo(2):hi(2),hi(3)) + rhsbz(lo(1):hi(1),lo(2):hi(2),1)
-      !$OMP END WORKSHARE
+      !$OMP END PARALLEL WORKSHARE
     end if
   end subroutine updt_rhs
   !
