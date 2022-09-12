@@ -7,7 +7,7 @@ The solver is able to simulate the flow in any three-dimensional multi-block str
 **Reference**
 
 P. Costa. *A FFT-accelerated multi-block finite-difference solver for massively parallel simulations of incompressible flows*.
-Comput. Phys. Commun. 271 : 108194 (2022) [[DOI:10.1016/j.cpc.2021.108194]](doi.org/10.1016/j.cpc.2021.108194) [[arXiv:2106.03583]](https://arxiv.org/pdf/2106.03583.pdf).
+Comput. Phys. Commun. 271 : 108194 (2022) [[DOI:10.1016/j.cpc.2021.108194]](https://doi.org/10.1016/j.cpc.2021.108194) [[arXiv:2106.03583]](https://arxiv.org/pdf/2106.03583.pdf).
 
 ## News
 [08/07/2022] The input files describing the block geometry (under `geo/block.???`) have been simplified. Now, instead of prescribing the lower and upper extents of each block `lo(:)` and `hi(:)`, the number of grid points `ng(:)` is prescribed. This change makes it much easier to refine the grid, since one does not need to correct extents of neighboring blocks. See the updated [`src/INFO_INPUT.md`](src/INFO_INPUT.md) for more details.
