@@ -204,7 +204,7 @@ program snac
 #else
   if(myid == 0) write(stderr,*) 'ERROR: there can be only one FFT direction; check the pre-processor flags.'
   if(myid == 0) write(stderr,*) 'Aborting...'
-  call MPI_FINALIZE
+  call MPI_FINALIZE()
   error stop
 #endif
   call test_sanity_fft(dims(idir),ng(idir),lmin(idir),lmax(idir),gr(idir))
