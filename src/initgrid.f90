@@ -4,7 +4,7 @@ module mod_initgrid
   use mod_types
   implicit none
   private
-  public initgrid,distribute_grid,bound_grid,save_grid
+  public initgrid,distribute_grid,bound_grid,save_grid,load_grid
   contains
   subroutine initgrid(lo,hi,gt,gr,lmin,lmax,drc_g,drf_g,rc_g,rf_g)
     !
@@ -139,6 +139,17 @@ module mod_initgrid
     do q=lo_g-1,hi_g+1
       write(iunit,'(5E15.7)') 0._rp,rf_g(q),rc_g(q),drf_g(q),drc_g(q)
     end do
+    close(iunit)
+  end subroutine save_grid
+  subroutine load_grid(fname,lo_g,hi_g,rf_g,rc_g,drf_g,drc_g)
+    implicit none
+    character(len=*), intent(in ) :: fname
+    integer         , intent(in ) :: lo_g,hi_g
+    real(rp)        , intent(out), dimension(lo_g-1:) :: rf_g,rc_g,drf_g,drc_g
+    integer :: iunit,q,reclen
+    inquire(iolength=reclen) rf_g(lo_g:hi_g),rc_g(lo_g:hi_g),drf_g(lo_g:hi_g),drc_g(lo_g:hi_g)
+    open(newunit=iunit,file=trim(fname)//'.bin',access='direct',recl=reclen)
+    read(iunit,rec=1) rf_g(lo_g:hi_g),rc_g(lo_g:hi_g),drf_g(lo_g:hi_g),drc_g(lo_g:hi_g)
     close(iunit)
   end subroutine save_grid
   !

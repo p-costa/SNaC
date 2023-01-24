@@ -27,7 +27,7 @@ program snac
   use mod_common_mpi     , only: myid,myid_block,comm_block
   use mod_correc         , only: correc
   use mod_initflow       , only: initflow,init_inflow
-  use mod_initgrid       , only: initgrid,distribute_grid,bound_grid,save_grid
+  use mod_initgrid       , only: initgrid,distribute_grid,bound_grid,load_grid
   use mod_initmpi        , only: initmpi
   use mod_fillps         , only: fillps
   use mod_load           , only: load
@@ -406,9 +406,9 @@ end if
   call initgrid(lo_g(3),hi_g(3),gt(3),gr(3),lmin(3),lmax(3),dzc_g,dzf_g,zc_g,zf_g)
   write(cblock,'(i3.3)') my_block
   if(myid_block == 0) then
-    call save_grid(trim(datadir)//'grid_x_b_'//cblock,lo_g(1),hi_g(1),xf_g,xc_g,dxf_g,dxc_g)
-    call save_grid(trim(datadir)//'grid_y_b_'//cblock,lo_g(2),hi_g(2),yf_g,yc_g,dyf_g,dyc_g)
-    call save_grid(trim(datadir)//'grid_z_b_'//cblock,lo_g(3),hi_g(3),zf_g,zc_g,dzf_g,dzc_g)
+    call load_grid(trim(datadir)//'grid_x_b_'//cblock,lo_g(1),hi_g(1),xf_g,xc_g,dxf_g,dxc_g)
+    call load_grid(trim(datadir)//'grid_y_b_'//cblock,lo_g(2),hi_g(2),yf_g,yc_g,dyf_g,dyc_g)
+    call load_grid(trim(datadir)//'grid_z_b_'//cblock,lo_g(3),hi_g(3),zf_g,zc_g,dzf_g,dzc_g)
     open(newunit=iunit,status='replace',file=trim(datadir)//'geometry_b_'//cblock//'.out')
       write(iunit,*) lo_g(1),lo_g(2),lo_g(3)
       write(iunit,*) hi_g(1),hi_g(2),hi_g(3)
