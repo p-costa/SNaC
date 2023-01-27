@@ -147,11 +147,11 @@ module mod_initgrid
     integer         , intent(in ) :: lo_g,hi_g
     real(rp)        , intent(out), dimension(lo_g-1:) :: rf_g,rc_g,drf_g,drc_g
     integer :: iunit,q,reclen
-    inquire(iolength=reclen) rf_g(lo_g:hi_g),rc_g(lo_g:hi_g),drf_g(lo_g:hi_g),drc_g(lo_g:hi_g)
+    inquire(iolength=reclen) rf_g(lo_g-1:hi_g+1),rc_g(lo_g-1:hi_g+1),drf_g(lo_g-1:hi_g+1),drc_g(lo_g-1:hi_g+1)
     open(newunit=iunit,file=trim(fname)//'.bin',access='direct',recl=reclen)
-    read(iunit,rec=1) rf_g(lo_g:hi_g),rc_g(lo_g:hi_g),drf_g(lo_g:hi_g),drc_g(lo_g:hi_g)
+    read(iunit,rec=1) rf_g(lo_g-1:hi_g+1),rc_g(lo_g-1:hi_g+1),drf_g(lo_g-1:hi_g+1),drc_g(lo_g-1:hi_g+1)
     close(iunit)
-  end subroutine save_grid
+  end subroutine load_grid
   !
   ! grid stretching functions
   ! see e.g., Fluid Flow Phenomena -- A Numerical Toolkit, by P. Orlandi
