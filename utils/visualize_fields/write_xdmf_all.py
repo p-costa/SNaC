@@ -99,12 +99,12 @@ for iblock in range(1,nblocks+1):
         f   = open('grid_z'+blockname+'.bin','rb')
         grid_z = np.fromfile(f,dtype=my_dtype)
         f.close()
-        grid_x = np.reshape(grid_x,(ng[0],4),order='F')
-        grid_y = np.reshape(grid_y,(ng[1],4),order='F')
-        grid_z = np.reshape(grid_z,(ng[2],4),order='F')
-        x = r0_g[0] + grid_x[:,1]
-        y = r0_g[1] + grid_y[:,1]
-        z = r0_g[2] + grid_z[:,1]
+        grid_x = np.reshape(grid_x,(ng[0]+2,4),order='F')
+        grid_y = np.reshape(grid_y,(ng[1]+2,4),order='F')
+        grid_z = np.reshape(grid_z,(ng[2]+2,4),order='F')
+        x = r0_g[0] + grid_x[1:ng[0]+1,1]
+        y = r0_g[1] + grid_y[1:ng[1]+1,1]
+        z = r0_g[2] + grid_z[1:ng[2]+1,1]
     x[nmin[0]-1:nmax[0]:nstep[0]].astype(my_dtype).tofile(xgridfile)
     y[nmin[1]-1:nmax[1]:nstep[1]].astype(my_dtype).tofile(ygridfile)
     z[nmin[2]-1:nmax[2]:nstep[2]].astype(my_dtype).tofile(zgridfile)
