@@ -95,13 +95,9 @@ program snac
   integer , dimension(    3) :: hiu,hiv,hiw
 #endif
   type(hypre_solver) :: psolver
-  logical                             :: is_symm_matrix_p
 #ifdef _IMPDIFF
   type(hypre_solver) :: usolver,vsolver,wsolver
   real(rp)           :: alphai,alphaoi
-  logical                             :: is_symm_matrix_u, &
-                                         is_symm_matrix_v, &
-                                         is_symm_matrix_w
 #endif
   !
   real(rp) :: dt,dtmax,time,dtrk,divtot,divmax
@@ -112,7 +108,6 @@ program snac
                                          dxc_g,dxf_g,xc_g,xf_g, &
                                          dyc_g,dyf_g,yc_g,yf_g, &
                                          dzc_g,dzf_g,zc_g,zf_g
-  logical                             :: is_uniform_grid
   logical, dimension(3)               :: is_centered
   !
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
@@ -501,21 +496,6 @@ end if
   call MPI_ALLREDUCE(MPI_IN_PLACE,dzf_g(hi_g(3)+1),1,MPI_REAL_RP,MPI_MAX,comm_block)
 #endif
 #endif
-  is_uniform_grid = all(dzf(:) == dzf(lo(3))) .and. &
-                    all(dyf(:) == dyf(lo(2))) .and. &
-                    all(dxf(:) == dxf(lo(1))) .and. &
-#ifdef _FFT_X
-                    dyf(lo(2)) == dzf(lo(3))
-#elif  _FFT_Y
-                    dxf(lo(1)) == dzf(lo(3))
-#elif  _FFT_Z
-                    dxf(lo(1)) == dyf(lo(2))
-#else
-                    dxf(lo(1)) == dyf(lo(2)) .and. &
-                    dxf(lo(1)) == dzf(lo(3)) .and. &
-                    dyf(lo(2)) == dzf(lo(3))
-#endif
-  call mpi_allreduce(MPI_IN_PLACE,is_uniform_grid,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
   !
   ! initialization of the flow fields
   !
@@ -713,7 +693,6 @@ end if
   allocate(comms_fft(hi_a(idir)-lo_a(idir)+1))
   allocate(lambda_p_a(hi_a(idir)-lo_a(idir)+1))
   is_bound_a(:,:) = is_bound(:,:)
-  is_symm_matrix_p = is_uniform_grid
 #ifndef _FFT_USE_SLABS
   comms_fft(:) = MPI_COMM_WORLD
   lambda_p_a(:) = lambda_p
@@ -728,19 +707,19 @@ end if
 #endif
 #ifndef _FFT_USE_SLICED_PENCILS
   call init_n_2d_matrices(cbcpre(:,il:iu:iskip),bcpre(:,il:iu:iskip),dl(:,il:iu:iskip), &
-                          is_symm_matrix_p,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          .true.,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hi_a(idir),lo_a(il:iu:iskip),hi_a(il:iu:iskip),periods(il:iu:iskip), &
                           dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,lambda_p_a,comms_fft,psolver_fft)
 #else
-  call init_n_3d_matrices(idir,nslices,cbcpre,bcpre,dl,is_symm_matrix_p,is_bound,is_centered,lo,periods, &
+  call init_n_3d_matrices(idir,nslices,cbcpre,bcpre,dl,.true.,is_bound,is_centered,lo,periods, &
                           lo_sp,hi_sp,dxc,dxf,dyc,dyf,dzc,dzf,alpha,alpha_bc,lambda_p_a,psolver_fft)
 #endif
-  call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,hypre_solver_i,psolver_fft)
+  call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,.true.,hypre_solver_i,psolver_fft)
   call setup_n_solvers(npsolvers,psolver_fft)
 #else
-  call init_matrix_3d(cbcpre,bcpre,dl,is_symm_matrix_p,is_bound,is_centered,lo,hi,periods, &
+  call init_matrix_3d(cbcpre,bcpre,dl,.true.,is_bound,is_centered,lo,hi,periods, &
                       dxc,dxf,dyc,dyf,dzc,dzf,alpha,alpha_bc,psolver)
-  call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,psolver)
+  call create_solver(hypre_maxiter,hypre_tol,.true.,hypre_solver_i,psolver)
   call setup_solver(psolver)
 #endif
 #ifdef _IMPDIFF
@@ -750,7 +729,6 @@ end if
   hiu(:) = hi(:)
   if(is_bound(1,1)) hiu(:) = hiu(:)-[1,0,0]
   is_centered(:) = [.false.,.true.,.true.]
-  is_symm_matrix_u = is_uniform_grid
   call init_bc_rhs(cbcvel(:,:,1),bcvel(:,:,1),dlu,is_bound,is_centered,lo,hiu,periods, &
                    dxf,dxc,dyc,dyf,dzc,dzf,rhsu%x,rhsu%y,rhsu%z,bcu%x,bcu%y,bcu%z)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
@@ -768,11 +746,11 @@ end if
   if(periods(1) == 0) hiu_a(:) = hiu_a(:)-[1,0,0]
 #endif
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,1),bcvel(:,il:iu:iskip,1),dlu(:,il:iu:iskip), &
-                          is_symm_matrix_u,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          .true.,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiu_a(idir),lo_a(il:iu:iskip),hiu_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlu1_1,dlu1_2,dlu2_1,dlu2_2,alpha,alpha_bc,lambda_u_a,comms_fft,usolver_fft)
 #else
-  call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dlu,is_symm_matrix_u,is_bound,is_centered,lo,hiu,periods, &
+  call init_matrix_3d(cbcvel(:,:,1),bcvel(:,:,1),dlu,.true.,is_bound,is_centered,lo,hiu,periods, &
                       dxf,dxc,dyc,dyf,dzc,dzf,alpha,alpha_bc,usolver)
 #endif
   dlv = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
@@ -796,14 +774,13 @@ end if
   lambda_v_a(:) = lambda_v(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
   hiv_a(:) = hi_s(:)
   if(periods(2) == 0) hiv_a(:) = hiv_a(:)-[0,1,0]
-  is_symm_matrix_v = is_uniform_grid
 #endif
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,2),bcvel(:,il:iu:iskip,2),dlv(:,il:iu:iskip), &
-                          is_symm_matrix_v,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          .true.,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiv_a(idir),lo_a(il:iu:iskip),hiv_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlv1_1,dlv1_2,dlv2_1,dlv2_2,alpha,alpha_bc,lambda_v_a,comms_fft,vsolver_fft)
 #else
-  call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dlv,is_symm_matrix_v,is_bound,is_centered,lo,hiv,periods, &
+  call init_matrix_3d(cbcvel(:,:,2),bcvel(:,:,2),dlv,.true.,is_bound,is_centered,lo,hiv,periods, &
                       dxc,dxf,dyf,dyc,dzc,dzf,alpha,alpha_bc,vsolver)
 #endif
   dlw = reshape([dxc_g(lo_g(1)-1),dxc_g(hi_g(1)), &
@@ -827,14 +804,13 @@ end if
   lambda_w_a(:) = lambda_w(lo_s(idir)-lo(idir)+1:hi_s(idir)-lo(idir)+1)
   hiw_a(:) = hi_s(:)
   if(periods(3) == 0) hiw_a(:) = hiw_a(:)-[0,0,1]
-  is_symm_matrix_w = is_uniform_grid
 #endif
   call init_n_2d_matrices(cbcvel(:,il:iu:iskip,3),bcvel(:,il:iu:iskip,3),dlw(:,il:iu:iskip), &
-                          is_symm_matrix_w,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
+                          .true.,is_bound_a(:,il:iu:iskip),is_centered(il:iu:iskip), &
                           lo_a(idir),hiw_a(idir),lo_a(il:iu:iskip),hiw_a(il:iu:iskip),periods(il:iu:iskip), &
                           dlw1_1,dlw1_2,dlw2_1,dlw2_2,alpha,alpha_bc,lambda_w_a,comms_fft,wsolver_fft)
 #else
-  call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dlw,is_symm_matrix_w,is_bound,is_centered,lo,hiw,periods, &
+  call init_matrix_3d(cbcvel(:,:,3),bcvel(:,:,3),dlw,.true.,is_bound,is_centered,lo,hiw,periods, &
                       dxc,dxf,dyc,dyf,dzf,dzc,alpha,alpha_bc,wsolver)
 #endif
 #endif
@@ -871,7 +847,7 @@ end if
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiu_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiu_a(il:iu:iskip), &
                                        alphai-alphaoi,usolver_fft(:)%mat) ! correct diagonal term
-      call create_n_solvers(hiu_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,hypre_solver_i,usolver_fft)
+      call create_n_solvers(hiu_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,.true.,hypre_solver_i,usolver_fft)
       call setup_n_solvers(hiu_a(idir)-lo_a(idir)+1,usolver_fft)
       call fft(arrplan_u(1),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
 #ifndef _FFT_USE_SLABS
@@ -888,7 +864,7 @@ end if
       call finalize_n_solvers(hiu_a(idir)-lo_a(idir)+1,usolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiu,alphai-alphaoi,usolver%mat) ! correct diagonal term
-      call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,usolver)
+      call create_solver(hypre_maxiter,hypre_tol,.true.,hypre_solver_i,usolver)
       call setup_solver(usolver)
       call solve_helmholtz(usolver,lo,hiu,up,uo)
       call finalize_solver(usolver)
@@ -901,7 +877,7 @@ end if
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiv_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiv_a(il:iu:iskip), &
                                        alphai-alphaoi,vsolver_fft(:)%mat) ! correct diagonal term
-      call create_n_solvers(hiv_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,hypre_solver_i,vsolver_fft)
+      call create_n_solvers(hiv_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,.true.,hypre_solver_i,vsolver_fft)
       call setup_n_solvers(hiv_a(idir)-lo_a(idir)+1,vsolver_fft)
       call fft(arrplan_v(1),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
 #ifndef _FFT_USE_SLABS
@@ -918,7 +894,7 @@ end if
       call finalize_n_solvers(hiv_a(idir)-lo_a(idir)+1,vsolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiv,alphai-alphaoi,vsolver%mat) ! correct diagonal term
-      call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,vsolver)
+      call create_solver(hypre_maxiter,hypre_tol,.true.,hypre_solver_i,vsolver)
       call setup_solver(vsolver)
       call solve_helmholtz(vsolver,lo,hiv,vp,vo)
       call finalize_solver(vsolver)
@@ -931,7 +907,7 @@ end if
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiw_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiw_a(il:iu:iskip), &
                                        alphai-alphaoi,wsolver_fft(:)%mat) ! correct diagonal term
-      call create_n_solvers(hiw_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,hypre_solver_i,wsolver_fft)
+      call create_n_solvers(hiw_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,.true.,hypre_solver_i,wsolver_fft)
       call setup_n_solvers(hiw_a(idir)-lo_a(idir)+1,wsolver_fft)
       call fft(arrplan_w(1),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
 #ifndef _FFT_USE_SLABS
@@ -948,7 +924,7 @@ end if
       call finalize_n_solvers(hiw_a(idir)-lo_a(idir)+1,wsolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiw,alphai-alphaoi,wsolver%mat) ! correct diagonal term
-      call create_solver(hypre_maxiter,hypre_tol,hypre_solver_i,wsolver)
+      call create_solver(hypre_maxiter,hypre_tol,.true.,hypre_solver_i,wsolver)
       call setup_solver(wsolver)
       call solve_helmholtz(wsolver,lo,hiw,wp,wo)
       call finalize_solver(wsolver)
