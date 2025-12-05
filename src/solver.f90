@@ -99,7 +99,7 @@ module mod_solver
     rhsz(:,:,:) = 0._rp
     do idir=1,3
       do k=lo(3),hi(3),max((hi(3)-lo(3))*eye(idir,3),1)
-        do j=lo(2),hi(2),max((hi(2)-lo(1))*eye(idir,2),1)
+        do j=lo(2),hi(2),max((hi(2)-lo(2))*eye(idir,2),1)
           do i=lo(1),hi(1),max((hi(1)-lo(1))*eye(idir,1),1)
             if(periods(idir) == 0) then
               select case(idir)
