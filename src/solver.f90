@@ -375,14 +375,14 @@ module mod_solver
       call HYPRE_StructSMGCreate(asolver%comm_hypre,solver,ierr)
       call HYPRE_StructSMGSetMaxIter(solver,maxiter,ierr)
       call HYPRE_StructSMGSetTol(solver,maxerror,ierr)
-      call HYPRE_StructSMGsetLogging(solver,1,ierr)
-      call HYPRE_StructSMGSetPrintLevel(solver,1,ierr)
+      !call HYPRE_StructSMGsetLogging(solver,1,ierr)
+      !call HYPRE_StructSMGSetPrintLevel(solver,1,ierr)
     else if ( stype == HYPRESolverPFMG ) then
       call HYPRE_StructPFMGCreate(asolver%comm_hypre,solver,ierr)
       call HYPRE_StructPFMGSetMaxIter(solver,maxiter,ierr)
       call HYPRE_StructPFMGSetTol(solver,maxerror,ierr)
-      call HYPRE_structPFMGsetLogging(solver,1,ierr)
-      call HYPRE_StructPFMGSetPrintLevel(solver,1,ierr)
+      !call HYPRE_structPFMGsetLogging(solver,1,ierr)
+      !call HYPRE_StructPFMGSetPrintLevel(solver,1,ierr)
       call HYPRE_StructPFMGSetRelChange(solver,1,ierr)
       ! Relaxiation Method: 2 is the fastest if symm matrix
       ! 0: Jacobi

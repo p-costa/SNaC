@@ -125,7 +125,7 @@ class Block:
             raise ValueError(f"block {self.id}: ng must contain three positive integers")
         if len(self.lmin) != 3 or len(self.lmax) != 3:
             raise ValueError(f"block {self.id}: lmin/lmax must contain three coordinates")
-        if any(high <= low for low, high in zip(self.lmin, self.lmax, strict=True)):
+        if any(high <= low for low, high in zip(self.lmin, self.lmax)):
             raise ValueError(f"block {self.id}: every lmax coordinate must exceed lmin")
         for axis in AXIS_NAMES:
             self.axes.setdefault(axis, AxisSpec())

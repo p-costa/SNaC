@@ -262,7 +262,7 @@ def _multi_grading_widths(length: float, n: int, segments: Sequence[dict[str, fl
     segment_cells = _allocate_cells(n, cell_weights)
 
     widths: list[np.ndarray] = []
-    for seg_length, seg_n, ratio in zip(segment_lengths, segment_cells, ratios, strict=True):
+    for seg_length, seg_n, ratio in zip(segment_lengths, segment_cells, ratios):
         widths.append(_profile_widths(float(seg_length), int(seg_n), float(ratio), profile))
     result = np.concatenate(widths)
     result[-1] += length - float(result.sum())

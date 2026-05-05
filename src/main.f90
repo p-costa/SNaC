@@ -36,7 +36,7 @@ program snac
                                  datadir,    &
                                  small,      &
                                  rkcoeff,    &
-                                 cfl,dtmax,dt_f,visc,                    &
+                                 cfl,dtmax,dt_f,visc,                      &
                                  nstep,time_max,tw_max,stop_type,          &
                                  restart,is_overwrite_save,nsaves_max,     &
                                  icheck,iout0d,iout1d,iout2d,iout3d,isave, &
@@ -74,7 +74,7 @@ program snac
   implicit none
   integer , dimension(0:1,3) :: nb
   logical , dimension(0:1,3) :: is_bound,is_bound_inflow
-  type(MPI_DATATYPE) , dimension(    3) :: halos
+  type(MPI_DATATYPE), dimension(    3) :: halos
   integer , dimension(    3) :: lo,hi,lo_g,hi_g,lo_1,hi_1
   real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,pp,po
 #ifdef _IMPDIFF
@@ -95,7 +95,7 @@ program snac
 #ifdef _IMPDIFF
   type(rhs_bound) :: rhsu,rhsv,rhsw,bcu,bcv,bcw
 #endif
-  real(rp), dimension(    0:1,3) :: dl
+  real(rp), dimension(0:1,3) :: dl
 #ifdef _IMPDIFF
   real(rp), dimension(0:1,3) :: dlu,dlv,dlw
   integer , dimension(    3) :: hiu,hiv,hiw

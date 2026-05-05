@@ -284,9 +284,7 @@ def _check_friend_boundaries(blocks: list[Block], connections: list[FaceConnecti
                 *(block.bcvel[component][face] for component in range(3)),
                 *(bcscal[face] for bcscal in block.bcscal),
             ]
-            actual_friends = [
-                int(round(value)) for code, value in zip(friend_codes, friend_values, strict=True) if code == "F"
-            ]
+            actual_friends = [int(round(value)) for code, value in zip(friend_codes, friend_values) if code == "F"]
 
             if expected_friend is None:
                 if actual_friends:

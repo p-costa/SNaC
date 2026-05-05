@@ -126,7 +126,6 @@ def _write_grid_out(path: Path, arrays) -> None:
             arrays.centers,
             arrays.face_spacing,
             arrays.center_spacing,
-            strict=True,
         ):
             handle.write(f"{0.0:15.7E}{values[0]:15.7E}{values[1]:15.7E}{values[2]:15.7E}{values[3]:15.7E}\n")
 
