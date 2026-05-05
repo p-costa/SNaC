@@ -8,13 +8,13 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: install software to compile SNaC
       run: |
         sudo apt-get update; sudo apt-get install gfortran libopenmpi-dev git libfftw3-dev
         git clone https://github.com/hypre-space/hypre $HOME/hypre_repo && cd $HOME/hypre_repo/src && ./configure --prefix=$HOME/hypre && make && make install && cd -
     - name: install python dependencies for performing the tests
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: 3.8
     - name: install dependencies
