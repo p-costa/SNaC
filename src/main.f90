@@ -904,18 +904,18 @@ end if
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #ifndef _FFT_USE_SLABS
         call solve_impdiff_field(alphai,s%alphai_o,lo,hi,lo_a,hi,hi_a, &
-                                 idir,il,iu,iskip,is_bound,s%rhs%x,s%rhs%y,s%rhs%z, &
+                                 idir,il,iu,iskip,is_bound,s%rhs%x,s%rhs%y,s%rhs%z,dl1_2,dl2_2, &
                                  hypre_maxiter,hypre_tol,hypre_solver_i, &
                                  s%val,s%val_o,s%arrplan,s%normfft,s%solver_fft)
 #else
         call solve_impdiff_field(alphai,s%alphai_o,lo,hi,lo_a,hi,hi_a, &
-                                 idir,il,iu,iskip,is_bound,s%rhs%x,s%rhs%y,s%rhs%z, &
+                                 idir,il,iu,iskip,is_bound,s%rhs%x,s%rhs%y,s%rhs%z,dl1_2,dl2_2, &
                                  hypre_maxiter,hypre_tol,hypre_solver_i, &
                                  s%val,s%val_o,s%arrplan,s%normfft,s%solver_fft,t_params,comm_block,s%val_s)
 #endif
 #else
         call solve_impdiff_field(alphai,s%alphai_o,lo,hi,hi,is_bound, &
-                                 s%rhs%x,s%rhs%y,s%rhs%z,hypre_maxiter,hypre_tol,hypre_solver_i, &
+                                 s%rhs%x,s%rhs%y,s%rhs%z,dxf,dyf,dzf,hypre_maxiter,hypre_tol,hypre_solver_i, &
                                  s%val,s%val_o,s%solver)
 #endif
         s%alphai_o = alphai
@@ -930,38 +930,38 @@ end if
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #ifndef _FFT_USE_SLABS
       call solve_impdiff_field(alphai,alphaoi,lo,hi,lo_a,hiu,hiu_a, &
-                               idir,il,iu,iskip,is_bound,rhsu%x,rhsu%y,rhsu%z, &
+                               idir,il,iu,iskip,is_bound,rhsu%x,rhsu%y,rhsu%z,dlu1_2,dlu2_2, &
                                hypre_maxiter,hypre_tol,hypre_solver_i, &
                                u,uo,arrplan_u,normfft_u,usolver_fft)
       call solve_impdiff_field(alphai,alphaoi,lo,hi,lo_a,hiv,hiv_a, &
-                               idir,il,iu,iskip,is_bound,rhsv%x,rhsv%y,rhsv%z, &
+                               idir,il,iu,iskip,is_bound,rhsv%x,rhsv%y,rhsv%z,dlv1_2,dlv2_2, &
                                hypre_maxiter,hypre_tol,hypre_solver_i, &
                                v,vo,arrplan_v,normfft_v,vsolver_fft)
       call solve_impdiff_field(alphai,alphaoi,lo,hi,lo_a,hiw,hiw_a, &
-                               idir,il,iu,iskip,is_bound,rhsw%x,rhsw%y,rhsw%z, &
+                               idir,il,iu,iskip,is_bound,rhsw%x,rhsw%y,rhsw%z,dlw1_2,dlw2_2, &
                                hypre_maxiter,hypre_tol,hypre_solver_i, &
                                w,wo,arrplan_w,normfft_w,wsolver_fft)
 #else
       call solve_impdiff_field(alphai,alphaoi,lo,hi,lo_a,hiu,hiu_a, &
-                               idir,il,iu,iskip,is_bound,rhsu%x,rhsu%y,rhsu%z, &
+                               idir,il,iu,iskip,is_bound,rhsu%x,rhsu%y,rhsu%z,dlu1_2,dlu2_2, &
                                hypre_maxiter,hypre_tol,hypre_solver_i, &
                                u,uo,arrplan_u,normfft_u,usolver_fft,t_params,comm_block,u_s)
       call solve_impdiff_field(alphai,alphaoi,lo,hi,lo_a,hiv,hiv_a, &
-                               idir,il,iu,iskip,is_bound,rhsv%x,rhsv%y,rhsv%z, &
+                               idir,il,iu,iskip,is_bound,rhsv%x,rhsv%y,rhsv%z,dlv1_2,dlv2_2, &
                                hypre_maxiter,hypre_tol,hypre_solver_i, &
                                v,vo,arrplan_v,normfft_v,vsolver_fft,t_params,comm_block,v_s)
       call solve_impdiff_field(alphai,alphaoi,lo,hi,lo_a,hiw,hiw_a, &
-                               idir,il,iu,iskip,is_bound,rhsw%x,rhsw%y,rhsw%z, &
+                               idir,il,iu,iskip,is_bound,rhsw%x,rhsw%y,rhsw%z,dlw1_2,dlw2_2, &
                                hypre_maxiter,hypre_tol,hypre_solver_i, &
                                w,wo,arrplan_w,normfft_w,wsolver_fft,t_params,comm_block,w_s)
 #endif
 #else
       call solve_impdiff_field(alphai,alphaoi,lo,hi,hiu,is_bound, &
-                               rhsu%x,rhsu%y,rhsu%z,hypre_maxiter,hypre_tol,hypre_solver_i,u,uo,usolver)
+                               rhsu%x,rhsu%y,rhsu%z,dxc,dyf,dzf,hypre_maxiter,hypre_tol,hypre_solver_i,u,uo,usolver)
       call solve_impdiff_field(alphai,alphaoi,lo,hi,hiv,is_bound, &
-                               rhsv%x,rhsv%y,rhsv%z,hypre_maxiter,hypre_tol,hypre_solver_i,v,vo,vsolver)
+                               rhsv%x,rhsv%y,rhsv%z,dxf,dyc,dzf,hypre_maxiter,hypre_tol,hypre_solver_i,v,vo,vsolver)
       call solve_impdiff_field(alphai,alphaoi,lo,hi,hiw,is_bound, &
-                               rhsw%x,rhsw%y,rhsw%z,hypre_maxiter,hypre_tol,hypre_solver_i,w,wo,wsolver)
+                               rhsw%x,rhsw%y,rhsw%z,dxf,dyf,dzc,hypre_maxiter,hypre_tol,hypre_solver_i,w,wo,wsolver)
 #endif
       alphaoi = alphai
 #endif
