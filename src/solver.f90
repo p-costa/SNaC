@@ -143,7 +143,7 @@ module mod_solver
       end do
     end do
   end subroutine init_bc_rhs
-  subroutine init_matrix_3d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
+  subroutine init_matrix_3d(cbc,bc,dl,is_symm_matrix,is_bound,is_centered,lo,hi,periods, &
                             dx1,dx2,dy1,dy2,dz1,dz2,alpha,alpha_bc,asolver,lambda,is_bound_outflow)
     !
     ! description
@@ -154,7 +154,7 @@ module mod_solver
     real(rp)          , intent(in ), dimension(0:1,3) ::  bc
     real(rp)          , intent(in ), dimension(0:1,3) ::  dl
     logical           , intent(in ), dimension(0:1,3) ::  is_bound
-    logical           , intent(in )                   ::  is_uniform_grid
+    logical           , intent(in )                   ::  is_symm_matrix
     logical           , intent(in ), dimension(    3) ::  is_centered
     integer           , intent(in ), dimension(    3) :: lo,hi,periods
     real(rp)          , intent(in ), target, dimension(lo(1)-1:) :: dx1,dx2
@@ -230,7 +230,7 @@ module mod_solver
     ! create coefficient matrix, and solution & right-hand-side vectors
     !
     call HYPRE_StructMatrixCreate(comm_hypre,grid,stencil,mat,ierr)
-    if(is_uniform_grid) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
+    if(is_symm_matrix) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
     call HYPRE_StructMatrixInitialize(mat,ierr)
     call HYPRE_StructVectorCreate(comm_hypre,grid,sol,ierr)
     call HYPRE_StructVectorInitialize(sol,ierr)
@@ -241,29 +241,43 @@ module mod_solver
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           q = q + 1
-          cxm = 1._rp/(dx1(i-1+qqq(1))*dx2(i))
-          cxp = 1._rp/(dx1(i  +qqq(1))*dx2(i))
-          cym = 1._rp/(dy1(j-1+qqq(2))*dy2(j))
-          cyp = 1._rp/(dy1(j  +qqq(2))*dy2(j))
-          czm = 1._rp/(dz1(k-1+qqq(3))*dz2(k))
-          czp = 1._rp/(dz1(k  +qqq(3))*dz2(k))
+          cc = 0.
 #ifdef _FFT_X
           cxm = 0._rp
           cxp = 0._rp
+          cym = 1._rp/(dy1(j-1+qqq(2)))*dz2(k)
+          cyp = 1._rp/(dy1(j  +qqq(2)))*dz2(k)
+          czm = 1._rp/(dz1(k-1+qqq(3)))*dy2(j)
+          czp = 1._rp/(dz1(k  +qqq(3)))*dy2(j)
           qq  = i - lo(1) + 1
+          cc  = lambda(qq)*dy2(j)*dz2(k)
 #elif  _FFT_Y
+          cxm = 1._rp/(dx1(i-1+qqq(1)))*dz2(k)
+          cxp = 1._rp/(dx1(i  +qqq(1)))*dz2(k)
           cym = 0._rp
           cyp = 0._rp
+          czm = 1._rp/(dz1(k-1+qqq(3)))*dx2(i)
+          czp = 1._rp/(dz1(k  +qqq(3)))*dx2(i)
           qq  = j - lo(2) + 1
+          cc  = lambda(qq)*dx2(i)*dz2(k)
 #elif  _FFT_Z
+          cxm = 1._rp/(dx1(i-1+qqq(1)))*dy2(j)
+          cxp = 1._rp/(dx1(i  +qqq(1)))*dy2(j)
+          cym = 1._rp/(dy1(j-1+qqq(2)))*dx2(i)
+          cyp = 1._rp/(dy1(j  +qqq(2)))*dx2(i)
           czm = 0._rp
           czp = 0._rp
           qq  = k - lo(3) + 1
+          cc  = lambda(qq)*dx2(i)*dy2(j)
+#else
+          cxm = 1._rp/(dx1(i-1+qqq(1)))*dy2(j)*dz2(k)
+          cxp = 1._rp/(dx1(i  +qqq(1)))*dy2(j)*dz2(k)
+          cym = 1._rp/(dy1(j-1+qqq(2)))*dx2(i)*dz2(k)
+          cyp = 1._rp/(dy1(j  +qqq(2)))*dx2(i)*dz2(k)
+          czm = 1._rp/(dz1(k-1+qqq(3)))*dx2(i)*dy2(j)
+          czp = 1._rp/(dz1(k  +qqq(3)))*dx2(i)*dy2(j)
 #endif
-          cc  = -(cxm+cxp+cym+cyp+czm+czp) + alpha
-#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-          cc  = cc + lambda(qq)
-#endif
+          cc  = cc - (cxm+cxp+cym+cyp+czm+czp) + alpha
           if(periods(1) == 0) then
             if(is_bound(0,1).and.i == lo(1)) then
               cc = cc + sgn(0,1)*cxm + alpha_bc(0,1)
@@ -339,10 +353,11 @@ module mod_solver
     asolver%sol        = sol
     asolver%comm_hypre = comm_hypre
   end subroutine init_matrix_3d
-  subroutine create_solver(maxiter,maxerror,stype,asolver)
+  subroutine create_solver(maxiter,maxerror,is_symm_matrix,stype,asolver)
     implicit none
     integer           ,         intent(   in) :: maxiter
     real(rp)          ,         intent(   in) :: maxerror
+    logical           ,         intent(in   ) :: is_symm_matrix
     integer           ,         intent(   in) :: stype
     type(hypre_solver), target, intent(inout) :: asolver
     type(C_PTR) :: solver,precond
@@ -358,7 +373,7 @@ module mod_solver
       call HYPRE_StructSMGCreate(asolver%comm_hypre,solver,ierr)
       call HYPRE_StructSMGSetMaxIter(solver,maxiter,ierr)
       call HYPRE_StructSMGSetTol(solver,maxerror,ierr)
-      call hypre_structSMGsetLogging(solver,1,ierr)
+      call HYPRE_StructSMGsetLogging(solver,1,ierr)
       call HYPRE_StructSMGSetPrintLevel(solver,1,ierr)
     else if ( stype == HYPRESolverPFMG ) then
       call HYPRE_StructPFMGCreate(asolver%comm_hypre,solver,ierr)
@@ -372,7 +387,11 @@ module mod_solver
       ! 1: Weighted Jacobi (default)
       ! 2: Red/Black Gauss-Seidel (symmetric: RB pre- and post-relaxation)
       ! 3: Red/Black Gauss-Seidel (nonsymmetric: RB pre- and post-relaxation)
-      call HYPRE_StructPFMGSetRelaxType(solver,1,ierr)
+      if(.not.is_symm_matrix) then
+        call HYPRE_StructPFMGSetRelaxType(solver,1,ierr)
+      else
+        call HYPRE_StructPFMGSetRelaxType(solver,2,ierr)
+      end if
       call HYPRE_StructPFMGSetNumPreRelax(solver,1,ierr)
       call HYPRE_StructPFMGSetNumPostRelax(solver,1,ierr)
     else if ( stype == HYPRESolverGMRES .or. &
@@ -617,7 +636,7 @@ module mod_solver
     end do
   end subroutine add_constant_to_n_3d_boundaries
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  subroutine init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
+  subroutine init_matrix_2d(cbc,bc,dl,is_symm_matrix,is_bound,is_centered,lo,hi,periods, &
                             dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,comm,asolver,is_bound_outflow)
     !
     ! description
@@ -627,7 +646,7 @@ module mod_solver
     character(len=1)  , intent(in ), dimension(0:1,2) :: cbc
     real(rp)          , intent(in ), dimension(0:1,2) ::  bc
     real(rp)          , intent(in ), dimension(0:1,2) ::  dl
-    logical           , intent(in )                   ::  is_uniform_grid
+    logical           , intent(in )                   ::  is_symm_matrix
     logical           , intent(in ), dimension(0:1,2) ::  is_bound
     logical           , intent(in ), dimension(    2) ::  is_centered
     integer           , intent(in ), dimension(    2) :: lo,hi,periods
@@ -702,7 +721,7 @@ module mod_solver
     ! create coefficient matrix, and solution & right-hand-side vectors
     !
     call HYPRE_StructMatrixCreate(comm_hypre,grid,stencil,mat,ierr)
-    if(is_uniform_grid) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
+    if(is_symm_matrix) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
     call HYPRE_StructMatrixInitialize(mat,ierr)
     call HYPRE_StructVectorCreate(comm_hypre,grid,sol,ierr)
     call HYPRE_StructVectorInitialize(sol,ierr)
@@ -711,10 +730,10 @@ module mod_solver
     q = 0
     do i2=lo(2),hi(2)
       do i1=lo(1),hi(1)
-        c1m = 1._rp/(dl1_1(i1-1+qqq(1))*dl1_2(i1))
-        c1p = 1._rp/(dl1_1(i1  +qqq(1))*dl1_2(i1))
-        c2m = 1._rp/(dl2_1(i2-1+qqq(2))*dl2_2(i2))
-        c2p = 1._rp/(dl2_1(i2  +qqq(2))*dl2_2(i2))
+        c1m = 1._rp/(dl1_1(i1-1+qqq(1)))*dl2_2(i2)
+        c1p = 1._rp/(dl1_1(i1  +qqq(1)))*dl2_2(i2)
+        c2m = 1._rp/(dl2_1(i2-1+qqq(2)))*dl1_2(i1)
+        c2p = 1._rp/(dl2_1(i2  +qqq(2)))*dl1_2(i1)
         cc  = -(c1m+c1p+c2m+c2p) + alpha
         if(periods(1) == 0) then
           if(is_bound(0,1).and.i1 == lo(1)) then
@@ -909,12 +928,12 @@ module mod_solver
       !$OMP END PARALLEL WORKSHARE
     end do
   end subroutine solve_n_helmholtz_3d
-  subroutine init_n_2d_matrices(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_out,hi_out,lo,hi,periods, &
+  subroutine init_n_2d_matrices(cbc,bc,dl,is_symm_matrix,is_bound,is_centered,lo_out,hi_out,lo,hi,periods, &
                                 dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,lambda,comm,asolver,is_bound_outflow)
     character(len=1)  , intent(in   ), dimension(0:1,2) :: cbc
     real(rp)          , intent(in   ), dimension(0:1,2) ::  bc
     real(rp)          , intent(in   ), dimension(0:1,2) ::  dl
-    logical           , intent(in   )                   ::  is_uniform_grid
+    logical           , intent(in   )                   ::  is_symm_matrix
     logical           , intent(in   ), dimension(0:1,2) ::  is_bound
     logical           , intent(in   ), dimension(    2) ::  is_centered
     integer           , intent(in   )                   :: lo_out,hi_out
@@ -928,27 +947,35 @@ module mod_solver
     type(hypre_solver), intent(inout), dimension(:) :: asolver
     logical           , intent(in   ), optional, dimension(0:1,2)  :: is_bound_outflow
     type(hypre_solver) :: asolver_aux
-    integer :: i_out,q
+    integer :: i_out,i1,i2,q,qq
     logical, dimension(0:1,2) :: is_bound_outflow_aux
+    real(rp), dimension(product(hi(1:2)-lo(1:2)+1)) :: matvalues
     is_bound_outflow_aux(:,:) = .false.
     if( present(is_bound_outflow) ) is_bound_outflow_aux(:,:) = is_bound_outflow(:,:)
     do i_out=lo_out,hi_out
       q = i_out-lo_out+1
       asolver_aux = asolver(q)
-      call init_matrix_2d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,hi,periods, &
+      call init_matrix_2d(cbc,bc,dl,is_symm_matrix,is_bound,is_centered,lo,hi,periods, &
                           dl1_1,dl1_2,dl2_1,dl2_2,alpha,alpha_bc,comm(q),asolver_aux,is_bound_outflow_aux)
-      call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],lambda(q),asolver_aux%mat)
+      qq = 0
+      do i2=lo(2),hi(2)
+        do i1=lo(1),hi(1)
+          qq = qq + 1
+          matvalues(qq) = lambda(q)*dl1_2(i1)*dl2_2(i2)
+        end do
+      end do
+      call HYPRE_StructMatrixAddToBoxValues(asolver_aux%mat,[lo(1),lo(2),1],[hi(1),hi(2),1],1,[0],matvalues,ierr)
       asolver(q) = asolver_aux
     end do
   end subroutine init_n_2d_matrices
-  subroutine init_n_3d_matrices(idir,nslice,cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo,periods, &
+  subroutine init_n_3d_matrices(idir,nslice,cbc,bc,dl,is_symm_matrix,is_bound,is_centered,lo,periods, &
                                 lo_sp,hi_sp,dl1_1,dl1_2,dl2_1,dl2_2,dl3_1,dl3_2,alpha,alpha_bc,lambda,asolver, &
                                 is_bound_outflow)
     integer           , intent(in   )                   :: idir,nslice
     character(len=1)  , intent(in   ), dimension(0:1,3) :: cbc
     real(rp)          , intent(in   ), dimension(0:1,3) ::  bc
     real(rp)          , intent(in   ), dimension(0:1,3) ::  dl
-    logical           , intent(in   )                   ::  is_uniform_grid
+    logical           , intent(in   )                   ::  is_symm_matrix
     logical           , intent(in   ), dimension(0:1,3) ::  is_bound
     logical           , intent(in   ), dimension(    3) ::  is_centered
     integer           , intent(in   ), dimension(    3) :: lo,periods
@@ -968,7 +995,7 @@ module mod_solver
     if( present(is_bound_outflow) ) is_bound_outflow_aux(:,:) = is_bound_outflow(:,:)
     do q=1,nslice
       asolver_aux = asolver(q)
-      call init_matrix_3d(cbc,bc,dl,is_uniform_grid,is_bound,is_centered,lo_sp(:,q),hi_sp(:,q),periods, &
+      call init_matrix_3d(cbc,bc,dl,is_symm_matrix,is_bound,is_centered,lo_sp(:,q),hi_sp(:,q),periods, &
                           dl1_1(lo_sp(1,q)-1:hi_sp(1,q)+1),dl1_2(lo_sp(1,q)-1:hi_sp(1,q)+1), &
                           dl2_1(lo_sp(2,q)-1:hi_sp(2,q)+1),dl2_2(lo_sp(2,q)-1:hi_sp(2,q)+1), &
                           dl3_1(lo_sp(3,q)-1:hi_sp(3,q)+1),dl3_2(lo_sp(3,q)-1:hi_sp(3,q)+1), &
@@ -978,15 +1005,16 @@ module mod_solver
       asolver(q) = asolver_aux
     end do
   end subroutine init_n_3d_matrices
-  subroutine create_n_solvers(n,maxiter,maxerror,stype,asolver)
+  subroutine create_n_solvers(n,maxiter,maxerror,is_symm_matrix,stype,asolver)
     integer           , intent(   in) :: n
     integer           , intent(   in) :: maxiter
     real(rp)          , intent(   in) :: maxerror
+    logical           , intent(   in) :: is_symm_matrix
     integer           , intent(   in) :: stype
     type(hypre_solver), intent(inout), dimension(:) :: asolver
     integer :: q
     do q=1,n
-      call create_solver(maxiter,maxerror,stype,asolver(q))
+      call create_solver(maxiter,maxerror,is_symm_matrix,stype,asolver(q))
     end do
   end subroutine create_n_solvers
   subroutine setup_n_solvers(n,asolver)
@@ -1038,11 +1066,12 @@ module mod_solver
     call eigenvalues(n(idir),bc,is_centered,lambda)
     lambda(:) = lambda(:)/dl**2
   end subroutine init_fft_reduction
-  subroutine solve_n_helmholtz_2d_old(asolver,maxiter,maxerror,lo_out,hi_out,lo,hi,lambda,alpha_old,p,po)
+  subroutine solve_n_helmholtz_2d_old(asolver,maxiter,maxerror,is_symm_matrix,lo_out,hi_out,lo,hi,lambda,alpha_old,p,po)
     implicit none
     type(hypre_solver), target, intent(inout)               :: asolver
     integer           ,         intent(in   )               :: maxiter
     real(rp)          ,         intent(in   )               :: maxerror
+    logical           ,         intent(in   )               :: is_symm_matrix
     integer           ,         intent(in   )               :: lo_out,hi_out
     integer           ,         intent(in   ), dimension(2) :: lo,hi
     real(rp)          ,         intent(inout)               :: alpha_old
@@ -1102,7 +1131,7 @@ module mod_solver
       !       freely available under a GPL license; see:
       !       http://www.ida.upmc.fr/~zaleski/paris/
       !
-      call create_solver(maxiter,maxerror,stype,asolver)
+      call create_solver(maxiter,maxerror,is_symm_matrix,stype,asolver)
       call setup_solver(asolver)
       if      ( stype == HYPRESolverSMG ) then
         call HYPRE_StructSMGSolve(solver,mat,rhs,sol,ierr)

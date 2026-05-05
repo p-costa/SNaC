@@ -30,9 +30,23 @@ module mod_fillps
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           p(i,j,k) = ( &
-                      (wp(i,j,k)-wp(i,j,k-1))/dzf(k) + &
-                      (vp(i,j,k)-vp(i,j-1,k))/dyf(j) + &
-                      (up(i,j,k)-up(i-1,j,k))/dxf(i) &
+#if   defined(_FFT_Z)
+                      (wp(i,j,k)-wp(i,j,k-1))/dzf(k)*dxf(i)*dyf(j) + &
+                      (vp(i,j,k)-vp(i,j-1,k))*dxf(i) + &
+                      (up(i,j,k)-up(i-1,j,k))*dyf(j) &
+#elif defined(_FFT_Y)
+                      (wp(i,j,k)-wp(i,j,k-1))*dxf(i) + &
+                      (vp(i,j,k)-vp(i,j-1,k))/dyf(j)*dxf(i)*dzf(k) + &
+                      (up(i,j,k)-up(i-1,j,k))*dzf(k) &
+#elif defined(_FFT_X)
+                      (wp(i,j,k)-wp(i,j,k-1))*dyf(j) + &
+                      (vp(i,j,k)-vp(i,j-1,k))*dzf(k) + &
+                      (up(i,j,k)-up(i-1,j,k))/dxf(i)*dyf(j)*dzf(k) &
+#else
+                      (wp(i,j,k)-wp(i,j,k-1))*dxf(i)*dyf(j) + &
+                      (vp(i,j,k)-vp(i,j-1,k))*dxf(i)*dzf(k) + &
+                      (up(i,j,k)-up(i-1,j,k))*dyf(j)*dzf(k) &
+#endif
                      )/dt
         end do
       end do
