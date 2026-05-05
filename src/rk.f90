@@ -123,6 +123,7 @@ module mod_rk
     end do
 #endif
   end subroutine rk_mom
+  !
   subroutine rk_scal(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,alpha,vol_all,u,v,w, &
                      is_forced,scalf,ssource,dsdtrko,s,f)
     use mod_scal, only: scal_a,scal_d,bulk_mean_s

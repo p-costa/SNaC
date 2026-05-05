@@ -62,8 +62,7 @@ module mod_solve_helmholtz
 #endif
     !
     !$OMP PARALLEL WORKSHARE
-    phi(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = &
-      phi(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai_new
+    phi(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = phi(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai_new
     !$OMP END PARALLEL WORKSHARE
     call updt_rhs(lo,hif,is_bound,rhsx,rhsy,rhsz,phi)
     call add_constant_to_n_diagonals(hif_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hif_a(il:iu:iskip), &
@@ -80,15 +79,13 @@ module mod_solve_helmholtz
 #endif
     call fft(arrplan(2),phi(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
     !$OMP PARALLEL WORKSHARE
-    phi(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = &
-      phi(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft
+    phi(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = phi(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft
     !$OMP END PARALLEL WORKSHARE
     call finalize_n_solvers(hif_a(idir)-lo_a(idir)+1,asolver)
   end subroutine solve_impdiff_field_fft
 #else
-  subroutine solve_impdiff_field_3d(alphai_new,alphai_old,lo,hi,hif,is_bound, &
-                                    rhsx,rhsy,rhsz,hypre_maxiter,hypre_tol,hypre_solver_i, &
-                                    phi,phio,asolver)
+  subroutine solve_impdiff_field_3d(alphai_new,alphai_old,lo,hi,hif,is_bound,rhsx,rhsy,rhsz, &
+                                    hypre_maxiter,hypre_tol,hypre_solver_i,phi,phio,asolver)
     !
     ! solves an implicit-diffusion Helmholtz problem for one field
     !
@@ -116,9 +113,5 @@ module mod_solve_helmholtz
     call finalize_solver(asolver)
   end subroutine solve_impdiff_field_3d
 #endif
-#else
-  use mod_types
-  implicit none
-  private
 #endif
 end module mod_solve_helmholtz

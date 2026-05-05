@@ -3,7 +3,7 @@ module mod_scal
   use mpi_f08
   use mod_common_mpi, only: ierr
 #ifdef _IMPDIFF
-  use mod_solver, only: hypre_solver
+  use mod_solver    , only: hypre_solver
 #endif
   use mod_types
   implicit none
