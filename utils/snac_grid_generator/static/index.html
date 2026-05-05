@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SNaC Grid Generator</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.164.1/examples/jsm/"
+        }
+      }
+    </script>
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="brand">SNaC Grid</div>
+      <label class="field field-project">
+        <span>Project</span>
+        <input id="project-name" type="text" autocomplete="off" />
+      </label>
+      <label class="field field-small">
+        <span>Scalars</span>
+        <input id="scalar-count" type="number" min="0" step="1" />
+      </label>
+      <label class="field field-output">
+        <span>Output</span>
+        <input id="output-dir" type="text" value="generated/snac_grid_case" autocomplete="off" />
+      </label>
+      <button id="check-project" class="button" title="Check structured grid"><i data-lucide="circle-check"></i><span>Check</span></button>
+      <button id="update-structure" class="button" title="Update connectivity and MPI partitions"><i data-lucide="refresh-cw"></i><span>Update</span></button>
+      <button id="export-case" class="button primary" title="Write case files"><i data-lucide="hard-drive-download"></i><span>Write</span></button>
+      <button id="download-json" class="button icon" title="Download project JSON"><i data-lucide="file-json"></i></button>
+      <label class="button icon file-button" title="Open project JSON">
+        <i data-lucide="folder-open"></i>
+        <input id="open-json" type="file" accept="application/json,.json" />
+      </label>
+      <button id="reset-project" class="button icon danger" title="Erase all blocks"><i data-lucide="rotate-ccw"></i></button>
+      <div id="status" class="status"></div>
+    </header>
+
+    <main class="workspace">
+      <aside class="block-panel">
+        <div class="panel-head">
+          <span>Blocks</span>
+          <button id="add-block" class="button icon" title="Add block"><i data-lucide="plus"></i></button>
+        </div>
+        <div id="block-list" class="block-list"></div>
+        <div class="add-adjacent">
+          <div class="row">
+            <label class="field">
+              <span>Face</span>
+              <select id="adjacent-face">
+                <option value="x+">X+</option>
+                <option value="x-">X-</option>
+                <option value="y+">Y+</option>
+                <option value="y-">Y-</option>
+                <option value="z+">Z+</option>
+                <option value="z-">Z-</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Size</span>
+              <input id="adjacent-size" type="number" value="1" step="any" min="1e-12" />
+            </label>
+          </div>
+          <button id="add-adjacent" class="button"><i data-lucide="panel-top-open"></i><span>Add Adjacent</span></button>
+        </div>
+      </aside>
+
+      <section class="viewport-shell">
+        <canvas id="scene"></canvas>
+        <div class="view-tools">
+          <button id="fit-view" class="button icon" title="Fit view"><i data-lucide="scan"></i></button>
+          <button id="toggle-grid" class="button icon active" title="Toggle ground grid"><i data-lucide="grid-3x3"></i></button>
+        </div>
+      </section>
+
+      <aside class="inspector">
+        <div class="panel-head">
+          <span id="block-title">Block</span>
+          <button id="remove-block" class="button icon danger" title="Remove block"><i data-lucide="trash-2"></i></button>
+        </div>
+
+        <section class="section">
+          <div class="section-title">Geometry</div>
+          <div class="form-grid two">
+            <label class="field"><span>Name</span><input id="block-name" type="text" autocomplete="off" /></label>
+            <label class="field"><span>Init</span><select id="inivel"></select></label>
+          </div>
+          <div class="periodic-grid" id="periodic-grid"></div>
+          <div class="matrix" id="geometry-grid"></div>
+          <div class="matrix" id="resolution-grid"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-title">Grid</div>
+          <div class="tabs" id="axis-tabs">
+            <button data-axis="x" class="active">X</button>
+            <button data-axis="y">Y</button>
+            <button data-axis="z">Z</button>
+          </div>
+          <div id="axis-editor"></div>
+          <canvas id="spacing-preview" width="520" height="90"></canvas>
+          <div id="spacing-stats" class="stats"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-title">Boundaries</div>
+          <div class="form-grid two">
+            <label class="check"><input id="infer-connectivity" type="checkbox" checked /> <span>Infer friends</span></label>
+            <label class="field">
+              <span>Grid files</span>
+              <select id="grid-source">
+                <option value="grid">grid/</option>
+                <option value="both">grid/ + data/</option>
+              </select>
+            </label>
+          </div>
+          <div id="boundary-table" class="boundary-table"></div>
+          <div id="check-results" class="check-results"></div>
+        </section>
+      </aside>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

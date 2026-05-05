@@ -1,0 +1,13 @@
+&dns
+cfl = 0.95, dtmax = 0.01, dt_f = -1.
+visci = 150.
+nstep = 2501, time_max = 100., tw_max = 100.
+stop_type(1:3) = T, F, F
+restart = F, is_overwrite_save = T, nsaves_max = 0
+icheck = 10, iout0d = 250, iout1d = 250, iout2d = 2500, iout3d = 250, isave = 2500
+bforce(1:3) = 0., 0., 0.
+/
+
+&hypre
+hypre_solver_i = 1, hypre_tol = 1.e-3, hypre_maxiter = 50
+/

@@ -8,15 +8,14 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: install software
       run: |
         sudo apt-get update; sudo apt-get install gfortran libopenmpi-dev git libfftw3-dev
         git clone https://github.com/hypre-space/hypre $HOME/hypre_repo && cd $HOME/hypre_repo/src && ./configure --prefix=$HOME/hypre && make && make install && cd -
     - name: test compilation
       run: |
-        cd src
-        export LIB_HYPRE="-L${HOME}/hypre/lib -lHYPRE"
-        make LIBS="${LIB_HYPRE} -lfftw3" && make run && make clean
-        make OMP+=-fopenmp OTH+=-D_IMPDIFF LIBS="${LIB_HYPRE} -lfftw3 -lfftw3_threads" && make run && make clean
-        make OMP+=-fopenmp OTH+=-D_IMPDIFF OTH+=-D_FFT_Z LIBS="${LIB_HYPRE} -lfftw3 -lfftw3_threads" && make run && make clean
+        export LD_LIBRARY_PATH="${HOME}/hypre/lib:${LD_LIBRARY_PATH}"
+        make HYPRE_LIB_DIR="${HOME}/hypre/lib" FFT_AXIS=0 run && make clean
+        make HYPRE_LIB_DIR="${HOME}/hypre/lib" OPENMP=1 IMPDIFF=1 FFT_AXIS=0 run && make clean
+        make HYPRE_LIB_DIR="${HOME}/hypre/lib" OPENMP=1 IMPDIFF=1 FFT_AXIS=3 run && make clean

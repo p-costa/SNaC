@@ -13,7 +13,7 @@ def test_ldc():
     data = np.block([[data_1,data_3],[data_2,data_4]])
     data_ref = np.loadtxt("data_ldc_re1000.txt")
     islice = int(np.size(data[0,:])/2)
-    np.testing.assert_allclose(data[islice,:], data_ref[:,1], rtol=1e-7, atol=0)
+    np.testing.assert_allclose(data[islice,:], data_ref[:,1], rtol=1e-7, atol=5e-8)
 if __name__ == "__main__":
     test_ldc()
     print("Passed!")

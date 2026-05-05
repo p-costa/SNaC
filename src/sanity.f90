@@ -192,7 +192,7 @@ module mod_sanity
     implicit none
     if(myid == 0) write(stderr,*) ''
     if(myid == 0) write(stderr,*) '*** Simulation aborted due to errors in the input file ***'
-    if(myid == 0) write(stderr,*) '    check dns.in'
+    if(myid == 0) write(stderr,*) '    check dns.nml and blocks.nml'
     call MPI_FINALIZE()
     error stop
   end subroutine abortit

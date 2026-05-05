@@ -8,13 +8,13 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: install software to compile SNaC
       run: |
         sudo apt-get update; sudo apt-get install gfortran libopenmpi-dev git libfftw3-dev
         git clone https://github.com/hypre-space/hypre $HOME/hypre_repo && cd $HOME/hypre_repo/src && ./configure --prefix=$HOME/hypre && make && make install && cd -
     - name: install python dependencies for performing the tests
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: 3.8
     - name: install dependencies
@@ -23,5 +23,7 @@ jobs:
         pip install numpy flake8 pytest
     - name: run all tests
       run: |
-        cd tests/
-        for i in */; do cd $i && sh testit.sh && cd -; done
+        export LD_LIBRARY_PATH="${HOME}/hypre/lib:${LD_LIBRARY_PATH}"
+        cd tests/lid_driven_cavity && sh testit.sh && cd -
+        cd tests/differentially_heated_cavity && sh testit.sh && cd -
+        python -m unittest tests.snac_grid_generator.test_core

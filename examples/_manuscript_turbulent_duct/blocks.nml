@@ -1,0 +1,20 @@
+&blocks
+nblocks = 1
+block_dims(1:3,1) = 2, 1, 2
+block_ng(1:3,1) = 512, 128, 128
+block_lmin(1:3,1) = 0., 0., 0.
+block_lmax(1:3,1) = 10., 1., 1.
+block_gt(1:3,1) = 0, 0, 0
+block_gr(1:3,1) = 0., 0., 0.
+block_cbcvel(0:1,1:3,1,1) = 'F', 'F', 'D', 'D', 'D', 'D'
+block_cbcvel(0:1,1:3,2,1) = 'F', 'F', 'D', 'D', 'D', 'D'
+block_cbcvel(0:1,1:3,3,1) = 'F', 'F', 'D', 'D', 'D', 'D'
+block_cbcpre(0:1,1:3,1) = 'F', 'F', 'N', 'N', 'N', 'N'
+block_bcvel(0:1,1:3,1,1) = 1., 1., 0., 0., 0., 0.
+block_bcvel(0:1,1:3,2,1) = 1., 1., 0., 0., 0., 0.
+block_bcvel(0:1,1:3,3,1) = 1., 1., 0., 0., 0., 0.
+block_bcpre(0:1,1:3,1) = 1., 1., 0., 0., 0., 0.
+block_inflow_type(0:1,1:3,1) = 0, 0, 0, 0, 0, 0
+block_inivel(1) = 'poi'
+
+/

@@ -3,7 +3,7 @@ module mod_post
   implicit none
   private
   public cmpt_vorticity,cmpt_rotation_rate,cmpt_strain_rate,cmpt_q_criterion, &
-         cmpt_wall_forces, updt_wall_forces
+         cmpt_wall_forces,cmpt_wall_heatflux,updt_wall_forces,updt_wall_heatflux
   contains
   subroutine cmpt_vorticity(n,dxc,dyc,dzc,ux,uy,uz,vox,voy,voz)
     !
@@ -354,6 +354,100 @@ module mod_post
     end do
     call mpi_allreduce(MPI_IN_PLACE,tau_z,2*3,MPI_REAL_RP,MPI_SUM,comm_block)
   end subroutine cmpt_wall_forces
+  !
+  subroutine cmpt_wall_heatflux(n,is_bound,dxc,dxf,dyc,dyf,dzc,dzf,alpha,s,heatflux)
+    use mpi_f08
+    use mod_common_mpi, only: comm_block
+    !
+    ! computes the integrated scalar diffusive fluxes at the walls
+    !
+    implicit none
+    integer , intent(in ), dimension(3)        :: n
+    logical , intent(in ), dimension(0:1,3)    :: is_bound
+    real(rp), intent(in ), dimension(0:)       :: dxc,dyc,dzc, &
+                                                  dxf,dyf,dzf
+    real(rp), intent(in )                      :: alpha
+    real(rp), intent(in ), dimension(0:,0:,0:) :: s
+    real(rp), intent(out), dimension(0:1,3)    :: heatflux
+    integer :: i,j,k,idir,ib
+    real(rp) :: sgn
+    !
+    heatflux(:,:) = 0._rp
+    idir = 1
+    do ib = 0,1
+      if(ib == 0) then
+        i   = 1
+        sgn =  1._rp
+      end if
+      if(ib == 1) then
+        i   = n(idir) + 1
+        sgn = -1._rp
+      end if
+      if(is_bound(ib,idir)) then
+        do k=1,n(3)
+          do j=1,n(2)
+            heatflux(ib,idir) = heatflux(ib,idir) + &
+                                sgn*alpha*(s(i,j,k)-s(i-1,j,k))/dxc(i-1)*dyf(j)*dzf(k)
+          end do
+        end do
+      end if
+    end do
+    idir = 2
+    do ib = 0,1
+      if(ib == 0) then
+        j   = 1
+        sgn =  1._rp
+      end if
+      if(ib == 1) then
+        j   = n(idir) + 1
+        sgn = -1._rp
+      end if
+      if(is_bound(ib,idir)) then
+        do k=1,n(3)
+          do i=1,n(1)
+            heatflux(ib,idir) = heatflux(ib,idir) + &
+                                sgn*alpha*(s(i,j,k)-s(i,j-1,k))/dyc(j-1)*dxf(i)*dzf(k)
+          end do
+        end do
+      end if
+    end do
+    idir = 3
+    do ib = 0,1
+      if(ib == 0) then
+        k   = 1
+        sgn =  1._rp
+      end if
+      if(ib == 1) then
+        k   = n(idir) + 1
+        sgn = -1._rp
+      end if
+      if(is_bound(ib,idir)) then
+        do j=1,n(2)
+          do i=1,n(1)
+            heatflux(ib,idir) = heatflux(ib,idir) + &
+                                sgn*alpha*(s(i,j,k)-s(i,j,k-1))/dzc(k-1)*dxf(i)*dyf(j)
+          end do
+        end do
+      end if
+    end do
+    call mpi_allreduce(MPI_IN_PLACE,heatflux,2*3,MPI_REAL_RP,MPI_SUM,comm_block)
+  end subroutine cmpt_wall_heatflux
+  !
+  subroutine updt_wall_heatflux(rkpar,heatflux,heatflux_o,heatflux_acc)
+    implicit none
+    real(rp), intent(in   ), dimension(2) :: rkpar
+    real(rp), intent(in   ), dimension(0:1,3) :: heatflux
+    real(rp), intent(inout), dimension(0:1,3) :: heatflux_o,heatflux_acc
+    !
+    ! increment in time wall heat fluxes, consistently with
+    ! the RK3 time integration scheme
+    !
+    heatflux_acc(:,:) = heatflux_acc(:,:) + rkpar(1)*heatflux(:,:) + rkpar(2)*heatflux_o(:,:)
+    !
+    ! update previous time step values
+    !
+    heatflux_o(:,:) = heatflux(:,:)
+  end subroutine updt_wall_heatflux
   !
   subroutine updt_wall_forces(rkpar,tau_x,tau_y,tau_z,tau_x_o,tau_y_o,tau_z_o, &
                               tau_x_acc,tau_y_acc,tau_z_acc)

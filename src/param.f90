@@ -12,17 +12,18 @@ real(rp), parameter, dimension(2,3) :: rkcoeff = reshape( [32._rp/60._rp,  0._rp
                                                            25._rp/60._rp, -17._rp/60._rp, &
                                                            45._rp/60._rp, -25._rp/60._rp], shape(rkcoeff))
 real(rp), parameter, dimension(3)   :: rkcoeff12 = rkcoeff(1,:)+rkcoeff(2,:)
-integer , parameter :: hypre_solver_i_default  = 2
-real(rp), parameter :: hypre_tol_default     = real(1.e-4,rp)
-integer , parameter :: hypre_maxiter_default = 50
+integer , parameter :: hypre_solver_i_default = 2
+real(rp), parameter :: hypre_tol_default      = real(1.e-4,rp)
+integer , parameter :: hypre_maxiter_default  = 50
+integer , parameter :: max_blocks = 999
 integer  :: hypre_solver_i
 real(rp) :: hypre_tol
 integer  :: hypre_maxiter
 !
-! parameters to be determined from the input file 'dns.in'
+! parameters to be determined from the input file 'dns.nml'
 !
-real(rp)               :: cfl,dtmin
-real(rp)               :: uref,lref,rey,visc
+real(rp)               :: cfl,dtmax,dt_f
+real(rp)               :: visci,visc
 integer                :: nstep
 real(rp)               :: time_max,tw_max
 logical , dimension(3) :: stop_type
@@ -30,6 +31,17 @@ logical                :: restart,is_overwrite_save
 integer                :: nsaves_max
 integer                :: icheck,iout0d,iout1d,iout2d,iout3d,isave
 real(rp), dimension(3) :: bforce
+real(rp), dimension(3) :: gacc
+integer                :: nscal
+real(rp), allocatable, dimension(:) :: alphai
+real(rp) :: beta
+character(len=100), allocatable, dimension(:)     :: iniscal
+character(len=1)  , allocatable, dimension(:,:,:) :: cbcscal
+real(rp)          , allocatable, dimension(:,:,:) ::  bcscal
+real(rp), allocatable, dimension(:) :: ssource
+logical , allocatable, dimension(:) :: is_sforced
+real(rp), allocatable, dimension(:) :: scalf
+real(rp) :: alpha_max
 !
 ! parameters specific to each block
 !
@@ -53,157 +65,213 @@ real(rp), dimension(3) :: l_periodic
 real(rp), dimension(3) :: lmin_min,lmax_max
 contains
   subroutine read_input()
+  use, intrinsic :: iso_fortran_env, only: iostat_end
   use mpi_f08
   use mod_common_mpi, only:myid
   implicit none
   integer :: iunit,iblock,ierr
   integer, allocatable, dimension(:) :: nranks
-  logical :: exists
-  character(len=100) :: filename
-  character(len=  3) :: cblock
   integer :: q
+  character(len=1024) :: iomsg
+  character(len=2) :: cbc_pair
+  integer           , dimension(      3,max_blocks) :: block_dims,block_ng,block_gt
+  real(rp)          , dimension(      3,max_blocks) :: block_lmin,block_lmax,block_gr
+  character(len=1  ), dimension(0:1,3,3,max_blocks) :: block_cbcvel
+  real(rp)          , dimension(0:1,3,3,max_blocks) :: block_bcvel
+  character(len=1  ), dimension(0:1,3,  max_blocks) :: block_cbcpre
+  real(rp)          , dimension(0:1,3,  max_blocks) :: block_bcpre
+  integer           , dimension(0:1,3,  max_blocks) :: block_inflow_type
+  character(len=100), dimension(        max_blocks) :: block_inivel
+  character(len=1  ), allocatable, dimension(:,:,:,:) :: block_cbcscal
+  real(rp)          , allocatable, dimension(:,:,:,:) :: block_bcscal
+  namelist /dns/ cfl,dtmax,dt_f, &
+                 visci, &
+                 nstep,time_max,tw_max, &
+                 stop_type, &
+                 restart,is_overwrite_save,nsaves_max, &
+                 icheck,iout0d,iout1d,iout2d,iout3d,isave, &
+                 bforce,gacc, &
+                 nscal
+  namelist /scalar/ alphai,beta, &
+                    iniscal, &
+                    ssource, &
+                    is_sforced, &
+                    scalf
+  namelist /hypre/ hypre_solver_i,hypre_tol,hypre_maxiter
+  namelist /blocks/ nblocks, &
+                    block_dims,block_ng,block_lmin,block_lmax,block_gt,block_gr, &
+                    block_cbcvel,block_cbcpre,block_bcvel,block_bcpre, &
+                    block_cbcscal,block_bcscal, &
+                    block_inflow_type,block_inivel
+  !
+  ! defaults
+  !
   nsaves_max = 0 ! a good default, for backward compatibility
-    open(newunit=iunit,file='dns.in',status='old',action='read',iostat=ierr)
-      if( ierr == 0 ) then
-        read(iunit,*) cfl,dtmin
-        read(iunit,*) uref,lref,rey
-        read(iunit,*) nstep, time_max,tw_max
-        read(iunit,*) stop_type(1),stop_type(2),stop_type(3)
-        read(iunit,*) restart,is_overwrite_save,nsaves_max
-        read(iunit,*) icheck,iout0d,iout1d,iout2d,iout3d,isave
-        read(iunit,*)  bforce(1),bforce(2),bforce(3)
-      else
-        if(myid == 0) write(stderr,*) '*** Error reading the input file *** '
-        if(myid == 0) write(stderr,*) 'Aborting...'
-        call MPI_FINALIZE()
-        error stop
-      end if
-    close(iunit)
-    visc = uref*lref/rey
+  dt_f = -1._rp
+  visci = 1._rp
+  gacc(:) = 0._rp
+  nscal = 0
+  beta = 0._rp
+  alpha_max = 0._rp
+  hypre_solver_i = hypre_solver_i_default
+  hypre_tol      = hypre_tol_default
+  hypre_maxiter  = hypre_maxiter_default
+  block_dims(:,:) = 1
+  block_ng(:,:) = 1
+  block_lmin(:,:) = 0._rp
+  block_lmax(:,:) = 1._rp
+  block_gt(:,:) = 0
+  block_gr(:,:) = 0._rp
+  block_cbcvel(:,:,:,:) = 'D'
+  block_cbcpre(:,:,:) = 'N'
+  block_bcvel(:,:,:,:) = 0._rp
+  block_bcpre(:,:,:) = 0._rp
+  block_inflow_type(:,:,:) = 0
+  block_inivel(:) = 'zer'
+  nblocks = 0
+  !
+  ! read global parameters
+  !
+  open(newunit=iunit,file='dns.nml',status='old',action='read',iostat=ierr,iomsg=iomsg)
+    if(ierr /= 0) call abort_input('dns.nml',iomsg)
+    rewind(iunit)
+    read(iunit,nml=dns,iostat=ierr,iomsg=iomsg)
+    if(ierr /= 0) call abort_input('dns namelist',iomsg)
+    rewind(iunit)
+    read(iunit,nml=hypre,iostat=ierr,iomsg=iomsg)
+    if(ierr /= 0 .and. ierr /= iostat_end) &
+      call abort_input('hypre namelist',iomsg)
     !
-    exists = .true.
-    nblocks = 1
-    filename = 'geo/block.'
-    do while(exists)
-      write(cblock,'(i3.3)') nblocks
-      inquire(file=trim(filename)//cblock, exist = exists)
-      if(exists) nblocks = nblocks + 1
-    end do
-    nblocks = nblocks - 1
-    allocate(nranks(nblocks))
-    do iblock = 1,nblocks
-      write(cblock,'(i3.3)') iblock
-      open(newunit=iunit,file=trim(filename)//cblock,status='old',action='read',iostat=ierr)
-        if( ierr == 0 ) then
-          read(iunit,*) dims(1),dims(2),dims(3)
-          nranks(iblock) = product(dims(:))
-        else
-          if(myid == 0) write(stderr,*) '*** Error reading the input file *** '
-          if(myid == 0) write(stderr,*) 'Aborting...'
-          call MPI_FINALIZE(ierr)
-          error stop
-        end if
-      close(iunit)
-    end do
-    call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
-    if(nrank /= sum(nranks(1:nblocks))) then
-      if(myid == 0) write(stderr,*) '*** Error: invalid number of MPI tasks. ***'
-      if(myid == 0) write(stderr,*) 'Expected: ',sum(nranks(1:nblocks)), ' Found: ', nrank
+    ! read scalar transport parameters, if these are set
+    !
+    if(nscal > 0) then
+      allocate(alphai(nscal),iniscal(nscal), &
+               cbcscal(0:1,3,nscal),bcscal(0:1,3,nscal), &
+               ssource(nscal),is_sforced(nscal),scalf(nscal))
+      alphai(:)      = huge(1._rp)
+      iniscal(:)     = 'zer'
+      cbcscal(:,:,:) = 'N'
+      bcscal(:,:,:)  = 0._rp
+      ssource(:)     = 0._rp
+      is_sforced(:)  = .false.
+      scalf(:)       = 0._rp
+      rewind(iunit)
+      read(iunit,nml=scalar,iostat=ierr,iomsg=iomsg)
+      if(ierr /= 0) call abort_input('scalar namelist',iomsg)
+      alpha_max = maxval(alphai(1:nscal)**(-1))
+    else
+      nscal = 0
+    end if
+#ifdef _BOUSSINESQ_BUOYANCY
+    if(nscal == 0) then
+      if(myid == 0) write(stderr,*) '*** Error: _BOUSSINESQ_BUOYANCY requires nscal > 0. ***'
       if(myid == 0) write(stderr,*) 'Aborting...'
       call MPI_FINALIZE(ierr)
       error stop
     end if
-    is_periodic(:) = .true.
-    do iblock = 1,nblocks
-      write(cblock,'(i3.3)') iblock
-      open(newunit=iunit,file=trim(filename)//cblock,status='old',action='read',iostat=ierr)
-        if( ierr == 0 ) then
-          if( myid >= sum(nranks(1:iblock-1)).and. &
-              myid <  sum(nranks(1:iblock  )) ) then
-            read(iunit,*) dims(1),dims(2),dims(3)
-            read(iunit,*) ng(1),ng(2),ng(3)
-            read(iunit,*) lmin(1),lmin(2),lmin(3)
-            read(iunit,*) lmax(1),lmax(2),lmax(3)
-            read(iunit,*) gt(1),gt(2),gt(3)
-            read(iunit,*) gr(1),gr(2),gr(3)
-            read(iunit,*) cbcvel(0,1,1),cbcvel(1,1,1),cbcvel(0,2,1),cbcvel(1,2,1),cbcvel(0,3,1),cbcvel(1,3,1)
-            read(iunit,*) cbcvel(0,1,2),cbcvel(1,1,2),cbcvel(0,2,2),cbcvel(1,2,2),cbcvel(0,3,2),cbcvel(1,3,2)
-            read(iunit,*) cbcvel(0,1,3),cbcvel(1,1,3),cbcvel(0,2,3),cbcvel(1,2,3),cbcvel(0,3,3),cbcvel(1,3,3)
-            read(iunit,*) cbcpre(0,1  ),cbcpre(1,1  ),cbcpre(0,2  ),cbcpre(1,2  ),cbcpre(0,3  ),cbcpre(1,3  )
-            read(iunit,*)  bcvel(0,1,1), bcvel(1,1,1), bcvel(0,2,1), bcvel(1,2,1), bcvel(0,3,1), bcvel(1,3,1)
-            read(iunit,*)  bcvel(0,1,2), bcvel(1,1,2), bcvel(0,2,2), bcvel(1,2,2), bcvel(0,3,2), bcvel(1,3,2)
-            read(iunit,*)  bcvel(0,1,3), bcvel(1,1,3), bcvel(0,2,3), bcvel(1,2,3), bcvel(0,3,3), bcvel(1,3,3)
-            read(iunit,*)  bcpre(0,1  ), bcpre(1,1  ), bcpre(0,2  ), bcpre(1,2  ), bcpre(0,3  ), bcpre(1,3  )
-            read(iunit,*)  inflow_type(0,1),inflow_type(1,1),inflow_type(0,2),inflow_type(1,2),inflow_type(0,3),inflow_type(1,3)
-            read(iunit,*) inivel
-            my_block = iblock
-            id_first = sum(nranks(1:iblock-1))
-            do q=1,3
-              is_periodic(q) = is_periodic(q).and.(cbcpre(0,q)//cbcpre(1,q) == 'FF')
-            end do
-          end if
-        else
-          if(myid == 0) write(stderr,*) '*** Error reading the input file *** '
-          if(myid == 0) write(stderr,*) 'Aborting...'
-          call MPI_FINALIZE(ierr)
-          error stop
-        end if
-      close(iunit)
-    end do
-    call mpi_allreduce(MPI_IN_PLACE,is_periodic,3,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
-    deallocate(nranks)
-    !
-    ! compute volume of all blocks (useful to compute bulk averages)
-    !
-    vol_all = product(lmax(:)-lmin(:))/product(dims(:))
-    call mpi_allreduce(MPI_IN_PLACE,vol_all,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
-    !
-    ! determine length of the domain in the periodic directions
-    !
-    call MPI_ALLREDUCE(lmin(1),lmin_min(1),3,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
-    call MPI_ALLREDUCE(lmax(1),lmax_max(1),3,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
-    where(is_periodic(:))
-      l_periodic(:) = lmax_max(:)-lmin_min(:)
-    elsewhere
-      l_periodic(:) = 0._rp
-    end where
-    !
-    ! read iterative solver parameter file hypre.in, if it exists
-    !
-    inquire(file='hypre.in', exist = exists)
-    if(exists) then
-      open(newunit=iunit,file='hypre.in',status='old',action='read',iostat=ierr)
-        if( ierr == 0 ) then
-          read(iunit,*) hypre_solver_i,hypre_tol,hypre_maxiter
-          if(hypre_solver_i < 1 .or. hypre_solver_i > 4) then
-            if(myid == 0) write(stderr,*) '*** Error: invalid solver choice [1-4] *** '
-            if(myid == 0) write(stderr,*) 'Reverting to the default (2 -> PFMG)...'
-            hypre_solver_i = hypre_solver_i_default
-          end if
-          if(hypre_tol > 1._rp .or. hypre_tol < 0._rp) then
-            if(myid == 0) write(stderr,*) '*** Error: iterative error tolerance is too high or negative *** '
-            if(myid == 0) write(stderr,*) 'Reverting to the default (1.e-4)...'
-            hypre_tol     = hypre_tol_default
-          end if
-          if(hypre_maxiter < 0) then
-            if(myid == 0) write(stderr,*) '*** Error: maximum number of iterations needs to be > 0 *** '
-            if(myid == 0) write(stderr,*) 'Reverting to the default (50)...'
-            hypre_maxiter = hypre_maxiter_default
-          end if
-        else
-          if(myid == 0) write(stderr,*) '*** Error reading the input file *** '
-          if(myid == 0) write(stderr,*) 'Aborting...'
-          call MPI_FINALIZE()
-          error stop
-        end if
-      close(iunit)
-    else
-      !
-      ! defaults
-      !
-      hypre_solver_i = hypre_solver_i_default
-      hypre_tol      = hypre_tol_default
-      hypre_maxiter  = hypre_maxiter_default
+#endif
+  close(iunit)
+  visc = visci**(-1)
+  allocate(block_cbcscal(0:1,3,max(nscal,1),max_blocks), &
+           block_bcscal( 0:1,3,max(nscal,1),max_blocks))
+  block_cbcscal(:,:,:,:) = 'N'
+  block_bcscal(:,:,:,:) = 0._rp
+  !
+  ! read block-specific parameters
+  !
+  open(newunit=iunit,file='blocks.nml',status='old',action='read',iostat=ierr,iomsg=iomsg)
+    if(ierr /= 0) call abort_input('blocks.nml',iomsg)
+    read(iunit,nml=blocks,iostat=ierr,iomsg=iomsg)
+    if(ierr /= 0) call abort_input('blocks namelist',iomsg)
+  close(iunit)
+  if(nblocks < 1 .or. nblocks > max_blocks) then
+    if(myid == 0) write(stderr,*) '*** Error: invalid number of blocks in blocks.nml ***'
+    if(myid == 0) write(stderr,*) 'Aborting...'
+    call MPI_FINALIZE(ierr)
+    error stop
+  end if
+  allocate(nranks(nblocks))
+  do iblock = 1,nblocks
+    nranks(iblock) = product(block_dims(:,iblock))
+  end do
+  call MPI_COMM_SIZE(MPI_COMM_WORLD,nrank,ierr)
+  if(nrank /= sum(nranks(1:nblocks))) then
+    if(myid == 0) write(stderr,*) '*** Error: invalid number of MPI tasks. ***'
+    if(myid == 0) write(stderr,*) 'Expected: ',sum(nranks(1:nblocks)), ' Found: ', nrank
+    if(myid == 0) write(stderr,*) 'Aborting...'
+    call MPI_FINALIZE(ierr)
+    error stop
+  end if
+  is_periodic(:) = .true.
+  do iblock = 1,nblocks
+    if( myid >= sum(nranks(1:iblock-1)).and. &
+        myid <  sum(nranks(1:iblock  )) ) then
+      dims(:) = block_dims(:,iblock)
+      ng(:) = block_ng(:,iblock)
+      lmin(:) = block_lmin(:,iblock)
+      lmax(:) = block_lmax(:,iblock)
+      gt(:) = block_gt(:,iblock)
+      gr(:) = block_gr(:,iblock)
+      cbcvel(:,:,:) = block_cbcvel(:,:,:,iblock)
+      cbcpre(:,:) = block_cbcpre(:,:,iblock)
+      bcvel(:,:,:) = block_bcvel(:,:,:,iblock)
+      bcpre(:,:) = block_bcpre(:,:,iblock)
+      inflow_type(:,:) = block_inflow_type(:,:,iblock)
+      inivel = block_inivel(iblock)
+      if(nscal > 0) then
+        cbcscal(:,:,:) = block_cbcscal(:,:,1:nscal,iblock)
+        bcscal( :,:,:) = block_bcscal( :,:,1:nscal,iblock)
+      end if
+      my_block = iblock
+      id_first = sum(nranks(1:iblock-1))
     end if
+    do q=1,3
+      cbc_pair = block_cbcpre(0,q,iblock)//block_cbcpre(1,q,iblock)
+      is_periodic(q) = is_periodic(q).and.(cbc_pair == 'FF')
+    end do
+  end do
+  call mpi_allreduce(MPI_IN_PLACE,is_periodic,3,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
+  deallocate(nranks)
+  !
+  ! compute volume of all blocks (useful to compute bulk averages)
+  !
+  vol_all = product(lmax(:)-lmin(:))/product(dims(:))
+  call mpi_allreduce(MPI_IN_PLACE,vol_all,1,MPI_REAL_RP,MPI_SUM,MPI_COMM_WORLD,ierr)
+  !
+  ! determine length of the domain in the periodic directions
+  !
+  call MPI_ALLREDUCE(lmin(1),lmin_min(1),3,MPI_REAL_RP,MPI_MIN,MPI_COMM_WORLD,ierr)
+  call MPI_ALLREDUCE(lmax(1),lmax_max(1),3,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD,ierr)
+  where(is_periodic(:))
+    l_periodic(:) = lmax_max(:)-lmin_min(:)
+  elsewhere
+    l_periodic(:) = 0._rp
+  end where
+  !
+  ! validate iterative solver parameters
+  !
+  if(hypre_solver_i < 1 .or. hypre_solver_i > 4) then
+    if(myid == 0) write(stderr,*) '*** Error: invalid solver choice [1-4] *** '
+    if(myid == 0) write(stderr,*) 'Reverting to the default (2 -> PFMG)...'
+    hypre_solver_i = hypre_solver_i_default
+  end if
+  if(hypre_tol > 1._rp .or. hypre_tol < 0._rp) then
+    if(myid == 0) write(stderr,*) '*** Error: iterative error tolerance is too high or negative *** '
+    if(myid == 0) write(stderr,*) 'Reverting to the default (1.e-4)...'
+    hypre_tol = hypre_tol_default
+  end if
+  if(hypre_maxiter < 0) then
+    if(myid == 0) write(stderr,*) '*** Error: maximum number of iterations needs to be > 0 *** '
+    if(myid == 0) write(stderr,*) 'Reverting to the default (50)...'
+    hypre_maxiter = hypre_maxiter_default
+  end if
+  contains
+    subroutine abort_input(fname,msg)
+      character(len=*), intent(in) :: fname,msg
+      if(myid == 0) write(stderr,*) '*** Error reading ', trim(fname), ': ', trim(msg)
+      if(myid == 0) write(stderr,*) 'Aborting...'
+      call MPI_FINALIZE(ierr)
+      error stop
+    end subroutine abort_input
   end subroutine read_input
 end module mod_param

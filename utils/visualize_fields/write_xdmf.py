@@ -13,7 +13,7 @@ else:
 r0_g = np.array([0.,0.,0.]) # domain origin
 non_uniform_grid = True
 #
-# retrieve number of blocks from the number of geo files
+# retrieve number of blocks from the number of geometry files
 #
 geofiles  = "geometry_b_???.out"
 nblocks = np.size(glob.glob(geofiles))
