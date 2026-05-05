@@ -40,22 +40,24 @@ The input file `dns.nml` sets the physical and computational parameters, while `
 
 Files `out1d.h90`, `out2d.h90` and `out3d.h90` in `src/` set which data are written in 1-, 2-, and 3-dimensional output files, respectively. *The code should be recompiled after editing out?d.h90 files*.
 
-### Build
+### Compilation
 
-The code should be compiled in `src/`. The prerequisites are the following:
+#### Prerequisites
+The prerequisites for compiling SNaC are the following:
 
  * MPI
  * [*HYPRE*](https://github.com/hypre-space/hypre)
  * OpenMP (optional)
  * *FFTW* (optional, in case FFT acceleration is used)
 
-The Makefile in `src/` should be modified in agreement to the installation paths of each library. Also, the following preprocessor options are available:
+#### In short
+For most systems, SNaC can be compiled from the root directory with:
 
- * `-D_TIMING`           : wall-clock time per time step is computed
- * `-D_IMPDIFF`          : diffusion term of the N-S equations is integrated in time with an implicit discretization (thereby improving the stability of the numerical algorithm for viscous-dominated flows)
- * `-D_BOUSSINESQ_BUOYANCY`: enables the Boussinesq source term from the first scalar field
- * `-D_SINGLE_PRECISION` : calculation will be carried out in single precision (the default precision is double)
- * `-D_FFT_?`, with `?` being `X`, `Y` or `Z`: will use FFTs to solve the Poisson equation in the direction in question.
+```bash
+make
+```
+
+The root `Makefile` creates local configuration files from `configs/defaults/` at the first compilation. The generated `build.conf` file selects the compiler, optimization profile, and pre-processing options such as `IMPDIFF`, `BOUSSINESQ_BUOYANCY`, and `FFT_AXIS`; see [`docs/INFO_COMPILING.md`](docs/INFO_COMPILING.md) for details.
 
 Typing `make run` will compile the code and copy the executable `snac`, `dns.nml`, `blocks.nml`, and any optional `grid/` folder to a `run/` folder.
 

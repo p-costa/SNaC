@@ -52,7 +52,7 @@ hypre_solver_i = 2, hypre_tol = 1.e-4, hypre_maxiter = 50
 
 `nscal` sets the number of scalar fields. When `nscal > 0`, the `&scalar` namelist is read. `alphai(:)` is the inverse scalar diffusivity, and `iniscal(:)` selects each scalar initial condition. Supported scalar initial conditions include `zer`, `uni`, `cou`, and `dhc`.
 
-When SNaC is compiled with `-D_BOUSSINESQ_BUOYANCY`, the first scalar is active and contributes the Boussinesq acceleration `-gacc(:)*beta*s`. Without that CPP macro, no buoyancy source is compiled in.
+When SNaC is compiled with `BOUSSINESQ_BUOYANCY=1` in `build.conf` or on the `make` command line, the first scalar is active and contributes the Boussinesq acceleration `-gacc(:)*beta*s`. Without that CPP macro, no buoyancy source is compiled in.
 
 The optional `&hypre` namelist controls the iterative Poisson solver. `hypre_solver_i` selects `1: SMG`, `2: PFMG`, `3: GMRES`, or `4: BiCGSTAB`.
 

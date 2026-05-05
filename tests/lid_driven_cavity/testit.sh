@@ -3,7 +3,6 @@ set -e
 
 TESTDIR=$(pwd)
 SNACDIR=$(pwd)/../..
-SRCDIR=$SNACDIR/src
 RUNDIR=$SNACDIR/run
 UTILSDIR=$SNACDIR/utils
 EXEC=snac
@@ -13,8 +12,8 @@ MPIRUN="mpirun -n 4 $MPIRUN_OPTIONS"
 
 rm -rf $RUNDIR
 echo "Compiling ..."
-for FLAGS in ' ' '-D_FFT_X'; do
-  cd $SRCDIR && make -f $TESTDIR/Makefile clean && make -f $TESTDIR/Makefile OTH="$FLAGS" -j run
+for FFT_AXIS in 0 1; do
+  cd $SNACDIR && make clean && make FFT_AXIS=$FFT_AXIS -j run
   cp $TESTDIR/dns.nml $TESTDIR/blocks.nml $RUNDIR && cd $RUNDIR
   echo "Running SNaC..."
   set +e

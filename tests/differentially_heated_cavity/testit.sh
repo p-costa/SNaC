@@ -3,7 +3,6 @@ set -e
 
 TESTDIR=$(pwd)
 SNACDIR=$(pwd)/../..
-SRCDIR=$SNACDIR/src
 RUNDIR=$SNACDIR/run
 UTILSDIR=$SNACDIR/utils
 EXEC=snac
@@ -14,7 +13,7 @@ MPIRUN="mpirun -n 4 $MPIRUN_OPTIONS"
 
 rm -rf $RUNDIR
 echo "Compiling ..."
-cd $SRCDIR && make clean && make OTH='-D_FFT_Y -D_BOUSSINESQ_BUOYANCY' -j run
+cd $SNACDIR && make clean && make FFT_AXIS=2 BOUSSINESQ_BUOYANCY=1 -j run
 cp $TESTDIR/dns.nml $TESTDIR/blocks.nml $RUNDIR
 cd $RUNDIR
 
