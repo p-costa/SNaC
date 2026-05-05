@@ -265,7 +265,7 @@ module mod_bound
     end select
   end subroutine set_bc
   !
-  subroutine set_open_bc_uvw(ibound,lo,hi,idir,visc,dr,u,v,w,p,up,vp,wp,tr_x,tr_y,tr_z)
+  subroutine set_open_bc_uvw(ibound,lo,hi,idir,visc,dr,u,v,w,p,tr_x,tr_y,tr_z)
     !
     ! a zero or estimated-traction open BC (Bozonnet et al., JCP 2021)
     ! the latter serves well as a robust outflow BC;
@@ -277,8 +277,8 @@ module mod_bound
     integer , intent(in   ), dimension(3) :: lo,hi
     integer , intent(in   ) :: idir
     real(rp), intent(in   ) :: visc,dr
-    real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u ,v ,w ,p
-    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: up,vp,wp
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u ,v ,w
+    real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     real(rp), intent(inout), dimension(lo(2)-1:,lo(3)-1:,0:), optional :: tr_x
     real(rp), intent(inout), dimension(lo(1)-1:,lo(3)-1:,0:), optional :: tr_y
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,0:), optional :: tr_z
@@ -299,45 +299,45 @@ module mod_bound
       if     (ibound == 0) then
         !$OMP PARALLEL WORKSHARE
         tr_x(:,:,ibound) = tr_x(:,:,ibound) + .5_rp*min(0._rp,norm*u(q+1,:,:))**2
-        up(q,:,:) = up(q+1,:,:) + factor*(tr_x(:,:,ibound) + p(q+1,:,:))
+        u(q,:,:) = u(q+1,:,:) + factor*(tr_x(:,:,ibound) + p(q+1,:,:))
         !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
         !$OMP PARALLEL WORKSHARE
         tr_x(:,:,ibound) = tr_x(:,:,ibound) + .5_rp*min(0._rp,norm*u(q-1,:,:))**2
-        up(q,:,:) = up(q-1,:,:) + factor*(tr_x(:,:,ibound) + p(q  ,:,:))
+        u(q,:,:) = u(q-1,:,:) + factor*(tr_x(:,:,ibound) + p(q  ,:,:))
         !$OMP END PARALLEL WORKSHARE
         !$OMP PARALLEL WORKSHARE
-        up(hi(idir)+1,:,:) = up(hi(idir)  ,:,:) ! not needed
+        u(hi(idir)+1,:,:) = u(hi(idir)  ,:,:) ! not needed
         !$OMP END PARALLEL WORKSHARE
       end if
     case(2)
       if     (ibound == 0) then
         !$OMP PARALLEL WORKSHARE
         tr_y(:,:,ibound) = tr_y(:,:,ibound) + .5_rp*min(0._rp,norm*v(:,q+1,:))**2
-        vp(:,q,:) = vp(:,q+1,:) + factor*(tr_y(:,:,ibound) + p(:,q+1,:))
+        v(:,q,:) = v(:,q+1,:) + factor*(tr_y(:,:,ibound) + p(:,q+1,:))
         !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
         !$OMP PARALLEL WORKSHARE
         tr_y(:,:,ibound) = tr_y(:,:,ibound) + .5_rp*min(0._rp,norm*v(:,q-1,:))**2
-        vp(:,q,:) = vp(:,q-1,:) + factor*(tr_y(:,:,ibound) + p(:,q  ,:))
+        v(:,q,:) = v(:,q-1,:) + factor*(tr_y(:,:,ibound) + p(:,q  ,:))
         !$OMP END PARALLEL WORKSHARE
         !$OMP PARALLEL WORKSHARE
-        vp(:,hi(idir)+1,:) = vp(:,hi(idir)  ,:) ! not needed
+        v(:,hi(idir)+1,:) = v(:,hi(idir)  ,:) ! not needed
         !$OMP END PARALLEL WORKSHARE
       end if
     case(3)
       if     (ibound == 0) then
         !$OMP PARALLEL WORKSHARE
         tr_z(:,:,ibound) = tr_z(:,:,ibound) + .5_rp*min(0._rp,norm*w(:,:,q+1))**2
-        wp(:,:,q) = wp(:,:,q+1) + factor*(tr_z(:,:,ibound) + p(:,:,q+1))
+        w(:,:,q) = w(:,:,q+1) + factor*(tr_z(:,:,ibound) + p(:,:,q+1))
         !$OMP END PARALLEL WORKSHARE
       else if(ibound == 1) then
         !$OMP PARALLEL WORKSHARE
         tr_z(:,:,ibound) = tr_z(:,:,ibound) + .5_rp*min(0._rp,norm*w(:,:,q-1))**2
-        wp(:,:,q) = wp(:,:,q-1) + factor*(tr_z(:,:,ibound) + p(:,:,q  ))
+        w(:,:,q) = w(:,:,q-1) + factor*(tr_z(:,:,ibound) + p(:,:,q  ))
         !$OMP END PARALLEL WORKSHARE
         !$OMP PARALLEL WORKSHARE
-        wp(:,:,hi(idir)+1) = wp(:,:,hi(idir)  ) ! not needed
+        w(:,:,hi(idir)+1) = w(:,:,hi(idir)  ) ! not needed
         !$OMP END PARALLEL WORKSHARE
       end if
     end select
@@ -494,7 +494,7 @@ module mod_bound
     end do
   end subroutine inflow
   !
-  subroutine outflow(is_outflow_bound,is_estimated_traction,lo,hi,dl,dl_h,visc,u,v,w,p,tr_x,tr_y,tr_z,up,vp,wp)
+  subroutine outflow(is_outflow_bound,is_estimated_traction,lo,hi,dl,dl_h,visc,u,v,w,p,tr_x,tr_y,tr_z)
     !
     implicit none
     logical , intent(in   ), dimension(0:1,1:3) :: is_outflow_bound,is_estimated_traction
@@ -505,7 +505,6 @@ module mod_bound
     real(rp), intent(inout), dimension(lo(2)-1:,lo(3)-1:,0:) :: tr_x
     real(rp), intent(inout), dimension(lo(1)-1:,lo(3)-1:,0:) :: tr_y
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,0:) :: tr_z
-    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: up,vp,wp
     integer :: ib,idir
     !
     do idir=1,3
@@ -516,17 +515,17 @@ module mod_bound
               tr_x(:,:,ib) = 0._rp
               if( is_estimated_traction(ib,idir) ) &
                 call cmpt_estimated_traction(ib,lo,hi,idir,visc,dl_h(ib,idir),u,v,w,p,tr_x=tr_x)
-              call set_open_bc_uvw(ib,lo,hi,idir,visc,dl(ib,idir),u,v,w,p,up,vp,wp,tr_x=tr_x)
+              call set_open_bc_uvw(ib,lo,hi,idir,visc,dl(ib,idir),u,v,w,p,tr_x=tr_x)
             case(2)
               tr_y(:,:,ib) = 0._rp
               if( is_estimated_traction(ib,idir) ) &
                 call cmpt_estimated_traction(ib,lo,hi,idir,visc,dl_h(ib,idir),u,v,w,p,tr_y=tr_y)
-              call set_open_bc_uvw(ib,lo,hi,idir,visc,dl(ib,idir),u,v,w,p,up,vp,wp,tr_y=tr_y)
+              call set_open_bc_uvw(ib,lo,hi,idir,visc,dl(ib,idir),u,v,w,p,tr_y=tr_y)
             case(3)
               tr_z(:,:,ib) = 0._rp
               if( is_estimated_traction(ib,idir) ) &
                 call cmpt_estimated_traction(ib,lo,hi,idir,visc,dl_h(ib,idir),u,v,w,p,tr_z=tr_z)
-              call set_open_bc_uvw(ib,lo,hi,idir,visc,dl(ib,idir),u,v,w,p,up,vp,wp,tr_z=tr_z)
+              call set_open_bc_uvw(ib,lo,hi,idir,visc,dl(ib,idir),u,v,w,p,tr_z=tr_z)
           end select
         end if
       end do

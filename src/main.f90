@@ -27,7 +27,7 @@ program snac
   use mod_common_mpi     , only: myid,myid_block,comm_block
   use mod_correc         , only: correc
   use mod_initflow       , only: initflow,init_inflow
-  use mod_initgrid       , only: initgrid,distribute_grid,bound_grid,save_grid
+  use mod_initgrid       , only: initgrid,distribute_grid,bound_grid,save_grid,load_grid
   use mod_initmpi        , only: initmpi
   use mod_fillps         , only: fillps
   use mod_load           , only: load
@@ -36,7 +36,7 @@ program snac
                                  datadir,    &
                                  small,      &
                                  rkcoeff,    &
-                                 cfl,dtmin,uref,lref,rey,visc,             &
+                                 cfl,dtmax,dt_f,uref,lref,rey,visc,       &
                                  nstep,time_max,tw_max,stop_type,          &
                                  restart,is_overwrite_save,nsaves_max,     &
                                  icheck,iout0d,iout1d,iout2d,iout3d,isave, &
@@ -73,7 +73,7 @@ program snac
   logical , dimension(0:1,3) :: is_bound,is_bound_inflow
   type(MPI_DATATYPE) , dimension(    3) :: halos
   integer , dimension(    3) :: lo,hi,lo_g,hi_g,lo_1,hi_1
-  real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,up,vp,wp,pp,po
+  real(rp), allocatable, dimension(:,:,:) :: u,v,w,p,pp,po
 #ifdef _IMPDIFF
   real(rp), allocatable, dimension(:,:,:) :: uo,vo,wo
 #endif
@@ -100,7 +100,7 @@ program snac
   real(rp)           :: alphai,alphaoi
 #endif
   !
-  real(rp) :: dt,dtmax,time,dtrk,divtot,divmax
+  real(rp) :: dt,dt_cfl,time,dtrk,divtot,divmax
   integer  :: irk,istep
   real(rp), allocatable, dimension(:) :: dxc  ,dxf  ,xc  ,xf  , &
                                          dyc  ,dyf  ,yc  ,yf  , &
@@ -146,7 +146,7 @@ program snac
   real(rp), allocatable, dimension(:,:,:) :: pp_s
   integer                                 :: nrank_block
 #ifdef _IMPDIFF
-  real(rp), allocatable, dimension(:,:,:) :: up_s,vp_s,wp_s
+  real(rp), allocatable, dimension(:,:,:) :: u_s,v_s,w_s
 #endif
 #endif
 #ifdef _FFT_USE_SLICED_PENCILS
@@ -171,7 +171,7 @@ program snac
   !
   real(rp) :: twi,tw
   integer  :: savecounter,ichkptnum
-  logical  :: is_done,kill
+  logical  :: is_done,kill,exists
 #ifdef _TIMING
   real(rp) :: dt12,dt12av,dt12min,dt12max
 #endif
@@ -219,9 +219,6 @@ program snac
            v( lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            w( lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            p( lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
-           up(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
-           vp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
-           wp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            pp(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1), &
            po(lo(1)-1:hi(1)+1,lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1))
   allocate(u_in%x(lo(2)-1:hi(2)+1,lo(3)-1:hi(3)+1,0:1), &
@@ -350,15 +347,15 @@ end if
   pp_s(:,:,:) = 0._rp
 #ifdef _IMPDIFF
   deallocate(uo,vo,wo)
-  allocate(up_s(lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
-           vp_s(lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
-           wp_s(lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
+  allocate(u_s(lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
+           v_s(lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
+           w_s(lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
            uo(  lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
            vo(  lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0), &
            wo(  lo_s(1)-0:hi_s(1)+0,lo_s(2)-0:hi_s(2)+0,lo_s(3)-0:hi_s(3)+0))
-  up_s(:,:,:) = 0._rp
-  vp_s(:,:,:) = 0._rp
-  wp_s(:,:,:) = 0._rp
+  u_s(:,:,:) = 0._rp
+  v_s(:,:,:) = 0._rp
+  w_s(:,:,:) = 0._rp
 #endif
 #endif
   npsolvers = hi_a(idir)-lo_a(idir)+1
@@ -396,10 +393,19 @@ end if
   !
   ! generate grid
   !
+  write(cblock,'(i3.3)') my_block
   call initgrid(lo_g(1),hi_g(1),gt(1),gr(1),lmin(1),lmax(1),dxc_g,dxf_g,xc_g,xf_g)
   call initgrid(lo_g(2),hi_g(2),gt(2),gr(2),lmin(2),lmax(2),dyc_g,dyf_g,yc_g,yf_g)
   call initgrid(lo_g(3),hi_g(3),gt(3),gr(3),lmin(3),lmax(3),dzc_g,dzf_g,zc_g,zf_g)
-  write(cblock,'(i3.3)') my_block
+  filename = 'grid/grid_x_b_'//cblock
+  inquire(file=trim(filename)//'.bin',exist=exists)
+  if(exists) call load_grid(trim(filename),lo_g(1),hi_g(1),xf_g,xc_g,dxf_g,dxc_g)
+  filename = 'grid/grid_y_b_'//cblock
+  inquire(file=trim(filename)//'.bin',exist=exists)
+  if(exists) call load_grid(trim(filename),lo_g(2),hi_g(2),yf_g,yc_g,dyf_g,dyc_g)
+  filename = 'grid/grid_z_b_'//cblock
+  inquire(file=trim(filename)//'.bin',exist=exists)
+  if(exists) call load_grid(trim(filename),lo_g(3),hi_g(3),zf_g,zc_g,dzf_g,dzc_g)
   if(myid_block == 0) then
     call save_grid(trim(datadir)//'grid_x_b_'//cblock,lo_g(1),hi_g(1),xf_g,xc_g,dxf_g,dxc_g)
     call save_grid(trim(datadir)//'grid_y_b_'//cblock,lo_g(2),hi_g(2),yf_g,yc_g,dyf_g,dyc_g)
@@ -586,9 +592,6 @@ end if
   alpha_bc(  :,:) = 0._rp
   alpha_bc_o(:,:) = alpha_bc(:,:)
   !
-  up(:,:,:)      = 0._rp
-  vp(:,:,:)      = 0._rp
-  wp(:,:,:)      = 0._rp
   pp(:,:,:)      = 0._rp
   po(:,:,:)      = 0._rp
   dudtrko(:,:,:) = 0._rp
@@ -612,9 +615,9 @@ end if
   !
   ! determine time step
   !
-  call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
-  dt = min(cfl*dtmax,dtmin)
-  if(myid == 0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
+  call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dt_cfl)
+  dt = merge(dt_f,min(cfl*dt_cfl,dtmax),dt_f > 0._rp)
+  if(myid == 0) write(stdout,*) 'dt_cfl = ', dt_cfl, 'dt = ',dt
   !
   ! initialize Poisson solver
   !
@@ -831,124 +834,119 @@ end if
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
       alpha = -visc*dtrk/2._rp
-      call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce, &
-                  visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko,up,vp,wp)
       call cmpt_wall_forces(hi(:)-lo(:)+1,is_bound,dxc,dxf,dyc,dyf,dzc,dzf,visc, &
                             u,v,w,p,bforce,tau_x,tau_y,tau_z)
       call updt_wall_forces(rkcoeff(:,irk),tau_x,tau_y,tau_z,tau_x_o,tau_y_o,tau_z_o, &
                             tau_x_acc,tau_y_acc,tau_z_acc)
+      call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce, &
+                  visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko)
 #ifdef _IMPDIFF
       alphai = alpha**(-1)
       !
       !$OMP PARALLEL WORKSHARE
-      up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
+      u(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = u(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END PARALLEL WORKSHARE
-      call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,up)
+      call updt_rhs(lo,hiu,is_bound,rhsu%x,rhsu%y,rhsu%z,u)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiu_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiu_a(il:iu:iskip), &
                                        alphai-alphaoi,usolver_fft(:)%mat) ! correct diagonal term
       call create_n_solvers(hiu_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,.true.,hypre_solver_i,usolver_fft)
       call setup_n_solvers(hiu_a(idir)-lo_a(idir)+1,usolver_fft)
-      call fft(arrplan_u(1),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call fft(arrplan_u(1),u(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
 #ifndef _FFT_USE_SLABS
-      call solve_n_helmholtz_2d(usolver_fft,lo(idir),hiu(idir),1,lo(il:iu:iskip),hiu(il:iu:iskip),up,uo)
+      call solve_n_helmholtz_2d(usolver_fft,lo(idir),hiu(idir),1,lo(il:iu:iskip),hiu(il:iu:iskip),u,uo)
 #else
-      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,up,up_s)
-      call solve_n_helmholtz_2d(usolver_fft,lo_a(idir),hiu_a(idir),0,lo_a(il:iu:iskip),hiu_a(il:iu:iskip),up_s,uo)
-      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,up_s,up)
+      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,u,u_s)
+      call solve_n_helmholtz_2d(usolver_fft,lo_a(idir),hiu_a(idir),0,lo_a(il:iu:iskip),hiu_a(il:iu:iskip),u_s,uo)
+      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,u_s,u)
 #endif
-      call fft(arrplan_u(2),up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call fft(arrplan_u(2),u(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       !$OMP PARALLEL WORKSHARE
-      up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = up(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_u
+      u(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = u(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_u
       !$OMP END PARALLEL WORKSHARE
       call finalize_n_solvers(hiu_a(idir)-lo_a(idir)+1,usolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiu,alphai-alphaoi,usolver%mat) ! correct diagonal term
       call create_solver(hypre_maxiter,hypre_tol,.true.,hypre_solver_i,usolver)
       call setup_solver(usolver)
-      call solve_helmholtz(usolver,lo,hiu,up,uo)
+      call solve_helmholtz(usolver,lo,hiu,u,uo)
       call finalize_solver(usolver)
 #endif
       !
       !$OMP PARALLEL WORKSHARE
-      vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
+      v(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = v(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END PARALLEL WORKSHARE
-      call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,vp)
+      call updt_rhs(lo,hiv,is_bound,rhsv%x,rhsv%y,rhsv%z,v)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiv_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiv_a(il:iu:iskip), &
                                        alphai-alphaoi,vsolver_fft(:)%mat) ! correct diagonal term
       call create_n_solvers(hiv_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,.true.,hypre_solver_i,vsolver_fft)
       call setup_n_solvers(hiv_a(idir)-lo_a(idir)+1,vsolver_fft)
-      call fft(arrplan_v(1),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call fft(arrplan_v(1),v(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
 #ifndef _FFT_USE_SLABS
-      call solve_n_helmholtz_2d(vsolver_fft,lo(idir),hiv(idir),1,lo(il:iu:iskip),hiv(il:iu:iskip),vp,vo)
+      call solve_n_helmholtz_2d(vsolver_fft,lo(idir),hiv(idir),1,lo(il:iu:iskip),hiv(il:iu:iskip),v,vo)
 #else
-      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,vp,vp_s)
-      call solve_n_helmholtz_2d(vsolver_fft,lo_a(idir),hiv_a(idir),0,lo_a(il:iu:iskip),hiv_a(il:iu:iskip),vp_s,vo)
-      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,vp_s,vp)
+      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,v,v_s)
+      call solve_n_helmholtz_2d(vsolver_fft,lo_a(idir),hiv_a(idir),0,lo_a(il:iu:iskip),hiv_a(il:iu:iskip),v_s,vo)
+      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,v_s,v)
 #endif
-      call fft(arrplan_v(2),vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call fft(arrplan_v(2),v(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       !$OMP PARALLEL WORKSHARE
-      vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = vp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_v
+      v(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = v(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_v
       !$OMP END PARALLEL WORKSHARE
       call finalize_n_solvers(hiv_a(idir)-lo_a(idir)+1,vsolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiv,alphai-alphaoi,vsolver%mat) ! correct diagonal term
       call create_solver(hypre_maxiter,hypre_tol,.true.,hypre_solver_i,vsolver)
       call setup_solver(vsolver)
-      call solve_helmholtz(vsolver,lo,hiv,vp,vo)
+      call solve_helmholtz(vsolver,lo,hiv,v,vo)
       call finalize_solver(vsolver)
 #endif
       !
       !$OMP PARALLEL WORKSHARE
-      wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
+      w(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = w(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*alphai
       !$OMP END PARALLEL WORKSHARE
-      call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,wp)
+      call updt_rhs(lo,hiw,is_bound,rhsw%x,rhsw%y,rhsw%z,w)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call add_constant_to_n_diagonals(hiw_a(idir)-lo_a(idir)+1,lo_a(il:iu:iskip),hiw_a(il:iu:iskip), &
                                        alphai-alphaoi,wsolver_fft(:)%mat) ! correct diagonal term
       call create_n_solvers(hiw_a(idir)-lo_a(idir)+1,hypre_maxiter,hypre_tol,.true.,hypre_solver_i,wsolver_fft)
       call setup_n_solvers(hiw_a(idir)-lo_a(idir)+1,wsolver_fft)
-      call fft(arrplan_w(1),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call fft(arrplan_w(1),w(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
 #ifndef _FFT_USE_SLABS
-      call solve_n_helmholtz_2d(wsolver_fft,lo(idir),hiw(idir),1,lo(il:iu:iskip),hiw(il:iu:iskip),wp,wo)
+      call solve_n_helmholtz_2d(wsolver_fft,lo(idir),hiw(idir),1,lo(il:iu:iskip),hiw(il:iu:iskip),w,wo)
 #else
-      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,wp,wp_s)
-      call solve_n_helmholtz_2d(wsolver_fft,lo_a(idir),hiw_a(idir),0,lo_a(il:iu:iskip),hiw_a(il:iu:iskip),wp_s,wo)
-      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,wp_s,wp)
+      call transpose_slab(1,0,t_params(:,1:2:1 ),comm_block,w,w_s)
+      call solve_n_helmholtz_2d(wsolver_fft,lo_a(idir),hiw_a(idir),0,lo_a(il:iu:iskip),hiw_a(il:iu:iskip),w_s,wo)
+      call transpose_slab(0,1,t_params(:,2:1:-1),comm_block,w_s,w)
 #endif
-      call fft(arrplan_w(2),wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
+      call fft(arrplan_w(2),w(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
       !$OMP PARALLEL WORKSHARE
-      wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = wp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_w
+      w(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) = w(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3))*normfft_w
       !$OMP END PARALLEL WORKSHARE
       call finalize_n_solvers(hiw_a(idir)-lo_a(idir)+1,wsolver_fft)
 #else
       call add_constant_to_diagonal(lo,hiw,alphai-alphaoi,wsolver%mat) ! correct diagonal term
       call create_solver(hypre_maxiter,hypre_tol,.true.,hypre_solver_i,wsolver)
       call setup_solver(wsolver)
-      call solve_helmholtz(wsolver,lo,hiw,wp,wo)
+      call solve_helmholtz(wsolver,lo,hiw,w,wo)
       call finalize_solver(wsolver)
 #endif
       !
       alphaoi = alphai
 #endif
       call bounduvw(cbcvel,lo,hi,bcvel,.false.,halos,is_bound,nb, &
-                    dxc,dxf,dyc,dyf,dzc,dzf,up,vp,wp)
+                    dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
       call inflow(is_bound_inflow,.false.,lo,hi,u_in%x,v_in%x,w_in%x, &
                                                 u_in%y,v_in%y,w_in%y, &
-                                                u_in%z,v_in%z,w_in%z,up,vp,wp)
+                                                u_in%z,v_in%z,w_in%z,u,v,w)
 #if !defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
       dtrk  = dt
       if(irk < 3) then ! pressure correction only at the last RK step
-        !$OMP PARALLEL WORKSHARE
-        u(:,:,:) = up(:,:,:)
-        v(:,:,:) = vp(:,:,:)
-        w(:,:,:) = wp(:,:,:)
-        !$OMP END PARALLEL WORKSHARE
         cycle
       end if
 #endif
-      call fillps(lo,hi,dxf,dyf,dzf,dtrk,up,vp,wp,pp)
+      call fillps(lo,hi,dxf,dyf,dzf,dtrk,u,v,w,pp)
       call updt_rhs(lo,hi,is_bound,rhsp%x,rhsp%y,rhsp%z,pp)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
       call fft(arrplan_p(1),pp(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)))
@@ -972,7 +970,7 @@ end if
 #endif
       alpha_bc_o(:,:) = alpha_bc(:,:)
       call boundp(  cbcpre,lo,hi,bcpre,halos,is_bound,nb,dxc,dyc,dzc,pp)
-      call correc(lo,hi,dxc,dyc,dzc,dtrk,pp,up,vp,wp,u,v,w)
+      call correc(lo,hi,dxc,dyc,dzc,dtrk,pp,u,v,w)
       call bounduvw(cbcvel,lo,hi,bcvel,.true.,halos,is_bound,nb, &
                     dxc,dxf,dyc,dyf,dzc,dzf,u,v,w)
       call inflow(is_bound_inflow,.true.,lo,hi,u_in%x,v_in%x,w_in%x, &
@@ -998,10 +996,10 @@ end if
     if(mod(istep,icheck) == 0) then
       if(myid == 0) write(stdout,*) 'Checking stability and divergence...'
       !
-      call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dtmax)
-      dt = min(cfl*dtmax,dtmin)
-      if(myid == 0) write(stdout,*) 'dtmax = ', dtmax, 'dt = ',dt
-      if(dtmax < small) then
+      call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,visc,u,v,w,dt_cfl)
+      dt = merge(dt_f,min(cfl*dt_cfl,dtmax),dt_f > 0._rp)
+      if(myid == 0) write(stdout,*) 'dt_cfl = ', dt_cfl, 'dt = ',dt
+      if(dt_cfl < small) then
         if(myid == 0) write(stderr,*) 'ERROR: timestep is too small.'
         if(myid == 0) write(stderr,*) 'Aborting...'
         is_done = .true.
