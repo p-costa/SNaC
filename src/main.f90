@@ -1016,7 +1016,7 @@ end if
       call MPI_ALLREDUCE(MPI_IN_PLACE,tw,1,MPI_REAL_RP,MPI_MAX,MPI_COMM_WORLD)
       if(tw    >= tw_max  ) is_done = is_done.or..true.
     end if
-    if(mod(istep,icheck) == 0) then
+    if(icheck > 0.and.mod(istep,max(icheck,1)) == 0) then
       if(myid == 0) write(stdout,*) 'Checking stability and divergence...'
       !
       call chkdt(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,max(visc,alpha_max),u,v,w,dt_cfl)
@@ -1041,7 +1041,7 @@ end if
     !
     ! output routines below
     !
-    if(mod(istep,iout0d) == 0) then
+    if(iout0d > 0.and.mod(istep,max(iout0d,1)) == 0) then
       !allocate(var(4))
       var(1) = 1._rp*istep
       var(2) = dt
@@ -1050,16 +1050,16 @@ end if
       include 'out0d.h90'
     end if
     write(fldnum,'(i7.7)') istep
-    if(mod(istep,iout1d) == 0) then
+    if(iout1d > 0.and.mod(istep,max(iout1d,1)) == 0) then
       include 'out1d.h90'
     end if
-    if(mod(istep,iout2d) == 0) then
+    if(iout2d > 0.and.mod(istep,max(iout2d,1)) == 0) then
       include 'out2d.h90'
     end if
-    if(mod(istep,iout3d) == 0) then
+    if(iout3d > 0.and.mod(istep,max(iout3d,1)) == 0) then
       include 'out3d.h90'
     end if
-    if(mod(istep,isave ) == 0.or.(is_done.and..not.kill)) then
+    if(isave > 0.and.((mod(istep,max(isave,1)) == 0).or.(is_done.and..not.kill))) then
       if(is_overwrite_save) then
         basename = 'fld_b_'//cblock
       else

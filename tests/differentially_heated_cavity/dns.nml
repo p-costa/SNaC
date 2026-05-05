@@ -4,7 +4,7 @@ visci = 1186.78165819
 nstep = 20, time_max = 100., tw_max = 0.1
 stop_type(1:3) = T, F, F
 restart = F, is_overwrite_save = T, nsaves_max = 0
-icheck = 10, iout0d = 10, iout1d = 100000, iout2d = 100000, iout3d = 20, isave = 100000
+icheck = 10, iout0d = 10, iout1d = 0, iout2d = 0, iout3d = 20, isave = 0
 bforce(1:3) = 0., 0., 0.
 gacc(1:3) = 0., 0., -1.
 nscal = 1

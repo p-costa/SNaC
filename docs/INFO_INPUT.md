@@ -18,7 +18,7 @@ visci = 100.
 nstep = 100, time_max = 100., tw_max = 0.1
 stop_type(1:3) = T, F, F
 restart = F, is_overwrite_save = T, nsaves_max = 0
-icheck = 10, iout0d = 10, iout1d = 200000, iout2d = 50000000, iout3d = 10, isave = 20
+icheck = 10, iout0d = 10, iout1d = 0, iout2d = 0, iout3d = 10, isave = 20
 bforce(1:3) = 0., 0., 0.
 gacc(1:3) = 0., 0., 0.
 nscal = 0
@@ -46,7 +46,7 @@ hypre_solver_i = 2, hypre_tol = 1.e-4, hypre_maxiter = 50
 
 `restart` loads `data/fld_b_###_<field>.bin` checkpoint files. `is_overwrite_save` controls whether saves overwrite the current checkpoint or keep numbered checkpoint history. `nsaves_max` limits the number of numbered checkpoint files when overwrite is disabled.
 
-`icheck`, `iout0d`, `iout1d`, `iout2d`, `iout3d`, and `isave` set the cadence for stability checks, history output, 1D profiles, 2D slices, 3D fields, and checkpoint saves.
+`icheck`, `iout0d`, `iout1d`, `iout2d`, `iout3d`, and `isave` set the cadence for stability checks, history output, 1D profiles, 2D slices, 3D fields, and checkpoint saves. Set any of these values to `0` to skip the corresponding operation.
 
 `bforce(1:3)` is a constant body force density, often used as a pressure-gradient forcing.
 
