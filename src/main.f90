@@ -970,12 +970,6 @@ end if
       call inflow(is_bound_inflow,.false.,lo,hi,u_in%x,v_in%x,w_in%x, &
                                                 u_in%y,v_in%y,w_in%y, &
                                                 u_in%z,v_in%z,w_in%z,u,v,w)
-#if !defined(_IMPDIFF) && defined(_ONE_PRESS_CORR)
-      dtrk  = dt
-      if(irk < 3) then ! pressure correction only at the last RK step
-        cycle
-      end if
-#endif
       call fillps(lo,hi,dxf,dyf,dzf,dtrk,u,v,w,pp)
       call updt_rhs(lo,hi,is_bound,rhsp%x,rhsp%y,rhsp%z,pp)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)

@@ -23,7 +23,6 @@ BOUSSINESQ_BUOYANCY=0    # Boussinesq source term from the first scalar field
 FFT_AXIS=3               # options: 0 (off), 1 (_FFT_X), 2 (_FFT_Y), 3 (_FFT_Z)
 FFT_USE_SLABS=0          # use slab communication for the FFT path
 FFT_USE_SLICED_PENCILS=0 # use sliced pencils for the FFT path
-ONE_PRESS_CORR=0         # use one pressure correction when possible
 OPENMP=0                 # OpenMP build
 ```
 
@@ -38,7 +37,6 @@ The following pre-processing options are available through `build.conf`:
  * `FFT_AXIS`               : `0` disables FFT acceleration; `1`, `2`, or `3` defines `_FFT_X`, `_FFT_Y`, or `_FFT_Z`, respectively
  * `FFT_USE_SLABS`          : enables the slab communication path for FFT acceleration
  * `FFT_USE_SLICED_PENCILS` : enables the sliced-pencil communication path for FFT acceleration
- * `ONE_PRESS_CORR`         : enables the one-pressure-correction path where supported
  * `OPENMP`                 : enables OpenMP compiler and linker flags
 
 HYPRE is linked through `configs/libs.mk`. The default HYPRE library path is `$(HOME)/hypre/lib`; this can be overridden by editing `configs/libs.mk`, by setting `HYPRE_LIB_DIR`, or by passing, e.g., `make HYPRE_LIB_DIR=[PATH_TO_LIB]`. If HYPRE modules or headers are not found by the compiler wrapper, set `HYPRE_INC_DIR` as well.

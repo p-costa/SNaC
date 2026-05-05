@@ -99,8 +99,7 @@ CUSTOM_DEFINES =  SINGLE_PRECISION \
                   IMPDIFF \
                   BOUSSINESQ_BUOYANCY \
                   FFT_USE_SLABS \
-                  FFT_USE_SLICED_PENCILS \
-                  ONE_PRESS_CORR
+                  FFT_USE_SLICED_PENCILS
 
 DEFINES += $(foreach var,$(CUSTOM_DEFINES),$(if $(filter 1,$(strip $($(var)))), -D_$(var)))
 
