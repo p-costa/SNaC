@@ -2,7 +2,7 @@ module mod_mom
   use mod_types
   implicit none
   private
-  public momx_a,momy_a,momz_a,momx_d,momy_d,momz_d,momx_p,momy_p,momz_p
+  public momx_a,momy_a,momz_a,momx_a_vv,momy_a_vv,momz_a_vv,momx_d,momy_d,momz_d,momx_p,momy_p,momz_p
   contains
   subroutine momx_a(lo,hi,dxc,dxf,dyf,dzf,u,v,w,dudt)
     implicit none

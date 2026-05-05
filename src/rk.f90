@@ -6,7 +6,10 @@ module mod_rk
   contains
   subroutine rk_mom(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce,gacc,beta,scalars,visc, &
                     u,v,w,p,dudtrko,dvdtrko,dwdtrko)
-    use mod_mom  , only: momx_a,momy_a,momz_a,momx_d,momy_d,momz_d,momx_p,momy_p,momz_p
+    use mod_mom  , only: momx_a => momx_a_vv, &
+                         momy_a => momy_a_vv, &
+                         momz_a => momz_a_vv, &
+                         momx_d,momy_d,momz_d,momx_p,momy_p,momz_p
     use mod_scal , only: scalar
     implicit none
     real(rp), intent(in   ), dimension(2) :: rkpar
