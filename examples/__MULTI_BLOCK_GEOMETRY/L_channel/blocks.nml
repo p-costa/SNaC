@@ -1,0 +1,54 @@
+&blocks
+nblocks = 3
+block_dims(1:3,1) = 1, 1, 1
+block_ng(1:3,1) = 32, 32, 64
+block_lmin(1:3,1) = 0., 0., 0.
+block_lmax(1:3,1) = .5, .5, 1.
+block_gt(1:3,1) = 0, 0, 0
+block_gr(1:3,1) = 0., 0., 0.
+block_cbcvel(0:1,1:3,1,1) = 'D', 'D', 'D', 'F', 'D', 'D'
+block_cbcvel(0:1,1:3,2,1) = 'D', 'D', 'D', 'F', 'D', 'D'
+block_cbcvel(0:1,1:3,3,1) = 'D', 'D', 'D', 'F', 'D', 'D'
+block_cbcpre(0:1,1:3,1) = 'N', 'N', 'N', 'F', 'N', 'N'
+block_bcvel(0:1,1:3,1,1) = 0., 0., 0., 2., 0., 0.
+block_bcvel(0:1,1:3,2,1) = 0., 0., 1., 2., 0., 0.
+block_bcvel(0:1,1:3,3,1) = 0., 0., 0., 2., 0., 0.
+block_bcpre(0:1,1:3,1) = 0., 0., 0., 2., 0., 0.
+block_inflow_type(0:1,1:3,1) = 0, 0, 0, 0, 0, 0
+block_inivel(1) = 'zer'
+
+block_dims(1:3,2) = 1, 1, 1
+block_ng(1:3,2) = 32, 32, 64
+block_lmin(1:3,2) = 0., .5, 0.
+block_lmax(1:3,2) = .5, 1., 1.
+block_gt(1:3,2) = 0, 0, 0
+block_gr(1:3,2) = 0., 0., 0.
+block_cbcvel(0:1,1:3,1,2) = 'D', 'F', 'F', 'D', 'D', 'D'
+block_cbcvel(0:1,1:3,2,2) = 'D', 'F', 'F', 'D', 'D', 'D'
+block_cbcvel(0:1,1:3,3,2) = 'D', 'F', 'F', 'D', 'D', 'D'
+block_cbcpre(0:1,1:3,2) = 'N', 'F', 'F', 'N', 'N', 'N'
+block_bcvel(0:1,1:3,1,2) = 0., 3., 1., 0., 0., 0.
+block_bcvel(0:1,1:3,2,2) = 0., 3., 1., 0., 0., 0.
+block_bcvel(0:1,1:3,3,2) = 0., 3., 1., 0., 0., 0.
+block_bcpre(0:1,1:3,2) = 0., 3., 1., 0., 0., 0.
+block_inflow_type(0:1,1:3,2) = 0, 0, 0, 0, 0, 0
+block_inivel(2) = 'zer'
+
+block_dims(1:3,3) = 2, 1, 1
+block_ng(1:3,3) = 96, 32, 64
+block_lmin(1:3,3) = .5, .5, 0.
+block_lmax(1:3,3) = 2.0, 1., 1.
+block_gt(1:3,3) = 0, 0, 0
+block_gr(1:3,3) = 0., 0., 0.
+block_cbcvel(0:1,1:3,1,3) = 'F', 'N', 'D', 'D', 'D', 'D'
+block_cbcvel(0:1,1:3,2,3) = 'F', 'N', 'D', 'D', 'D', 'D'
+block_cbcvel(0:1,1:3,3,3) = 'F', 'N', 'D', 'D', 'D', 'D'
+block_cbcpre(0:1,1:3,3) = 'F', 'D', 'N', 'N', 'N', 'N'
+block_bcvel(0:1,1:3,1,3) = 2., 0., 0., 0., 0., 0.
+block_bcvel(0:1,1:3,2,3) = 2., 0., 0., 0., 0., 0.
+block_bcvel(0:1,1:3,3,3) = 2., 0., 0., 0., 0., 0.
+block_bcpre(0:1,1:3,3) = 2., 0., 0., 0., 0., 0.
+block_inflow_type(0:1,1:3,3) = 0, 0, 0, 0, 0, 0
+block_inivel(3) = 'zer'
+
+/

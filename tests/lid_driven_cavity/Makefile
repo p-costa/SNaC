@@ -27,9 +27,9 @@ DATDIR := $(RUNDIR)/data
 run: $(TARGET)
 	@mkdir -p $(RUNDIR) $(DATDIR)
 	@cp $(TARGET) $(RUNDIR)
-	@cp dns.in $(RUNDIR)
-	@cp -r geo $(RUNDIR)
-	@printf "\nExecutable file $(TARGET), input file dns.in and geo folder copied to run folder $(RUNDIR)\n"
+	@cp dns.nml blocks.nml $(RUNDIR)
+	@test ! -d grid || cp -r grid $(RUNDIR)
+	@printf "\nExecutable file $(TARGET), namelist files and optional grid folder copied to run folder $(RUNDIR)\n"
 #
 .PHONY: clean
 clean:

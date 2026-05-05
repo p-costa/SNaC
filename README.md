@@ -10,7 +10,7 @@ P. Costa. *A FFT-accelerated multi-block finite-difference solver for massively 
 Comput. Phys. Commun. 271 : 108194 (2022) [[DOI:10.1016/j.cpc.2021.108194]](https://doi.org/10.1016/j.cpc.2021.108194) [[arXiv:2106.03583]](https://arxiv.org/pdf/2106.03583.pdf).
 
 ## News
-[08/07/2022] The input files describing the block geometry (under `geo/block.???`) have been simplified. Now, instead of prescribing the lower and upper extents of each block `lo(:)` and `hi(:)`, the number of grid points `ng(:)` is prescribed. This change makes it much easier to refine the grid, since one does not need to correct extents of neighboring blocks. See the updated [`src/INFO_INPUT.md`](src/INFO_INPUT.md) for more details.
+[27/04/2026] The input files now use Fortran namelists, `dns.nml` and `blocks.nml`, and the optional grid-generator utility can write multi-block `blocks.nml` files plus binary axis grids. See [`docs/INFO_INPUT.md`](docs/INFO_INPUT.md) for more details.
 
 ## Features
 
@@ -35,7 +35,7 @@ The fluid flow is solved with a standard second-order finite-difference/-volume 
 
 ### Input files
 
-The input files `dns.in` sets the physical and computational parameters, while the block files `geo/block.???` setup block-specific parameters. In the `examples/` folder are examples of input files for several canonical flows. See [`src/INFO_INPUT.md`](src/INFO_INPUT.md) for a detailed description of the input files.
+The input file `dns.nml` sets the physical and computational parameters, while `blocks.nml` sets block-specific geometry, grids, and boundary conditions. In the `examples/` folder are examples of input files for several canonical flows. See [`docs/INFO_INPUT.md`](docs/INFO_INPUT.md) for a detailed description of the input files.
 
 Files `out1d.h90`, `out2d.h90` and `out3d.h90` in `src/` set which data are written in 1-, 2-, and 3-dimensional output files, respectively. *The code should be recompiled after editing out?d.h90 files*.
 
@@ -55,15 +55,15 @@ The Makefile in `src/` should be modified in agreement to the installation paths
  * `-D_SINGLE_PRECISION` : calculation will be carried out in single precision (the default precision is double)
  * `-D_FFT_?`, with `?` being `X`, `Y` or `Z`: will use FFTs to solve the Poisson equation in the direction in question.
 
-Typing `make run` will compile the code and copy the executable `snac` and input file `dns.in` to a `run/` folder.
+Typing `make run` will compile the code and copy the executable `snac`, `dns.nml`, `blocks.nml`, and any optional `grid/` folder to a `run/` folder.
 
 ### Running the code
 
-Run the executable with `mpirun` with a number of tasks and shared threads complying to what has been set in the input file `dns.in` (or in the `geo/block.???` files in case of multi-block). Data will be written by default in a folder named `data/`, which must be located where the executable is run.
+Run the executable with `mpirun` with a number of tasks and shared threads complying with the decomposition set in `blocks.nml`. Data will be written by default in a folder named `data/`, which must be located where the executable is run.
 
 ### Visualizing field data
 
-See [`src/INFO_VISU.md`](src/INFO_VISU.md).
+See [`docs/INFO_VISU.md`](docs/INFO_VISU.md).
 
 ## Notes
 

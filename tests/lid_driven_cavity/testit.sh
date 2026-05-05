@@ -10,8 +10,7 @@ echo "Compiling ..."
 sleep 2
 for FLAGS in ' ' '-D_FFT_X'; do
 cp $TESTDIR/Makefile $SRCDIR && cd $SRCDIR && make clean && make OTH=$FLAGS -j run
-cp $TESTDIR/dns.in $RUNDIR && cd $RUNDIR
-rm -rf $RUNDIR/geo && cp -r $TESTDIR/geo $RUNDIR/geo
+cp $TESTDIR/dns.nml $TESTDIR/blocks.nml $RUNDIR && cd $RUNDIR
 echo "Running SNaC..."
 sleep 2
 mpirun -n 4 --oversubscribe ./${EXEC}
