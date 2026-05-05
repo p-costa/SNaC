@@ -4,7 +4,7 @@ module mod_initgrid
   use mod_types
   implicit none
   private
-  public initgrid,distribute_grid,bound_grid,save_grid
+  public initgrid,distribute_grid,bound_grid,save_grid,load_grid
   contains
   subroutine initgrid(lo,hi,gt,gr,lmin,lmax,drc_g,drf_g,rc_g,rf_g)
     !
@@ -141,6 +141,28 @@ module mod_initgrid
     end do
     close(iunit)
   end subroutine save_grid
+  subroutine load_grid(fname,lo_g,hi_g,rf_g,rc_g,drf_g,drc_g)
+    implicit none
+    character(len=*), intent(in) :: fname
+    integer         , intent(in) :: lo_g,hi_g
+    real(rp)        , intent(out), dimension(lo_g-1:) :: rf_g,rc_g,drf_g,drc_g
+    integer :: iunit,reclen
+    inquire(iolength=reclen) rf_g(lo_g:hi_g),rc_g(lo_g:hi_g),drf_g(lo_g:hi_g),drc_g(lo_g:hi_g)
+    open(newunit=iunit,file=trim(fname)//'.bin',status='old',access='direct',recl=reclen)
+    read(iunit,rec=1) rf_g(lo_g:hi_g),rc_g(lo_g:hi_g),drf_g(lo_g:hi_g),drc_g(lo_g:hi_g)
+    close(iunit)
+    !
+    ! Reconstruct the one-cell ghost values normally produced by initgrid.
+    !
+    drf_g(lo_g-1) = drf_g(lo_g)
+    drf_g(hi_g+1) = drf_g(hi_g)
+    drc_g(lo_g-1) = drf_g(lo_g)
+    drc_g(hi_g+1) = drc_g(hi_g)
+    rf_g(lo_g-1) = rf_g(lo_g)-drf_g(lo_g)
+    rf_g(hi_g+1) = rf_g(hi_g)+drf_g(hi_g)
+    rc_g(lo_g-1) = rc_g(lo_g)-drc_g(lo_g-1)
+    rc_g(hi_g+1) = rc_g(hi_g)+drc_g(hi_g)
+  end subroutine load_grid
   !
   ! grid stretching functions
   ! see e.g., Fluid Flow Phenomena -- A Numerical Toolkit, by P. Orlandi
