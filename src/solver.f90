@@ -33,6 +33,7 @@ module mod_solver
                         HYPRESolverPFMG     = 2, &
                         HYPRESolverGMRES    = 3, &
                         HYPRESolverBiCGSTAB = 4
+  logical, parameter :: is_leverage_symmetric_operators = .true.
   type hypre_solver
     type(C_PTR) :: grid,stencil,precond,solver,mat,rhs,sol
     integer     :: stype,comm_hypre
@@ -230,7 +231,8 @@ module mod_solver
     ! create coefficient matrix, and solution & right-hand-side vectors
     !
     call HYPRE_StructMatrixCreate(comm_hypre,grid,stencil,mat,ierr)
-    if(is_symm_matrix) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
+    if(is_leverage_symmetric_operators.and.is_symm_matrix) &
+      call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
     call HYPRE_StructMatrixInitialize(mat,ierr)
     call HYPRE_StructVectorCreate(comm_hypre,grid,sol,ierr)
     call HYPRE_StructVectorInitialize(sol,ierr)
@@ -387,7 +389,7 @@ module mod_solver
       ! 1: Weighted Jacobi (default)
       ! 2: Red/Black Gauss-Seidel (symmetric: RB pre- and post-relaxation)
       ! 3: Red/Black Gauss-Seidel (nonsymmetric: RB pre- and post-relaxation)
-      if(.not.is_symm_matrix) then
+      if(.not.(is_leverage_symmetric_operators.and.is_symm_matrix)) then
         call HYPRE_StructPFMGSetRelaxType(solver,1,ierr)
       else
         call HYPRE_StructPFMGSetRelaxType(solver,2,ierr)
@@ -412,7 +414,11 @@ module mod_solver
       call HYPRE_StructPFMGSetTol(precond,0._rp,ierr)
       call HYPRE_StructPFMGSetZeroGuess(precond,ierr)
       call HYPRE_StructPFMGSetRelChange(precond,1,ierr)
-      call HYPRE_StructPFMGSetRelaxType(precond,2,ierr)
+      if(.not.(is_leverage_symmetric_operators.and.is_symm_matrix)) then
+        call HYPRE_StructPFMGSetRelaxType(precond,1,ierr)
+      else
+        call HYPRE_StructPFMGSetRelaxType(precond,2,ierr)
+      end if
       precond_id = 1   ! Set PFMG as preconditioner
       if      ( stype == HYPRESolverGMRES ) then
         call HYPRE_StructGMRESSetPrecond(solver,precond_id,precond,ierr)
@@ -721,7 +727,8 @@ module mod_solver
     ! create coefficient matrix, and solution & right-hand-side vectors
     !
     call HYPRE_StructMatrixCreate(comm_hypre,grid,stencil,mat,ierr)
-    if(is_symm_matrix) call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
+    if(is_leverage_symmetric_operators.and.is_symm_matrix) &
+      call HYPRE_StructMatrixSetSymmetric(mat,1,ierr)
     call HYPRE_StructMatrixInitialize(mat,ierr)
     call HYPRE_StructVectorCreate(comm_hypre,grid,sol,ierr)
     call HYPRE_StructVectorInitialize(sol,ierr)
