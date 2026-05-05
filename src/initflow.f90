@@ -5,9 +5,9 @@ module mod_initflow
   use mod_types
   implicit none
   private
-  public initflow,init_inflow
+  public initflow,init_inflow,initscal
   contains
-  subroutine initflow(inivel,is_wallturb,lo,hi,lo_g,hi_g,l,uref,lref,visc,bforce, &
+  subroutine initflow(inivel,is_wallturb,lo,hi,lo_g,hi_g,l,bcvel,visc,bforce, &
                       xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf,u,v,w,p)
     !
     ! computes initial conditions for the velocity field
@@ -17,8 +17,8 @@ module mod_initflow
     logical , intent(in) :: is_wallturb
     integer , intent(in), dimension(3) :: lo,hi,lo_g,hi_g
     real(rp), intent(in), dimension(3) :: l
-    real(rp), intent(inout) :: uref
-    real(rp), intent(in) :: lref,visc,bforce
+    real(rp), intent(in), dimension(0:1,3,3) :: bcvel
+    real(rp), intent(in) :: visc,bforce
     real(rp), intent(in), dimension(lo(1)-1:) :: xc,xf,dxc,dxf
     real(rp), intent(in), dimension(lo(2)-1:) :: yc,yf,dyc,dyf
     real(rp), intent(in), dimension(lo(3)-1:) :: zc,zf,dzc,dzf
@@ -26,32 +26,38 @@ module mod_initflow
     real(rp), allocatable, dimension(:) :: u1d
     integer  :: i,j,k
     logical  :: is_noise,is_mean,is_pair
-    real(rp) :: reb,retau,lambda
+    real(rp) :: uref,ubulk,lref,reb,retau,lambda
     real(rp) :: xcl,xfl,ycl,yfl,zcl,zfl
     !
     allocate(u1d(lo(3):hi(3)))
     is_noise = .false.
     is_mean  = .false.
     is_pair  = .false.
+    uref  = 1._rp
+    ubulk = uref
+    lref  = 1._rp
     select case(trim(inivel))
     case('cou')
-      call couette(lo(3),hi(3),zc,l(3),uref,u1d)
+      call couette(lo(3),hi(3),zc,l(3),1._rp,u1d)
+      u1d(:) = u1d(:) + 0.5_rp
+      u1d(:) = bcvel(0,3,1)*u1d(:) + bcvel(1,3,1)*(1._rp-u1d(:))
+      uref = abs(bcvel(1,3,1)-bcvel(0,3,1))
     case('poi')
-      call poiseuille(lo(3),hi(3),zc,l(3),uref,u1d)
+      call poiseuille(lo(3),hi(3),zc,l(3),ubulk,u1d)
       is_mean=.true.
     case('zer')
       u1d(:) = 0._rp
     case('uni')
       u1d(:) = uref
     case('log')
-      call log_profile(lo(3),hi(3),zc,l(3),uref,lref,visc,u1d)
+      call log_profile(lo(3),hi(3),zc,l(3),ubulk,l(3),visc,u1d)
       is_noise = .true.
       is_mean = .true.
     case('hcp')
-      call poiseuille(lo(3),hi(3),zc,2.*l(3),uref,u1d)
+      call poiseuille(lo(3),hi(3),zc,2.*l(3),ubulk,u1d)
       is_mean = .true.
     case('hcl')
-      call log_profile(lo(3),hi(3),zc,2.*l(3),uref,lref,visc,u1d)
+      call log_profile(lo(3),hi(3),zc,2.*l(3),ubulk,2._rp*l(3),visc,u1d)
       is_noise = .true.
       is_mean=.true.
     case('tgv')
@@ -90,14 +96,16 @@ module mod_initflow
         end do
       end do
     case('pdc')
+      lref = l(3)/2._rp
       if(is_wallturb) then ! turbulent flow
-        retau  = sqrt(bforce*lref)*uref/visc
+        uref   = sqrt(bforce*lref)
+        retau  = uref*lref/visc
         reb    = (retau/.09_rp)**(1._rp/.88_rp)
-        uref   = (reb/2._rp)/retau
+        ubulk  = reb*visc/(2._rp*lref)
       else                 ! laminar flow
-        uref = (bforce*lref**2/(3._rp*visc))
+        ubulk = (bforce*lref**2/(3._rp*visc))
       end if
-      call poiseuille(lo(3),hi(3),zc,l(3),uref,u1d)
+      call poiseuille(lo(3),hi(3),zc,l(3),ubulk,u1d)
       is_mean=.true.
     case default
       if(myid_block == 0) write(stderr,*) 'ERROR: invalid name for initial velocity field'
@@ -125,7 +133,7 @@ module mod_initflow
       call add_noise(lo,hi,lo_g,hi_g,789,.05_rp,w)
     end if
     if(is_mean) then
-      call set_mean(lo,hi,l,dxc,dyf,dzf,uref,u)
+      call set_mean(lo,hi,l,dxc,dyf,dzf,ubulk,u)
     end if
     if(is_wallturb) is_pair = .true.
     if(is_pair) then
@@ -177,6 +185,79 @@ module mod_initflow
     end if
     deallocate(u1d)
   end subroutine initflow
+  !
+  subroutine initscal(iniscal,bcscal,lo,hi,lo_g,hi_g,l, &
+                      xc,xf,yc,yf,zc,zf,dxc,dxf,dyc,dyf,dzc,dzf, &
+                      salpha,is_sforced,scalf,s)
+    !
+    ! computes initial conditions for the scalar field
+    !
+    implicit none
+    character(len=*), intent(in)                 :: iniscal
+    real(rp), intent(in   ), dimension(0:1,3)    :: bcscal
+    integer , intent(in   ), dimension(3)        :: lo,hi,lo_g,hi_g
+    real(rp), intent(in   ), dimension(3)        :: l
+    real(rp), intent(in   ), dimension(lo(1)-1:) :: xc,xf,dxc,dxf
+    real(rp), intent(in   ), dimension(lo(2)-1:) :: yc,yf,dyc,dyf
+    real(rp), intent(in   ), dimension(lo(3)-1:) :: zc,zf,dzc,dzf
+    real(rp), intent(in   )                      :: salpha
+    logical , intent(in   )                      :: is_sforced
+    real(rp), intent(in   )                      :: scalf
+    real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: s
+    real(rp), allocatable, dimension(:) :: s1d
+    integer :: i,j,k
+    logical :: is_noise,is_mean
+    real(rp) :: sref,xx
+    !
+    associate(dummy_salpha => salpha, dummy_xf => xf, dummy_yc => yc, dummy_yf => yf, &
+              dummy_dyc => dyc, dummy_zf => zf, dummy_dzc => dzc)
+    end associate
+    allocate(s1d(lo(3):hi(3)))
+    is_noise = .false.
+    is_mean  = .false.
+    sref = 0.5_rp*(bcscal(0,3)+bcscal(1,3))
+    if(is_sforced) sref = scalf
+    select case(trim(iniscal))
+    case('zer')
+      s1d(:) = 0._rp
+    case('uni')
+      s1d(:) = sref
+    case('cou')
+      call couette(lo(3),hi(3),zc,l(3),1._rp,s1d)
+      s1d(:) = s1d(:) + 0.5_rp
+      s1d(:) = bcscal(0,3)*s1d(:) + bcscal(1,3)*(1._rp-s1d(:))
+      sref = abs(bcscal(1,3)-bcscal(0,3))
+    case('dhc')
+      s1d(:) = 0._rp
+    case default
+      if(myid_block == 0) write(stderr,*) 'ERROR: invalid name for initial scalar field'
+      if(myid_block == 0) write(stderr,*) ''
+      if(myid_block == 0) write(stderr,*) '*** Simulation aborted due to errors in the case file ***'
+      if(myid_block == 0) write(stderr,*) '    check docs/INFO_INPUT.md'
+      call MPI_FINALIZE()
+      error stop
+    end select
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+          s(i,j,k) = s1d(k)
+        end do
+      end do
+    end do
+    if(trim(iniscal) == 'dhc') then
+      do k=lo(3),hi(3)
+        do j=lo(2),hi(2)
+          do i=lo(1),hi(1)
+            xx = xc(i)/l(1)
+            s(i,j,k) = (1._rp-xx)*bcscal(0,1) + xx*bcscal(1,1)
+          end do
+        end do
+      end do
+    end if
+    if(is_noise) call add_noise(lo,hi,lo_g,hi_g,123,.05_rp,s)
+    if(is_mean) call set_mean(lo,hi,l,dxf,dyf,dzf,sref,s)
+    deallocate(s1d)
+  end subroutine initscal
   !
   subroutine add_noise(lo,hi,lo_g,hi_g,iseed,norm,p)
     implicit none

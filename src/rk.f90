@@ -4,8 +4,10 @@ module mod_rk
   private
   public rk_mom,rk_scal
   contains
-  subroutine rk_mom(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce,visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko)
+  subroutine rk_mom(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce,gacc,beta,scalars,visc, &
+                    u,v,w,p,dudtrko,dvdtrko,dwdtrko)
     use mod_mom  , only: momx_a,momy_a,momz_a,momx_d,momy_d,momz_d,momx_p,momy_p,momz_p
+    use mod_scal , only: scalar
     implicit none
     real(rp), intent(in   ), dimension(2) :: rkpar
     integer , intent(in   ), dimension(3) :: lo,hi
@@ -14,6 +16,9 @@ module mod_rk
     real(rp), intent(in   ), dimension(lo(3)-1:) :: dzc,dzf
     real(rp), intent(in   )               :: visc,dt
     real(rp), intent(in   ), dimension(3) :: bforce
+    real(rp), intent(in   ), dimension(3) :: gacc
+    real(rp), intent(in   )               :: beta
+    type(scalar), intent(in), dimension(:) :: scalars
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u ,v ,w
     real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: p
     real(rp), intent(inout), dimension(lo(1):  ,lo(2):  ,lo(3):  ) :: dudtrko,dvdtrko,dwdtrko
@@ -85,13 +90,19 @@ module mod_rk
     call momz_p(lo,hi,dzc,bforce(3),p,dwdtrk) ! we could perform the pressure gradient calculation in the loop below instead, but I
                                               ! decided to have it more modular, like this, for simplicity.
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP SHARED(lo,hi,factor12,u,v,w,dudtrk,dvdtrk,dwdtrk)
+    !$OMP SHARED(lo,hi,factor12,u,v,w,dudtrk,dvdtrk,dwdtrk) &
+    !$OMP SHARED(gacc,beta,scalars)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
           u(i,j,k) = u(i,j,k) + factor12*dudtrk(i,j,k)
           v(i,j,k) = v(i,j,k) + factor12*dvdtrk(i,j,k)
           w(i,j,k) = w(i,j,k) + factor12*dwdtrk(i,j,k)
+#ifdef _BOUSSINESQ_BUOYANCY
+          u(i,j,k) = u(i,j,k) - factor12*gacc(1)*beta*0.5_rp*(scalars(1)%val(i+1,j,k)+scalars(1)%val(i,j,k))
+          v(i,j,k) = v(i,j,k) - factor12*gacc(2)*beta*0.5_rp*(scalars(1)%val(i,j+1,k)+scalars(1)%val(i,j,k))
+          w(i,j,k) = w(i,j,k) - factor12*gacc(3)*beta*0.5_rp*(scalars(1)%val(i,j,k+1)+scalars(1)%val(i,j,k))
+#endif
         end do
       end do
     end do
@@ -112,8 +123,9 @@ module mod_rk
     end do
 #endif
   end subroutine rk_mom
-  subroutine rk_scal(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,alpha,u,v,w,dsdtrko,s)
-    use mod_scal, only: scal_a,scal_d
+  subroutine rk_scal(rkpar,lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,alpha,vol_all,u,v,w, &
+                     is_forced,scalf,ssource,dsdtrko,s,f)
+    use mod_scal, only: scal_a,scal_d,bulk_mean_s
     !
     ! low-storage 3rd-order Runge-Kutta scheme
     ! for time integration of the scalar field.
@@ -124,28 +136,66 @@ module mod_rk
     real(rp), intent(in   ), dimension(lo(1)-1:) :: dxc,dxf
     real(rp), intent(in   ), dimension(lo(2)-1:) :: dyc,dyf
     real(rp), intent(in   ), dimension(lo(3)-1:) :: dzc,dzf
-    real(rp), intent(in   )                      :: dt,alpha
+    real(rp), intent(in   )                      :: dt,alpha,vol_all
     real(rp), intent(in   ), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: u,v,w
+    logical , intent(in   )                      :: is_forced
+    real(rp), intent(in   )                      :: scalf,ssource
     real(rp), intent(inout), dimension(lo(1):  ,lo(2):  ,lo(3):  ) :: dsdtrko
     real(rp), intent(inout), dimension(lo(1)-1:,lo(2)-1:,lo(3)-1:) :: s
+    real(rp), intent(out  )                      :: f
     real(rp),                dimension(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) :: dsdtrk
-    real(rp) :: factor1,factor2
+#ifdef _IMPDIFF
+    real(rp),                dimension(lo(1):hi(1),lo(2):hi(2),lo(3):hi(3)) :: dsdtrkd
+#endif
+    real(rp) :: factor1,factor2,factor12,mean
     integer  :: i,j,k
     !
     factor1 = rkpar(1)*dt
     factor2 = rkpar(2)*dt
+    factor12 = factor1 + factor2
     dsdtrk(:,:,:) = 0._rp
+#ifdef _IMPDIFF
+    dsdtrkd(:,:,:) = 0._rp
+    call scal_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,s,dsdtrkd)
+#else
     call scal_d(lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,alpha,s,dsdtrk)
+#endif
     call scal_a(lo,hi,dxf,dyf,dzf,u,v,w,s,dsdtrk)
     !$OMP PARALLEL DO DEFAULT(none) &
-    !$OMP SHARED(lo,hi,factor1,factor2,s,dsdtrk,dsdtrko)
+#ifdef _IMPDIFF
+    !$OMP SHARED(dsdtrkd) &
+#endif
+    !$OMP SHARED(lo,hi,factor1,factor2,factor12,ssource,s,dsdtrk,dsdtrko)
     do k=lo(3),hi(3)
       do j=lo(2),hi(2)
         do i=lo(1),hi(1)
-          s(i,j,k) = s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k)
+          s(i,j,k) = s(i,j,k) + factor1*dsdtrk(i,j,k) + factor2*dsdtrko(i,j,k) + &
+                                factor12*ssource
+#ifdef _IMPDIFF
+          s(i,j,k) = s(i,j,k) + factor12*dsdtrkd(i,j,k)
+#endif
           dsdtrko(i,j,k) = dsdtrk(i,j,k)
         end do
       end do
     end do
+    f = 0._rp
+    if(is_forced) then
+      call bulk_mean_s(lo,hi,vol_all,dxf,dyf,dzf,s,mean)
+      f = scalf - mean
+    end if
+#ifdef _IMPDIFF
+    !
+    ! compute rhs of Helmholtz equation
+    !
+    !$OMP PARALLEL DO DEFAULT(none) &
+    !$OMP SHARED(lo,hi,factor12,s,dsdtrkd)
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+          s(i,j,k) = s(i,j,k) - .5_rp*factor12*dsdtrkd(i,j,k)
+        end do
+      end do
+    end do
+#endif
   end subroutine rk_scal
 end module mod_rk

@@ -23,7 +23,7 @@ integer  :: hypre_maxiter
 ! parameters to be determined from the input file 'dns.nml'
 !
 real(rp)               :: cfl,dtmax,dt_f
-real(rp)               :: uref,lref,rey,visc
+real(rp)               :: visci,visc
 integer                :: nstep
 real(rp)               :: time_max,tw_max
 logical , dimension(3) :: stop_type
@@ -31,6 +31,17 @@ logical                :: restart,is_overwrite_save
 integer                :: nsaves_max
 integer                :: icheck,iout0d,iout1d,iout2d,iout3d,isave
 real(rp), dimension(3) :: bforce
+real(rp), dimension(3) :: gacc
+integer                :: nscal
+real(rp), allocatable, dimension(:) :: alphai
+real(rp) :: beta
+character(len=100), allocatable, dimension(:)     :: iniscal
+character(len=1)  , allocatable, dimension(:,:,:) :: cbcscal
+real(rp)          , allocatable, dimension(:,:,:) ::  bcscal
+real(rp), allocatable, dimension(:) :: ssource
+logical , allocatable, dimension(:) :: is_sforced
+real(rp), allocatable, dimension(:) :: scalf
+real(rp) :: alpha_max
 !
 ! parameters specific to each block
 !
@@ -71,23 +82,37 @@ contains
   real(rp)          , dimension(0:1,3,  max_blocks) :: block_bcpre
   integer           , dimension(0:1,3,  max_blocks) :: block_inflow_type
   character(len=100), dimension(        max_blocks) :: block_inivel
+  character(len=1  ), allocatable, dimension(:,:,:,:) :: block_cbcscal
+  real(rp)          , allocatable, dimension(:,:,:,:) :: block_bcscal
   namelist /dns/ cfl,dtmax,dt_f, &
-                 uref,lref,rey, &
+                 visci, &
                  nstep,time_max,tw_max, &
                  stop_type, &
                  restart,is_overwrite_save,nsaves_max, &
                  icheck,iout0d,iout1d,iout2d,iout3d,isave, &
-                 bforce
+                 bforce,gacc, &
+                 nscal
+  namelist /scalar/ alphai,beta, &
+                    iniscal, &
+                    ssource, &
+                    is_sforced, &
+                    scalf
   namelist /hypre/ hypre_solver_i,hypre_tol,hypre_maxiter
   namelist /blocks/ nblocks, &
                     block_dims,block_ng,block_lmin,block_lmax,block_gt,block_gr, &
                     block_cbcvel,block_cbcpre,block_bcvel,block_bcpre, &
+                    block_cbcscal,block_bcscal, &
                     block_inflow_type,block_inivel
   !
   ! defaults
   !
   nsaves_max = 0 ! a good default, for backward compatibility
   dt_f = -1._rp
+  visci = 1._rp
+  gacc(:) = 0._rp
+  nscal = 0
+  beta = 0._rp
+  alpha_max = 0._rp
   hypre_solver_i = hypre_solver_i_default
   hypre_tol      = hypre_tol_default
   hypre_maxiter  = hypre_maxiter_default
@@ -116,8 +141,41 @@ contains
     read(iunit,nml=hypre,iostat=ierr,iomsg=iomsg)
     if(ierr /= 0 .and. ierr /= iostat_end) &
       call abort_input('hypre namelist',iomsg)
+    !
+    ! read scalar transport parameters, if these are set
+    !
+    if(nscal > 0) then
+      allocate(alphai(nscal),iniscal(nscal), &
+               cbcscal(0:1,3,nscal),bcscal(0:1,3,nscal), &
+               ssource(nscal),is_sforced(nscal),scalf(nscal))
+      alphai(:)      = huge(1._rp)
+      iniscal(:)     = 'zer'
+      cbcscal(:,:,:) = 'N'
+      bcscal(:,:,:)  = 0._rp
+      ssource(:)     = 0._rp
+      is_sforced(:)  = .false.
+      scalf(:)       = 0._rp
+      rewind(iunit)
+      read(iunit,nml=scalar,iostat=ierr,iomsg=iomsg)
+      if(ierr /= 0) call abort_input('scalar namelist',iomsg)
+      alpha_max = maxval(alphai(1:nscal)**(-1))
+    else
+      nscal = 0
+    end if
+#ifdef _BOUSSINESQ_BUOYANCY
+    if(nscal == 0) then
+      if(myid == 0) write(stderr,*) '*** Error: _BOUSSINESQ_BUOYANCY requires nscal > 0. ***'
+      if(myid == 0) write(stderr,*) 'Aborting...'
+      call MPI_FINALIZE(ierr)
+      error stop
+    end if
+#endif
   close(iunit)
-  visc = uref*lref/rey
+  visc = visci**(-1)
+  allocate(block_cbcscal(0:1,3,max(nscal,1),max_blocks), &
+           block_bcscal( 0:1,3,max(nscal,1),max_blocks))
+  block_cbcscal(:,:,:,:) = 'N'
+  block_bcscal(:,:,:,:) = 0._rp
   !
   ! read block-specific parameters
   !
@@ -160,12 +218,16 @@ contains
       bcpre(:,:) = block_bcpre(:,:,iblock)
       inflow_type(:,:) = block_inflow_type(:,:,iblock)
       inivel = block_inivel(iblock)
+      if(nscal > 0) then
+        cbcscal(:,:,:) = block_cbcscal(:,:,1:nscal,iblock)
+        bcscal( :,:,:) = block_bcscal( :,:,1:nscal,iblock)
+      end if
       my_block = iblock
       id_first = sum(nranks(1:iblock-1))
     end if
     do q=1,3
       cbc_pair = block_cbcpre(0,q,iblock)//block_cbcpre(1,q,iblock)
-      is_periodic(q) = is_periodic(q).and.(cbc_pair == 'FF' .or. cbc_pair == 'PP')
+      is_periodic(q) = is_periodic(q).and.(cbc_pair == 'FF')
     end do
   end do
   call mpi_allreduce(MPI_IN_PLACE,is_periodic,3,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)

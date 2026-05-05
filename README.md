@@ -20,6 +20,7 @@ Some features are:
  * Hybrid MPI/OpenMP parallelization
  * FFT-based synthesis of the Poissonn equation along one direction
  * HYPRE library used to solve Poisson/Helmholtz equations
+ * Passive-scalar transport, with optional Boussinesq buoyancy from the first scalar
  * Parallel I/O using MPI I/O
  * A different canonical flow can be simulated just by changing the input files
 
@@ -52,6 +53,7 @@ The Makefile in `src/` should be modified in agreement to the installation paths
 
  * `-D_TIMING`           : wall-clock time per time step is computed
  * `-D_IMPDIFF`          : diffusion term of the N-S equations is integrated in time with an implicit discretization (thereby improving the stability of the numerical algorithm for viscous-dominated flows)
+ * `-D_BOUSSINESQ_BUOYANCY`: enables the Boussinesq source term from the first scalar field
  * `-D_SINGLE_PRECISION` : calculation will be carried out in single precision (the default precision is double)
  * `-D_FFT_?`, with `?` being `X`, `Y` or `Z`: will use FFTs to solve the Poisson equation in the direction in question.
 

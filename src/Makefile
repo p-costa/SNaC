@@ -10,10 +10,12 @@ PROF := #-pg
 FFLAGS := $(OPT) $(BIG) $(DBG) $(PROF) $(OMP) $(OTH)
 TARGET = snac
 #
-OBJ = bound.o debug.o initflow.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fftw.o fft.o fillps.o initmpi.o load.o main.o mom.o output.o param.o updt_pressure.o post.o rk.o scal.o sanity.o solver.o types.o
+OBJ = bound.o debug.o initflow.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fftw.o fft.o fillps.o initmpi.o load.o main.o mom.o output.o param.o updt_pressure.o post.o rk.o scal.o sanity.o solver.o solve_helmholtz.o types.o
 #
 HYPRE_LIB_DIR=$(HOME)/hypre/lib
-LIBS = -L$(HYPRE_LIB_DIR) -lHYPRE -lfftw3
+FFTW_LIB_DIRS := $(patsubst %,-L%,$(subst :, ,$(LD_LIBRARY_PATH)))
+FFTW_PKG_LIBS := $(shell pkg-config --libs fftw3 2>/dev/null)
+LIBS = -L$(HYPRE_LIB_DIR) $(FFTW_LIB_DIRS) -lHYPRE $(if $(strip $(FFTW_PKG_LIBS)),$(FFTW_PKG_LIBS),-lfftw3)
 #
 all: $(TARGET)
 #
@@ -61,7 +63,7 @@ initmpi.o: initmpi.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 load.o: load.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
-main.o: main.f90 bound.o debug.o initflow.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fft.o fillps.o initmpi.o load.o mom.o output.o param.o updt_pressure.o post.o rk.o scal.o sanity.o solver.o types.o
+main.o: main.f90 bound.o debug.o initflow.o initgrid.o chkdiv.o chkdt.o common_mpi.o correc.o fft.o fillps.o initmpi.o load.o mom.o output.o param.o updt_pressure.o post.o rk.o scal.o sanity.o solver.o solve_helmholtz.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 mom.o: mom.f90 types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
@@ -75,11 +77,13 @@ rk.o: rk.f90 mom.o scal.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 post.o: post.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
-scal.o: scal.f90 types.o
+scal.o: scal.f90 common_mpi.o param.o solver.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 sanity.o: sanity.f90 common_mpi.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 solver.o: solver.f90 common_mpi.o fft.o types.o
+	$(FC) $(FFLAGS) -cpp -c  $<
+solve_helmholtz.o: solve_helmholtz.f90 bound.o common_mpi.o fft.o solver.o types.o
 	$(FC) $(FFLAGS) -cpp -c  $<
 types.o: types.f90
 	$(FC) $(FFLAGS) -cpp -c  $<

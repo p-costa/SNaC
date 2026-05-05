@@ -30,3 +30,9 @@
                      lo_1,hi_1,ng,[1,1,1],[ng(1),ng(2),ng(3)],[1,1,1],time,istep,w)
   call write_visu_3d(datadir,'pre_fld_'//fldnum//'_b_'//cblock//'.bin',comm_block,'log_visu_3d_b_'//cblock//'.out','Pressure_P', &
                      lo_1,hi_1,ng,[1,1,1],[ng(1),ng(2),ng(3)],[1,1,1],time,istep,p)
+  do iscal=1,nscal
+    write(scalnum,'(i3.3)') iscal
+    call write_visu_3d(datadir,'sca_'//scalnum//'_fld_'//fldnum//'_b_'//cblock//'.bin', &
+                       comm_block,'log_visu_3d_b_'//cblock//'.out','Scalar_S'//scalnum, &
+                       lo_1,hi_1,ng,[1,1,1],[ng(1),ng(2),ng(3)],[1,1,1],time,istep,scalars(iscal)%val)
+  end do
