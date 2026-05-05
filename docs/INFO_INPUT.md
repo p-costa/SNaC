@@ -90,7 +90,18 @@ block_inivel(1) = 'zer'
 
 `block_lmin` and `block_lmax` are the physical lower and upper corners of the block.
 
-`block_gt` selects the SNaC mapping function used by `initgrid.f90`; `block_gr` is the corresponding stretching parameter. `gr = 0` gives a uniform grid.
+`block_gt` selects the SNaC mapping function used by `initgrid.f90`; `block_gr` is the corresponding stretching parameter. `gr = 0` gives a uniform grid. Supported mapping-function IDs are:
+
+* `0`: tanh clustering at both lower and upper block faces.
+* `1`: tanh clustering at the lower block face.
+* `2`: tanh clustering toward the block center.
+* `3`: tanh clustering at the upper block face.
+* `4`: geometric clustering at the lower block face.
+* `5`: geometric clustering at the upper block face.
+* `6`: geometric clustering at both lower and upper block faces.
+* `7`: geometric clustering toward the block center.
+
+Any unsupported `block_gt` value falls back to `0`.
 
 The boundary-condition arrays use face order `x-`, `x+`, `y-`, `y+`, `z-`, `z+`. For velocity arrays, the third index is the velocity component: `1` for `u`, `2` for `v`, `3` for `w`.
 
