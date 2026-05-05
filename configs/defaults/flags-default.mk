@@ -98,6 +98,7 @@ CUSTOM_DEFINES =  SINGLE_PRECISION \
                   TIMING \
                   IMPDIFF \
                   BOUSSINESQ_BUOYANCY \
+                  HYPRE_LOG \
                   FFT_USE_SLABS \
                   FFT_USE_SLICED_PENCILS
 
