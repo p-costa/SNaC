@@ -102,8 +102,8 @@ module mod_sanity
   !
   subroutine chk_bc(cbcvel,cbcpre,passed)
     implicit none
-    character(len=2), parameter, dimension(9) :: bcs = ['ND', 'DN', 'NN', 'DD', &
-                                                        'FD', 'DF', 'FF', 'FN', 'NF']
+    character(len=2), parameter, dimension(9) :: bcs = ['ND', 'DN', 'NN', 'DD', 'FD', &
+                                                        'DF', 'FF', 'FN', 'NF']
     character(len=1), intent(in ), dimension(0:1,3,3) :: cbcvel
     character(len=1), intent(in ), dimension(0:1,3  ) :: cbcpre
     logical         , intent(out) :: passed

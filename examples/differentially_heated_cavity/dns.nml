@@ -1,0 +1,24 @@
+&dns
+cfl = .95, dtmax = 1.e9, dt_f = 1.e-3
+visci = 1186.78165819
+nstep = 100, time_max = 100., tw_max = 0.1
+stop_type(1:3) = T, T, F
+restart = F, is_overwrite_save = T, nsaves_max = 0
+icheck = 10, iout0d = 10, iout1d = 100, iout2d = 500, iout3d = 100, isave = 5000
+bforce(1:3) = 0., 0., 0.
+gacc(1:3) = 0., 0., -1.
+nscal = 1
+/
+
+&scalar
+iniscal(:) = 'dhc'
+alphai(:) = 842.614977318
+beta = 1.
+ssource(:) = 0.
+is_sforced(:) = F
+scalf(:) = 0.
+/
+
+&hypre
+hypre_solver_i = 2, hypre_tol = 1.e-4, hypre_maxiter = 50
+/

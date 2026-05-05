@@ -131,24 +131,6 @@ module mod_bound
     end if
     !
     select case(ctype)
-    case('P')
-      select case(idir)
-      case(1)
-        !$OMP PARALLEL WORKSHARE
-        p(lo(idir)-1,:,:) = p(hi(idir),:,:)
-        p(hi(idir)+1,:,:) = p(lo(idir),:,:)
-        !$OMP END PARALLEL WORKSHARE
-      case(2)
-        !$OMP PARALLEL WORKSHARE
-        p(:,lo(idir)-1,:) = p(:,hi(idir),:)
-        p(:,hi(idir)+1,:) = p(:,lo(idir),:)
-        !$OMP END PARALLEL WORKSHARE
-      case(3)
-        !$OMP PARALLEL WORKSHARE
-        p(:,:,lo(idir)-1) = p(:,:,hi(idir))
-        p(:,:,hi(idir)+1) = p(:,:,lo(idir))
-        !$OMP END PARALLEL WORKSHARE
-      end select
     case('D','N')
       if(centered) then
         select case(idir)
