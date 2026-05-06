@@ -6,12 +6,14 @@ module mod_solver
   implicit none
   private
   public init_bc_rhs,init_matrix_3d,create_solver,setup_solver, &
-         add_constant_to_diagonal,solve_helmholtz,finalize_matrix,finalize_solver, &
+         add_constant_to_diagonal,add_weighted_constant_to_diagonal, &
+         solve_helmholtz,finalize_matrix,finalize_solver, &
          hypre_solver, add_constant_to_boundary, &
          HYPRESolverSMG,HYPRESolverPFMG,HYPRESolverGMRES,HYPRESolverBiCGSTAB
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   public init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers, &
-         add_constant_to_n_diagonals,solve_n_helmholtz_2d, &
+         add_constant_to_n_diagonals,add_weighted_constant_to_n_diagonals, &
+         solve_n_helmholtz_2d, &
          finalize_n_matrices,finalize_n_solvers,init_comm_slab, &
          init_transpose_slab_uneven,transpose_slab,alltoallw, &
          init_n_3d_matrices,solve_n_helmholtz_3d
@@ -64,7 +66,7 @@ module mod_solver
     real(rp), dimension(0:1,3) :: factor,sgn
     integer :: i,j,k,q,qq,idir,ib
     integer, dimension(3,3) :: eye
-    real(rp) :: rhs
+    real(rp) :: rhs,weight
     !
     qqq(:) = 0
     where(.not.is_centered(:)) qqq(:) = 1
@@ -103,6 +105,15 @@ module mod_solver
         do j=lo(2),hi(2),max((hi(2)-lo(2))*eye(idir,2),1)
           do i=lo(1),hi(1),max((hi(1)-lo(1))*eye(idir,1),1)
             if(periods(idir) == 0) then
+#ifdef _FFT_X
+              weight = dy2(j)*dz2(k)
+#elif  _FFT_Y
+              weight = dx2(i)*dz2(k)
+#elif  _FFT_Z
+              weight = dx2(i)*dy2(j)
+#else
+              weight = dx2(i)*dy2(j)*dz2(k)
+#endif
               select case(idir)
               case(1)
                 if(     i == lo(idir)) then
@@ -111,7 +122,7 @@ module mod_solver
                   ib = 1
                 end if
                 if(is_bound(ib,idir)) then
-                  rhs = factor(ib,idir)/(dx1(i-(1-ib)+qqq(idir))*dx2(i))
+                  rhs = factor(ib,idir)*weight/(dx1(i-(1-ib)+qqq(idir))*dx2(i))
                   if(present(bcx).and.bc(ib,idir)/=0._rp) rhs = rhs*bcx(j,k,ib)/bc(ib,idir)
                   rhsx(j,k,ib) = rhs
                 end if
@@ -122,7 +133,7 @@ module mod_solver
                   ib = 1
                 end if
                 if(is_bound(ib,idir)) then
-                  rhs = factor(ib,idir)/(dy1(j-(1-ib)+qqq(idir))*dy2(j))
+                  rhs = factor(ib,idir)*weight/(dy1(j-(1-ib)+qqq(idir))*dy2(j))
                   if(present(bcy).and.bc(ib,idir)/=0._rp) rhs = rhs*bcy(i,k,ib)/bc(ib,idir)
                   rhsy(i,k,ib) = rhs
                 end if
@@ -133,7 +144,7 @@ module mod_solver
                   ib = 1
                 end if
                 if(is_bound(ib,idir)) then
-                  rhs = factor(ib,idir)/(dz1(k-(1-ib)+qqq(idir))*dz2(k))
+                  rhs = factor(ib,idir)*weight/(dz1(k-(1-ib)+qqq(idir))*dz2(k))
                   if(present(bcz).and.bc(ib,idir)/=0._rp) rhs = rhs*bcz(i,j,ib)/bc(ib,idir)
                   rhsz(i,j,ib) = rhs
                 end if
@@ -172,7 +183,7 @@ module mod_solver
     real(rp), dimension(0:1,3) :: factor,sgn
     type(C_PTR) :: grid,stencil,mat,rhs,sol
     integer :: i,j,k,q,qq
-    real(rp) :: cc,cxm,cxp,cym,cyp,czm,czp
+    real(rp) :: cc,cxm,cxp,cym,cyp,czm,czp,weight
     integer            :: comm_hypre
     logical, dimension(0:1,3) :: is_bound_outflow_aux
     !
@@ -245,6 +256,7 @@ module mod_solver
           q = q + 1
           cc = 0.
 #ifdef _FFT_X
+          weight = dy2(j)*dz2(k)
           cxm = 0._rp
           cxp = 0._rp
           cym = 1._rp/(dy1(j-1+qqq(2)))*dz2(k)
@@ -252,8 +264,9 @@ module mod_solver
           czm = 1._rp/(dz1(k-1+qqq(3)))*dy2(j)
           czp = 1._rp/(dz1(k  +qqq(3)))*dy2(j)
           qq  = i - lo(1) + 1
-          cc  = lambda(qq)*dy2(j)*dz2(k)
+          cc  = lambda(qq)*weight
 #elif  _FFT_Y
+          weight = dx2(i)*dz2(k)
           cxm = 1._rp/(dx1(i-1+qqq(1)))*dz2(k)
           cxp = 1._rp/(dx1(i  +qqq(1)))*dz2(k)
           cym = 0._rp
@@ -261,8 +274,9 @@ module mod_solver
           czm = 1._rp/(dz1(k-1+qqq(3)))*dx2(i)
           czp = 1._rp/(dz1(k  +qqq(3)))*dx2(i)
           qq  = j - lo(2) + 1
-          cc  = lambda(qq)*dx2(i)*dz2(k)
+          cc  = lambda(qq)*weight
 #elif  _FFT_Z
+          weight = dx2(i)*dy2(j)
           cxm = 1._rp/(dx1(i-1+qqq(1)))*dy2(j)
           cxp = 1._rp/(dx1(i  +qqq(1)))*dy2(j)
           cym = 1._rp/(dy1(j-1+qqq(2)))*dx2(i)
@@ -270,8 +284,9 @@ module mod_solver
           czm = 0._rp
           czp = 0._rp
           qq  = k - lo(3) + 1
-          cc  = lambda(qq)*dx2(i)*dy2(j)
+          cc  = lambda(qq)*weight
 #else
+          weight = dx2(i)*dy2(j)*dz2(k)
           cxm = 1._rp/(dx1(i-1+qqq(1)))*dy2(j)*dz2(k)
           cxp = 1._rp/(dx1(i  +qqq(1)))*dy2(j)*dz2(k)
           cym = 1._rp/(dy1(j-1+qqq(2)))*dx2(i)*dz2(k)
@@ -279,7 +294,7 @@ module mod_solver
           czm = 1._rp/(dz1(k-1+qqq(3)))*dx2(i)*dy2(j)
           czp = 1._rp/(dz1(k  +qqq(3)))*dx2(i)*dy2(j)
 #endif
-          cc  = cc - (cxm+cxp+cym+cyp+czm+czp) + alpha
+          cc  = cc - (cxm+cxp+cym+cyp+czm+czp) + alpha*weight
           if(periods(1) == 0) then
             if(is_bound(0,1).and.i == lo(1)) then
               cc = cc + sgn(0,1)*cxm + alpha_bc(0,1)
@@ -485,6 +500,27 @@ module mod_solver
     end do
     call HYPRE_StructMatrixAddToBoxValues(mat,lo,hi,1,[0],matvalues,ierr)
   end subroutine add_constant_to_diagonal
+  subroutine add_weighted_constant_to_diagonal(lo,hi,dx2,dy2,dz2,alpha,mat)
+    implicit none
+    integer    , intent(in   ), dimension(3) :: lo,hi
+    real(rp)   , intent(in   ), dimension(lo(1)-1:) :: dx2
+    real(rp)   , intent(in   ), dimension(lo(2)-1:) :: dy2
+    real(rp)   , intent(in   ), dimension(lo(3)-1:) :: dz2
+    real(rp)   , intent(in   ) :: alpha
+    type(C_PTR), intent(inout) :: mat
+    real(rp), dimension(product(hi(:)-lo(:)+1)) :: matvalues
+    integer :: i,j,k,q
+    q = 0
+    do k=lo(3),hi(3)
+      do j=lo(2),hi(2)
+        do i=lo(1),hi(1)
+          q=q+1
+          matvalues(q) = alpha*dx2(i)*dy2(j)*dz2(k)
+        end do
+      end do
+    end do
+    call HYPRE_StructMatrixAddToBoxValues(mat,lo,hi,1,[0],matvalues,ierr)
+  end subroutine add_weighted_constant_to_diagonal
   subroutine solve_helmholtz(asolver,lo,hi,p,po)
     implicit none
     type(hypre_solver), target, intent(in   )               :: asolver
@@ -675,7 +711,7 @@ module mod_solver
     real(rp), dimension(0:1,2) :: factor,sgn
     type(C_PTR) :: grid,stencil,mat,rhs,sol
     integer :: i1,i2,q,qq
-    real(rp) :: cc,c1m,c1p,c2m,c2p
+    real(rp) :: cc,c1m,c1p,c2m,c2p,weight
     integer            :: comm_hypre
     logical, dimension(0:1,2) :: is_bound_outflow_aux
     !
@@ -743,11 +779,12 @@ module mod_solver
     q = 0
     do i2=lo(2),hi(2)
       do i1=lo(1),hi(1)
+        weight = dl1_2(i1)*dl2_2(i2)
         c1m = 1._rp/(dl1_1(i1-1+qqq(1)))*dl2_2(i2)
         c1p = 1._rp/(dl1_1(i1  +qqq(1)))*dl2_2(i2)
         c2m = 1._rp/(dl2_1(i2-1+qqq(2)))*dl1_2(i1)
         c2p = 1._rp/(dl2_1(i2  +qqq(2)))*dl1_2(i1)
-        cc  = -(c1m+c1p+c2m+c2p) + alpha
+        cc  = -(c1m+c1p+c2m+c2p) + alpha*weight
         if(periods(1) == 0) then
           if(is_bound(0,1).and.i1 == lo(1)) then
             cc = cc + sgn(0,1)*c1m + alpha_bc(0,1)
@@ -1048,6 +1085,26 @@ module mod_solver
       call add_constant_to_diagonal([lo(1),lo(2),1],[hi(1),hi(2),1],alpha,mat(q))
     end do
   end subroutine add_constant_to_n_diagonals
+  subroutine add_weighted_constant_to_n_diagonals(n,lo,hi,dl1_2,dl2_2,alpha,mat)
+    integer    , intent(in   )               :: n
+    integer    , intent(in   ), dimension(2) :: lo,hi
+    real(rp)   , intent(in   ), dimension(lo(1)-1:) :: dl1_2
+    real(rp)   , intent(in   ), dimension(lo(2)-1:) :: dl2_2
+    real(rp)   , intent(in   )               :: alpha
+    type(C_PTR), intent(inout), dimension(:) :: mat
+    real(rp), dimension(product(hi(:)-lo(:)+1)) :: matvalues
+    integer :: i1,i2,nq,q
+    do nq=1,n
+      q = 0
+      do i2=lo(2),hi(2)
+        do i1=lo(1),hi(1)
+          q=q+1
+          matvalues(q) = alpha*dl1_2(i1)*dl2_2(i2)
+        end do
+      end do
+      call HYPRE_StructMatrixAddToBoxValues(mat(nq),[lo(1),lo(2),1],[hi(1),hi(2),1],1,[0],matvalues,ierr)
+    end do
+  end subroutine add_weighted_constant_to_n_diagonals
   subroutine finalize_n_matrices(n,asolver)
     integer           , intent(   in) :: n
     type(hypre_solver), intent(inout), dimension(:) :: asolver
