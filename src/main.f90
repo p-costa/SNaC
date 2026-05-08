@@ -40,6 +40,7 @@ program snac
                                  nstep,time_max,tw_max,stop_type,          &
                                  restart,is_overwrite_save,nsaves_max,     &
                                  icheck,iout0d,iout1d,iout2d,iout3d,isave, &
+                                 is_cmpt_forces,                           &
                                  dims,ng,lmin,lmax,                        &
                                  gt,gr,                                    &
                                  cbcvel,bcvel,cbcpre,bcpre,                &
@@ -52,6 +53,7 @@ program snac
                                  hypre_tol,hypre_maxiter,hypre_solver_i
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom,rk_scal
+  use mod_post           , only: cmpt_wall_forces, updt_wall_forces
   use mod_scal           , only: scalar,initialize_scalars,bulk_forcing_s
   use mod_sanity         , only: test_sanity
   use mod_solver         , only: init_bc_rhs,init_matrix_3d,create_solver,setup_solver, &
@@ -105,6 +107,9 @@ program snac
   type(hypre_solver) :: usolver,vsolver,wsolver
   real(rp)           :: alphai,alphaoi
 #endif
+  real(rp), dimension(0:1,3) :: tau_x    ,tau_y    ,tau_z    , &
+                                tau_x_o  ,tau_y_o  ,tau_z_o  , &
+                                tau_x_acc,tau_y_acc,tau_z_acc
   !
   real(rp) :: dt,dt_cfl,time,dtrk,divtot,divmax
   integer  :: irk,istep
@@ -635,6 +640,9 @@ end if
   dudtrko(:,:,:) = 0._rp
   dvdtrko(:,:,:) = 0._rp
   dwdtrko(:,:,:) = 0._rp
+  tau_x(:,:)     = 0._rp; tau_y(:,:)     = 0._rp; tau_z(:,:)     = 0._rp
+  tau_x_o(:,:)   = 0._rp; tau_y_o(:,:)   = 0._rp; tau_z_o(:,:)   = 0._rp
+  tau_x_acc(:,:) = 0._rp; tau_y_acc(:,:) = 0._rp; tau_z_acc(:,:) = 0._rp
 #ifdef _IMPDIFF
   uo(:,:,:) = 0._rp
   vo(:,:,:) = 0._rp
@@ -890,6 +898,11 @@ end if
     time  = time  + dt
     if(myid == 0) write(stdout,*) 'Timestep #', istep, 'Time = ', time
     if(nscal > 0) fs(1:nscal) = 0._rp
+    if(is_cmpt_forces) then
+      tau_x_acc(:,:) = 0._rp
+      tau_y_acc(:,:) = 0._rp
+      tau_z_acc(:,:) = 0._rp
+    end if
     do irk=1,3
       dtrk = sum(rkcoeff(:,irk))*dt
       do iscal=1,nscal
@@ -923,6 +936,12 @@ end if
         call boundp(s%cbc,lo,hi,s%bc,halos,is_bound,nb,dxc,dyc,dzc,s%val)
       end do
       alpha = -visc*dtrk/2._rp
+      if(is_cmpt_forces) then
+        call cmpt_wall_forces(hi(:)-lo(:)+1,is_bound,dxc,dxf,dyc,dyf,dzc,dzf,visc, &
+                              u,v,w,p,bforce,tau_x,tau_y,tau_z)
+        call updt_wall_forces(rkcoeff(:,irk),tau_x,tau_y,tau_z,tau_x_o,tau_y_o,tau_z_o, &
+                              tau_x_acc,tau_y_acc,tau_z_acc)
+      end if
       call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce,gacc,beta,scalars, &
                   visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko)
 #ifdef _IMPDIFF
