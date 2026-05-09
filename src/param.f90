@@ -16,6 +16,7 @@ integer , parameter :: hypre_solver_i_default = 2
 real(rp), parameter :: hypre_tol_default      = real(1.e-4,rp)
 integer , parameter :: hypre_maxiter_default  = 50
 integer , parameter :: max_blocks = 999
+logical , parameter :: is_cmpt_forces = .false.
 integer  :: hypre_solver_i
 real(rp) :: hypre_tol
 integer  :: hypre_maxiter
