@@ -945,6 +945,16 @@ end if
       call rk_mom(rkcoeff(:,irk),lo,hi,dxc,dxf,dyc,dyf,dzc,dzf,dt,bforce,gacc,beta,scalars, &
                   visc,u,v,w,p,dudtrko,dvdtrko,dwdtrko)
 #ifdef _IMPDIFF
+      is_centered(:) = [.false.,.true.,.true.]
+      call init_bc_rhs(cbcvel(:,:,1),bcvel(:,:,1),dlu,is_bound,is_centered,lo,hiu,periods, &
+                       dxf,dxc,dyc,dyf,dzc,dzf,rhsu%x,rhsu%y,rhsu%z,bcu%x,bcu%y,bcu%z)
+      is_centered(:) = [.true.,.false.,.true.]
+      call init_bc_rhs(cbcvel(:,:,2),bcvel(:,:,2),dlv,is_bound,is_centered,lo,hiv,periods, &
+                       dxc,dxf,dyf,dyc,dzc,dzf,rhsv%x,rhsv%y,rhsv%z,bcv%x,bcv%y,bcv%z)
+      is_centered(:) = [.true.,.true.,.false.]
+      call init_bc_rhs(cbcvel(:,:,3),bcvel(:,:,3),dlw,is_bound,is_centered,lo,hiw,periods, &
+                       dxc,dxf,dyc,dyf,dzf,dzc,rhsw%x,rhsw%y,rhsw%z,bcw%x,bcw%y,bcw%z)
+      is_centered(:) = [.true.,.true.,.true.]
       alphai = alpha**(-1)
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
 #ifndef _FFT_USE_SLABS
