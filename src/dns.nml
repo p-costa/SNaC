@@ -10,4 +10,9 @@ bforce(1:3) = 0., 0., 0.
 
 &hypre
 hypre_solver_i = 2, hypre_tol = 1.e-4, hypre_maxiter = 50
+hypre_fft_zero_mode_solver_i = 0
+hypre_precond_i = 1, hypre_precond_maxiter = 10
+hypre_gmres_k_dim = 0
+hypre_pfmg_relax_type = -1
+hypre_pfmg_num_pre_relax = 1, hypre_pfmg_num_post_relax = 1
 /

@@ -26,4 +26,5 @@ jobs:
         export LD_LIBRARY_PATH="${HOME}/hypre/lib:${LD_LIBRARY_PATH}"
         cd tests/lid_driven_cavity && sh testit.sh && cd -
         cd tests/differentially_heated_cavity && sh testit.sh && cd -
+        cd tests/hypre_solver_options && sh testit.sh && cd -
         python -m unittest tests.snac_grid_generator.test_core

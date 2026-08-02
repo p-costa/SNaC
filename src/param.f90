@@ -12,14 +12,24 @@ real(rp), parameter, dimension(2,3) :: rkcoeff = reshape( [32._rp/60._rp,  0._rp
                                                            25._rp/60._rp, -17._rp/60._rp, &
                                                            45._rp/60._rp, -25._rp/60._rp], shape(rkcoeff))
 real(rp), parameter, dimension(3)   :: rkcoeff12 = rkcoeff(1,:)+rkcoeff(2,:)
-integer , parameter :: hypre_solver_i_default = 2
-real(rp), parameter :: hypre_tol_default      = real(1.e-4,rp)
-integer , parameter :: hypre_maxiter_default  = 50
+integer , parameter :: hypre_solver_i_default               = 2
+real(rp), parameter :: hypre_tol_default                    = real(1.e-4,rp)
+integer , parameter :: hypre_maxiter_default                = 50
+integer , parameter :: hypre_fft_zero_mode_solver_i_default = 0
+integer , parameter :: hypre_precond_i_default              = 1
+integer , parameter :: hypre_precond_maxiter_default        = 10
+integer , parameter :: hypre_gmres_k_dim_default            = 0
+integer , parameter :: hypre_pfmg_relax_type_default        = -1
+integer , parameter :: hypre_pfmg_num_pre_relax_default     = 1
+integer , parameter :: hypre_pfmg_num_post_relax_default    = 1
 integer , parameter :: max_blocks = 999
 logical , parameter :: is_cmpt_forces = .false.
 integer  :: hypre_solver_i
 real(rp) :: hypre_tol
 integer  :: hypre_maxiter
+integer  :: hypre_fft_zero_mode_solver_i
+integer  :: hypre_precond_i,hypre_precond_maxiter,hypre_gmres_k_dim
+integer  :: hypre_pfmg_relax_type,hypre_pfmg_num_pre_relax,hypre_pfmg_num_post_relax
 !
 ! parameters to be determined from the input file 'dns.nml'
 !
@@ -98,7 +108,10 @@ contains
                     ssource, &
                     is_sforced, &
                     scalf
-  namelist /hypre/ hypre_solver_i,hypre_tol,hypre_maxiter
+  namelist /hypre/ hypre_solver_i,hypre_tol,hypre_maxiter, &
+                   hypre_fft_zero_mode_solver_i, &
+                   hypre_precond_i,hypre_precond_maxiter,hypre_gmres_k_dim, &
+                   hypre_pfmg_relax_type,hypre_pfmg_num_pre_relax,hypre_pfmg_num_post_relax
   namelist /blocks/ nblocks, &
                     block_dims,block_ng,block_lmin,block_lmax,block_gt,block_gr, &
                     block_cbcvel,block_cbcpre,block_bcvel,block_bcpre, &
@@ -114,9 +127,16 @@ contains
   nscal = 0
   beta = 0._rp
   alpha_max = 0._rp
-  hypre_solver_i = hypre_solver_i_default
-  hypre_tol      = hypre_tol_default
-  hypre_maxiter  = hypre_maxiter_default
+  hypre_solver_i               = hypre_solver_i_default
+  hypre_tol                    = hypre_tol_default
+  hypre_maxiter                = hypre_maxiter_default
+  hypre_fft_zero_mode_solver_i = hypre_fft_zero_mode_solver_i_default
+  hypre_precond_i              = hypre_precond_i_default
+  hypre_precond_maxiter        = hypre_precond_maxiter_default
+  hypre_gmres_k_dim            = hypre_gmres_k_dim_default
+  hypre_pfmg_relax_type        = hypre_pfmg_relax_type_default
+  hypre_pfmg_num_pre_relax     = hypre_pfmg_num_pre_relax_default
+  hypre_pfmg_num_post_relax    = hypre_pfmg_num_post_relax_default
   block_dims(:,:) = 1
   block_ng(:,:) = 1
   block_lmin(:,:) = 0._rp
@@ -251,10 +271,15 @@ contains
   !
   ! validate iterative solver parameters
   !
-  if(hypre_solver_i < 1 .or. hypre_solver_i > 4) then
-    if(myid == 0) write(stderr,*) '*** Error: invalid solver choice [1-4] *** '
+  if(hypre_solver_i < 1 .or. hypre_solver_i > 5) then
+    if(myid == 0) write(stderr,*) '*** Error: invalid solver choice [1-5] *** '
     if(myid == 0) write(stderr,*) 'Reverting to the default (2 -> PFMG)...'
     hypre_solver_i = hypre_solver_i_default
+  end if
+  if(hypre_fft_zero_mode_solver_i < 0 .or. hypre_fft_zero_mode_solver_i > 5) then
+    if(myid == 0) write(stderr,*) '*** Error: invalid FFT zero-mode solver choice [0-5] *** '
+    if(myid == 0) write(stderr,*) 'Reverting to the default (0 -> same solver)...'
+    hypre_fft_zero_mode_solver_i = hypre_fft_zero_mode_solver_i_default
   end if
   if(hypre_tol > 1._rp .or. hypre_tol < 0._rp) then
     if(myid == 0) write(stderr,*) '*** Error: iterative error tolerance is too high or negative *** '
@@ -265,6 +290,36 @@ contains
     if(myid == 0) write(stderr,*) '*** Error: maximum number of iterations needs to be > 0 *** '
     if(myid == 0) write(stderr,*) 'Reverting to the default (50)...'
     hypre_maxiter = hypre_maxiter_default
+  end if
+  if(.not.any(hypre_precond_i == [0,1,9])) then
+    if(myid == 0) write(stderr,*) '*** Error: invalid Krylov preconditioner choice [0, 1, or 9] *** '
+    if(myid == 0) write(stderr,*) 'Reverting to the default (1 -> PFMG)...'
+    hypre_precond_i = hypre_precond_i_default
+  end if
+  if(hypre_precond_maxiter < 1) then
+    if(myid == 0) write(stderr,*) '*** Error: preconditioner iterations need to be > 0 *** '
+    if(myid == 0) write(stderr,*) 'Reverting to the default (10)...'
+    hypre_precond_maxiter = hypre_precond_maxiter_default
+  end if
+  if(hypre_gmres_k_dim < 0) then
+    if(myid == 0) write(stderr,*) '*** Error: GMRES k_dim cannot be negative *** '
+    if(myid == 0) write(stderr,*) 'Reverting to the default (0 -> HYPRE default)...'
+    hypre_gmres_k_dim = hypre_gmres_k_dim_default
+  end if
+  if(hypre_pfmg_relax_type < -1 .or. hypre_pfmg_relax_type > 3) then
+    if(myid == 0) write(stderr,*) '*** Error: invalid PFMG relaxation type [-1, 0-3] *** '
+    if(myid == 0) write(stderr,*) 'Reverting to the default (-1 -> automatic)...'
+    hypre_pfmg_relax_type = hypre_pfmg_relax_type_default
+  end if
+  if(hypre_pfmg_num_pre_relax < 0) then
+    if(myid == 0) write(stderr,*) '*** Error: PFMG pre-relaxation count cannot be negative *** '
+    if(myid == 0) write(stderr,*) 'Reverting to the default (1)...'
+    hypre_pfmg_num_pre_relax = hypre_pfmg_num_pre_relax_default
+  end if
+  if(hypre_pfmg_num_post_relax < 0) then
+    if(myid == 0) write(stderr,*) '*** Error: PFMG post-relaxation count cannot be negative *** '
+    if(myid == 0) write(stderr,*) 'Reverting to the default (1)...'
+    hypre_pfmg_num_post_relax = hypre_pfmg_num_post_relax_default
   end if
   contains
     subroutine abort_input(fname,msg)

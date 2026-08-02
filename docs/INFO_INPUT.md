@@ -35,6 +35,11 @@ scalf(:) = 0.
 
 &hypre
 hypre_solver_i = 2, hypre_tol = 1.e-4, hypre_maxiter = 50
+hypre_fft_zero_mode_solver_i = 0
+hypre_precond_i = 1, hypre_precond_maxiter = 10
+hypre_gmres_k_dim = 0
+hypre_pfmg_relax_type = -1
+hypre_pfmg_num_pre_relax = 1, hypre_pfmg_num_post_relax = 1
 /
 ```
 
@@ -54,7 +59,27 @@ hypre_solver_i = 2, hypre_tol = 1.e-4, hypre_maxiter = 50
 
 When SNaC is compiled with `BOUSSINESQ_BUOYANCY=1` in `build.conf` or on the `make` command line, the first scalar is active and contributes the Boussinesq acceleration `-gacc(:)*beta*s`. Without that CPP macro, no buoyancy source is compiled in.
 
-The optional `&hypre` namelist controls the iterative Poisson solver. `hypre_solver_i` selects `1: SMG`, `2: PFMG`, `3: GMRES`, or `4: BiCGSTAB`.
+The optional `&hypre` namelist controls the iterative Poisson/Helmholtz solver:
+
+* `hypre_solver_i` selects `1: SMG`, `2: PFMG`, `3: GMRES`, `4: BiCGSTAB`, or `5: FlexGMRES`.
+* Krylov solvers (`3`--`5`) use the preconditioner selected by `hypre_precond_i`: `0: SMG`, `1: PFMG`, or `9: none`. `hypre_precond_maxiter` sets the number of preconditioner cycles per outer iteration.
+* `hypre_gmres_k_dim` sets the restart dimension for GMRES and FlexGMRES. A value of `0` retains the HYPRE default.
+* `hypre_pfmg_relax_type` selects PFMG relaxation type `0`--`3`. Its default, `-1`, retains SNaC's automatic choice: weighted Jacobi for a nonsymmetric matrix and symmetric red/black Gauss--Seidel when symmetric storage is available. `hypre_pfmg_num_pre_relax` and `hypre_pfmg_num_post_relax` set the corresponding sweep counts. These PFMG controls apply both to stand-alone PFMG and to PFMG used as a Krylov preconditioner.
+* With an FFT-enabled, nonsliced-pencil build, `hypre_fft_zero_mode_solver_i` may override the solver used for the pressure system whose local Fourier eigenvalue is zero. Its default, `0`, uses `hypre_solver_i` for every mode. The eigenvalue check also works when the Fourier modes are distributed by the slab path.
+
+For example, the following selects the investigated FlexGMRES(20)+PFMG(1) configuration with nonsymmetric red/black relaxation, no pre-relaxation, and four post-relaxation sweeps:
+
+```fortran
+&hypre
+hypre_solver_i = 5, hypre_tol = 1.e-4, hypre_maxiter = 2000
+hypre_precond_i = 1, hypre_precond_maxiter = 1
+hypre_gmres_k_dim = 20
+hypre_pfmg_relax_type = 3
+hypre_pfmg_num_pre_relax = 0, hypre_pfmg_num_post_relax = 4
+/
+```
+
+For an FFT-reduced pressure solve that retains stand-alone PFMG on the zero mode and uses BiCGSTAB+PFMG(1) on shifted modes, set `hypre_solver_i = 4` and `hypre_fft_zero_mode_solver_i = 2` with the same PFMG controls.
 
 ## `blocks.nml`
 
