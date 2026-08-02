@@ -39,10 +39,11 @@ subdomains to line up. Export runs the same structured-grid checks and refuses
 to write files when they fail. Large normal-spacing jumps across block
 interfaces are reported as warnings.
 
-Periodicity is controlled in the geometry panel. A periodic direction is only
-valid when every block has the same min/max extent in that direction; `Update`
-then marks the two periodic faces of each block as self-connected `F`
-boundaries.
+Periodicity is controlled in the geometry panel. `Update` matches congruent
+block faces on the global minimum and maximum boundaries and marks each pair as
+friend (`F`) boundaries. Blocks between those outer faces retain their normal
+internal connections, while physical boundaries around holes remain
+unconnected. A single block spanning a periodic direction is self-connected.
 
 Boundary rows expose the velocity, pressure, and scalar condition codes plus
 their numeric values. For `F` faces, the value is the neighboring block id and

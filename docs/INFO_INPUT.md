@@ -136,7 +136,7 @@ Boundary-condition types are:
 * `D`: Dirichlet.
 * `N`: Neumann.
 
-For an `F` boundary condition, the corresponding value in `block_bcvel` or `block_bcpre` is the connected block index. Periodic directions also use `F`; in a single-block periodic direction, both periodic faces point back to that same block.
+For an `F` boundary condition, the corresponding value in `block_bcvel` or `block_bcpre` is the connected block index. Periodic directions also use `F`; in a single-block periodic direction, both periodic faces point back to that same block. In a multi-block direction, matching faces on the global minimum and maximum boundaries point to each other. Only those outer wrap connections are required, so physical boundaries around internal holes may interrupt the friend connections.
 
 If scalars are enabled, `block_cbcscal(0:1,1:3,is,iblock)` and `block_bcscal(0:1,1:3,is,iblock)` set the boundary conditions for scalar `is` on block `iblock`.
 

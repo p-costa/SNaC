@@ -94,7 +94,6 @@ def check_project(project: Project | dict[str, Any]) -> CheckResult:
 
     project = _project_copy(project)
     result = CheckResult()
-    result.errors.extend(_check_periodic_geometry(project.blocks, project.periodic_axes))
     topology = _build_topology(project.blocks, project.periodic_axes)
     result.errors.extend(topology.errors)
     result.warnings.extend(topology.warnings)
@@ -113,7 +112,6 @@ def infer_project_connectivity(project: Project | dict[str, Any]) -> tuple[Proje
 
     project = _project_copy(project)
     result = CheckResult()
-    result.errors.extend(_check_periodic_geometry(project.blocks, project.periodic_axes))
     topology = _build_topology(project.blocks, project.periodic_axes)
     result.errors.extend(topology.errors)
     result.warnings.extend(topology.warnings)
@@ -165,35 +163,54 @@ def _build_topology(blocks: list[Block], periodic_axes: list[bool] | None = None
                 if _touches(right.lmax[axis_index], left.lmin[axis_index]):
                     _add_face_contact(topology, face_owner, right, 1, left, 0, axis_index)
 
-    for block in blocks:
-        for axis_index, is_periodic in enumerate(periodic_axes[:3]):
-            if is_periodic:
-                lo_face = FACE_INDEX[(axis_index, 0)]
-                hi_face = FACE_INDEX[(axis_index, 1)]
-                topology.connections.append(FaceConnection(block.id, lo_face, block.id, hi_face, axis_index))
+    for axis_index, is_periodic in enumerate(periodic_axes[:3]):
+        if is_periodic:
+            _add_periodic_contacts(topology, face_owner, blocks, axis_index)
 
     return topology
 
 
-def _check_periodic_geometry(blocks: list[Block], periodic_axes: list[bool]) -> list[str]:
-    errors: list[str] = []
+def _add_periodic_contacts(
+    topology: _Topology,
+    face_owner: dict[tuple[int, int], FaceConnection],
+    blocks: list[Block],
+    axis_index: int,
+) -> None:
     if not blocks:
-        return errors
-    reference = blocks[0]
-    for axis_index, is_periodic in enumerate(periodic_axes[:3]):
-        if not is_periodic:
+        return
+
+    axis = AXIS_NAMES[axis_index]
+    global_min = min(block.lmin[axis_index] for block in blocks)
+    global_max = max(block.lmax[axis_index] for block in blocks)
+    low_blocks = [block for block in blocks if _touches(block.lmin[axis_index], global_min)]
+    high_blocks = [block for block in blocks if _touches(block.lmax[axis_index], global_max)]
+    matched_high: set[int] = set()
+
+    for low_block in low_blocks:
+        matches = [block for block in high_blocks if _same_cross_section(low_block, block, axis_index)]
+        if len(matches) != 1:
+            topology.errors.append(
+                f"periodic {axis}- face of block {low_block.id} has {len(matches)} matching "
+                "full faces on the opposite boundary"
+            )
             continue
-        axis = AXIS_NAMES[axis_index]
-        for block in blocks[1:]:
-            if not (
-                _touches(block.lmin[axis_index], reference.lmin[axis_index])
-                and _touches(block.lmax[axis_index], reference.lmax[axis_index])
-            ):
-                errors.append(
-                    f"periodic {axis} requires every block to share the same {axis} min/max extent"
-                )
-                break
-    return errors
+        high_block = matches[0]
+        matched_high.add(high_block.id)
+        _add_connection(
+            topology,
+            face_owner,
+            low_block,
+            FACE_INDEX[(axis_index, 0)],
+            high_block,
+            FACE_INDEX[(axis_index, 1)],
+            axis_index,
+        )
+
+    for high_block in high_blocks:
+        if high_block.id not in matched_high:
+            topology.errors.append(
+                f"periodic {axis}+ face of block {high_block.id} has no matching full face on the opposite boundary"
+            )
 
 
 def _add_face_contact(
@@ -208,17 +225,37 @@ def _add_face_contact(
     if _same_cross_section(lower_block, upper_block, axis_index):
         lower_face = FACE_INDEX[(axis_index, lower_side)]
         upper_face = FACE_INDEX[(axis_index, upper_side)]
-        connection = FaceConnection(lower_block.id, lower_face, upper_block.id, upper_face, axis_index)
-        for block_id, face in ((connection.a_id, connection.a_face), (connection.b_id, connection.b_face)):
-            old = face_owner.get((block_id, face))
-            if old is not None:
-                topology.errors.append(f"block {block_id} face {FACE_ORDER[face]} has multiple full-face neighbors")
-            face_owner[(block_id, face)] = connection
-        topology.connections.append(connection)
+        _add_connection(
+            topology,
+            face_owner,
+            lower_block,
+            lower_face,
+            upper_block,
+            upper_face,
+            axis_index,
+        )
     elif _cross_section_overlap(lower_block, upper_block, axis_index):
         topology.errors.append(
             f"blocks {lower_block.id} and {upper_block.id} touch on a partial {AXIS_NAMES[axis_index]} face"
         )
+
+
+def _add_connection(
+    topology: _Topology,
+    face_owner: dict[tuple[int, int], FaceConnection],
+    a: Block,
+    a_face: int,
+    b: Block,
+    b_face: int,
+    axis_index: int,
+) -> None:
+    connection = FaceConnection(a.id, a_face, b.id, b_face, axis_index)
+    for block_id, face in ((connection.a_id, connection.a_face), (connection.b_id, connection.b_face)):
+        old = face_owner.get((block_id, face))
+        if old is not None:
+            topology.errors.append(f"block {block_id} face {FACE_ORDER[face]} has multiple full-face neighbors")
+        face_owner[(block_id, face)] = connection
+    topology.connections.append(connection)
 
 
 def _check_block_basics(blocks: list[Block]) -> list[str]:
