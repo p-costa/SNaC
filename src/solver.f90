@@ -2,14 +2,15 @@ module mod_solver
   use mpi_f08
   use mod_common_mpi, only: ierr
   use mod_types
-  use, intrinsic :: iso_c_binding, only: C_PTR
+  use, intrinsic :: iso_c_binding, only: C_PTR,C_NULL_PTR
   implicit none
   private
   public init_bc_rhs,init_matrix_3d,create_solver,setup_solver, &
          add_constant_to_diagonal,add_weighted_constant_to_diagonal, &
          solve_helmholtz,finalize_matrix,finalize_solver, &
-         hypre_solver, add_constant_to_boundary, &
-         HYPRESolverSMG,HYPRESolverPFMG,HYPRESolverGMRES,HYPRESolverBiCGSTAB
+         hypre_solver,configure_hypre_options,add_constant_to_boundary, &
+         HYPRESolverSMG,HYPRESolverPFMG,HYPRESolverGMRES,HYPRESolverBiCGSTAB, &
+         HYPRESolverFlexGMRES
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   public init_fft_reduction,init_n_2d_matrices,create_n_solvers,setup_n_solvers, &
          add_constant_to_n_diagonals,add_weighted_constant_to_n_diagonals, &
@@ -31,16 +32,56 @@ module mod_solver
 !    integer           , dimension(n) :: disps
 !    type(MPI_DATATYPE), dimension(n) :: types
 !  end type alltoallw
-  integer, parameter :: HYPRESolverSMG      = 1, &
-                        HYPRESolverPFMG     = 2, &
-                        HYPRESolverGMRES    = 3, &
-                        HYPRESolverBiCGSTAB = 4
+  integer, parameter :: HYPRESolverSMG       = 1, &
+                        HYPRESolverPFMG      = 2, &
+                        HYPRESolverGMRES     = 3, &
+                        HYPRESolverBiCGSTAB  = 4, &
+                        HYPRESolverFlexGMRES = 5
   logical, parameter :: is_leverage_symmetric_operators = .true.
+  integer, save :: hypre_precond_i_cfg           = 1,  &
+                   hypre_precond_maxiter_cfg     = 10, &
+                   hypre_gmres_k_dim_cfg         = 0,  &
+                   hypre_pfmg_relax_type_cfg     = -1, &
+                   hypre_pfmg_num_pre_relax_cfg  = 1,  &
+                   hypre_pfmg_num_post_relax_cfg = 1
   type hypre_solver
     type(C_PTR) :: grid,stencil,precond,solver,mat,rhs,sol
-    integer     :: stype,comm_hypre
+    integer     :: stype,ptype,comm_hypre
   end type hypre_solver
   contains
+  subroutine configure_hypre_options(precond_i,precond_maxiter,gmres_k_dim, &
+                                     pfmg_relax_type,pfmg_num_pre_relax,pfmg_num_post_relax)
+    implicit none
+    integer, intent(in) :: precond_i,precond_maxiter,gmres_k_dim, &
+                           pfmg_relax_type,pfmg_num_pre_relax,pfmg_num_post_relax
+    hypre_precond_i_cfg            = precond_i
+    hypre_precond_maxiter_cfg      = precond_maxiter
+    hypre_gmres_k_dim_cfg          = gmres_k_dim
+    hypre_pfmg_relax_type_cfg      = pfmg_relax_type
+    hypre_pfmg_num_pre_relax_cfg   = pfmg_num_pre_relax
+    hypre_pfmg_num_post_relax_cfg  = pfmg_num_post_relax
+  end subroutine configure_hypre_options
+
+  subroutine configure_pfmg(solver,maxiter,maxerror,is_symm_matrix)
+    implicit none
+    type(C_PTR), intent(in) :: solver
+    integer    , intent(in) :: maxiter
+    real(rp)   , intent(in) :: maxerror
+    logical    , intent(in) :: is_symm_matrix
+    integer :: relax_type
+    call HYPRE_StructPFMGSetMaxIter(solver,maxiter,ierr)
+    call HYPRE_StructPFMGSetTol(solver,maxerror,ierr)
+    call HYPRE_StructPFMGSetRelChange(solver,1,ierr)
+    relax_type = hypre_pfmg_relax_type_cfg
+    if(relax_type < 0) then
+      relax_type = 1
+      if(is_leverage_symmetric_operators.and.is_symm_matrix) relax_type = 2
+    end if
+    call HYPRE_StructPFMGSetRelaxType(solver,relax_type,ierr)
+    call HYPRE_StructPFMGSetNumPreRelax(solver,hypre_pfmg_num_pre_relax_cfg,ierr)
+    call HYPRE_StructPFMGSetNumPostRelax(solver,hypre_pfmg_num_post_relax_cfg,ierr)
+  end subroutine configure_pfmg
+
   subroutine init_bc_rhs(cbc,bc,dl,is_bound,is_centered,lo,hi,periods, &
                          dx1,dx2,dy1,dy2,dz1,dz2,rhsx,rhsy,rhsz,bcx,bcy,bcz)
     !
@@ -386,6 +427,8 @@ module mod_solver
     !       freely available under a GPL license
     !       http://www.ida.upmc.fr/~zaleski/paris
     !
+    precond = C_NULL_PTR
+    precond_id = 9
     if      ( stype == HYPRESolverSMG ) then
       call HYPRE_StructSMGCreate(asolver%comm_hypre,solver,ierr)
       call HYPRE_StructSMGSetMaxIter(solver,maxiter,ierr)
@@ -396,31 +439,20 @@ module mod_solver
 #endif
     else if ( stype == HYPRESolverPFMG ) then
       call HYPRE_StructPFMGCreate(asolver%comm_hypre,solver,ierr)
-      call HYPRE_StructPFMGSetMaxIter(solver,maxiter,ierr)
-      call HYPRE_StructPFMGSetTol(solver,maxerror,ierr)
+      call configure_pfmg(solver,maxiter,maxerror,is_symm_matrix)
 #ifdef _HYPRE_LOG
       call HYPRE_structPFMGsetLogging(solver,1,ierr)
       call HYPRE_StructPFMGSetPrintLevel(solver,1,ierr)
 #endif
-      call HYPRE_StructPFMGSetRelChange(solver,1,ierr)
-      ! Relaxiation Method: 2 is the fastest if symm matrix
-      ! 0: Jacobi
-      ! 1: Weighted Jacobi (default)
-      ! 2: Red/Black Gauss-Seidel (symmetric: RB pre- and post-relaxation)
-      ! 3: Red/Black Gauss-Seidel (nonsymmetric: RB pre- and post-relaxation)
-      if(.not.(is_leverage_symmetric_operators.and.is_symm_matrix)) then
-        call HYPRE_StructPFMGSetRelaxType(solver,1,ierr)
-      else
-        call HYPRE_StructPFMGSetRelaxType(solver,2,ierr)
-      end if
-      call HYPRE_StructPFMGSetNumPreRelax(solver,1,ierr)
-      call HYPRE_StructPFMGSetNumPostRelax(solver,1,ierr)
     else if ( stype == HYPRESolverGMRES .or. &
-              stype == HYPRESolverBiCGSTAB   ) then
+              stype == HYPRESolverBiCGSTAB .or. &
+              stype == HYPRESolverFlexGMRES ) then
       if      ( stype == HYPRESolverGMRES ) then
         call HYPRE_StructGMRESCreate(asolver%comm_hypre,solver,ierr)
         call HYPRE_StructGMRESSetMaxIter(solver,maxiter,ierr)
         call HYPRE_StructGMRESSetTol(solver,maxerror,ierr)
+        if(hypre_gmres_k_dim_cfg > 0) &
+          call HYPRE_StructGMRESSetKDim(solver,hypre_gmres_k_dim_cfg,ierr)
 #ifdef _HYPRE_LOG
         call HYPRE_StructGMRESSetLogging(solver,1,ierr)
 #endif
@@ -428,28 +460,39 @@ module mod_solver
         call HYPRE_StructBiCGSTABCreate(asolver%comm_hypre,solver,ierr)
         call HYPRE_StructBiCGSTABSetMaxIter(solver,maxiter,ierr)
         call HYPRE_StructBiCGSTABSetTol(solver,maxerror,ierr)
+      else if ( stype == HYPRESolverFlexGMRES ) then
+        call HYPRE_StructFGMRESCreate(asolver%comm_hypre,solver,ierr)
+        call HYPRE_StructFGMRESSetMaxIter(solver,maxiter,ierr)
+        call HYPRE_StructFGMRESSetTol(solver,maxerror,ierr)
+        if(hypre_gmres_k_dim_cfg > 0) &
+          call HYPRE_StructFGMRESSetKDim(solver,hypre_gmres_k_dim_cfg,ierr)
+#ifdef _HYPRE_LOG
+        call HYPRE_StructFGMRESSetLogging(solver,1,ierr)
+#endif
       end if
-      ! Use PFMG as preconditioner
-      call HYPRE_StructPFMGCreate(asolver%comm_hypre,precond,ierr)
-      call HYPRE_StructPFMGSetMaxIter(precond,10,ierr)
-      call HYPRE_StructPFMGSetTol(precond,0._rp,ierr)
-      call HYPRE_StructPFMGSetZeroGuess(precond,ierr)
-      call HYPRE_StructPFMGSetRelChange(precond,1,ierr)
-      if(.not.(is_leverage_symmetric_operators.and.is_symm_matrix)) then
-        call HYPRE_StructPFMGSetRelaxType(precond,1,ierr)
-      else
-        call HYPRE_StructPFMGSetRelaxType(precond,2,ierr)
+      precond_id = hypre_precond_i_cfg
+      if(precond_id == 0) then
+        call HYPRE_StructSMGCreate(asolver%comm_hypre,precond,ierr)
+        call HYPRE_StructSMGSetMaxIter(precond,hypre_precond_maxiter_cfg,ierr)
+        call HYPRE_StructSMGSetTol(precond,0._rp,ierr)
+        call HYPRE_StructSMGSetZeroGuess(precond,ierr)
+      else if(precond_id == 1) then
+        call HYPRE_StructPFMGCreate(asolver%comm_hypre,precond,ierr)
+        call configure_pfmg(precond,hypre_precond_maxiter_cfg,0._rp,is_symm_matrix)
+        call HYPRE_StructPFMGSetZeroGuess(precond,ierr)
       end if
-      precond_id = 1   ! Set PFMG as preconditioner
       if      ( stype == HYPRESolverGMRES ) then
         call HYPRE_StructGMRESSetPrecond(solver,precond_id,precond,ierr)
       else if ( stype == HYPRESolverBiCGSTAB ) then
         call HYPRE_StructBiCGSTABSetPrecond(solver,precond_id,precond,ierr)
+      else if ( stype == HYPRESolverFlexGMRES ) then
+        call HYPRE_StructFGMRESSetPrecond(solver,precond_id,precond,ierr)
       end if
-      asolver%precond = precond
     end if
+    asolver%precond = precond
     asolver%solver  = solver
     asolver%stype   = stype
+    asolver%ptype   = precond_id
   end subroutine create_solver
   subroutine setup_solver(asolver)
     implicit none
@@ -474,11 +517,14 @@ module mod_solver
     else if ( stype == HYPRESolverPFMG ) then
       call HYPRE_StructPFMGSetup(solver,mat,rhs,sol,ierr)
     else if ( stype == HYPRESolverGMRES .or. &
-             stype == HYPRESolverBiCGSTAB   ) then
+              stype == HYPRESolverBiCGSTAB .or. &
+              stype == HYPRESolverFlexGMRES ) then
       if      ( stype == HYPRESolverGMRES ) then
         call HYPRE_StructGMRESSetup(solver,mat,rhs,sol,ierr)
       else if ( stype == HYPRESolverBiCGSTAB ) then
         call HYPRE_StructBiCGSTABSetup(solver,mat,rhs,sol,ierr)
+      else if ( stype == HYPRESolverFlexGMRES ) then
+        call HYPRE_StructFGMRESSetup(solver,mat,rhs,sol,ierr)
       end if
     end if
   end subroutine setup_solver
@@ -560,6 +606,8 @@ module mod_solver
     else if ( stype == HYPRESolverBiCGSTAB ) then
       call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
       !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
+    else if ( stype == HYPRESolverFlexGMRES ) then
+      call HYPRE_StructFGMRESSolve(solver,mat,rhs,sol,ierr)
     end if ! stype
     !
     ! end of part based on the Paris Simulator code
@@ -575,11 +623,12 @@ module mod_solver
     implicit none
     type(hypre_solver), target, intent(in) :: asolver
     type(C_PTR), pointer :: precond,solver
-    integer    , pointer :: stype
+    integer    , pointer :: stype,ptype
     !
     precond => asolver%precond
     solver  => asolver%solver
     stype   => asolver%stype
+    ptype   => asolver%ptype
     !
     ! note: this part was based on the the Paris Simulator code
     !       freely available under a GPL license; see:
@@ -591,10 +640,15 @@ module mod_solver
       call HYPRE_StructPFMGDestroy(solver,ierr)
     else if ( stype == HYPRESolverGMRES ) then
       call HYPRE_StructGMRESDestroy(solver,ierr)
-      call HYPRE_StructPFMGDestroy(precond,ierr)
     else if ( stype == HYPRESolverBiCGSTAB ) then
       call HYPRE_StructBiCGSTABDestroy(solver,ierr)
-      call HYPRE_StructPFMGDestroy(precond,ierr)
+    else if ( stype == HYPRESolverFlexGMRES ) then
+      call HYPRE_StructFGMRESDestroy(solver,ierr)
+    end if
+    if(stype == HYPRESolverGMRES .or. stype == HYPRESolverBiCGSTAB .or. &
+       stype == HYPRESolverFlexGMRES) then
+      if(ptype == 0) call HYPRE_StructSMGDestroy(precond,ierr)
+      if(ptype == 1) call HYPRE_StructPFMGDestroy(precond,ierr)
     end if
   end subroutine finalize_solver
   subroutine finalize_matrix(asolver)
@@ -896,6 +950,8 @@ module mod_solver
       else if ( stype == HYPRESolverBiCGSTAB ) then
         call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
         !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
+      else if ( stype == HYPRESolverFlexGMRES ) then
+        call HYPRE_StructFGMRESSolve(solver,mat,rhs,sol,ierr)
       end if ! stype
       !
       ! end of part based on the Paris Simulator code
@@ -966,6 +1022,8 @@ module mod_solver
       else if ( stype == HYPRESolverBiCGSTAB ) then
         call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
         !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
+      else if ( stype == HYPRESolverFlexGMRES ) then
+        call HYPRE_StructFGMRESSolve(solver,mat,rhs,sol,ierr)
       end if ! stype
       !
       ! end of part based on the Paris Simulator code
@@ -1055,16 +1113,28 @@ module mod_solver
       asolver(q) = asolver_aux
     end do
   end subroutine init_n_3d_matrices
-  subroutine create_n_solvers(n,maxiter,maxerror,is_symm_matrix,stype,asolver)
+  subroutine create_n_solvers(n,maxiter,maxerror,is_symm_matrix,stype,asolver,lambda,zero_mode_stype)
     integer           , intent(   in) :: n
     integer           , intent(   in) :: maxiter
     real(rp)          , intent(   in) :: maxerror
     logical           , intent(   in) :: is_symm_matrix
     integer           , intent(   in) :: stype
     type(hypre_solver), intent(inout), dimension(:) :: asolver
-    integer :: q
+    real(rp)          , intent(   in), optional, dimension(:) :: lambda
+    integer           , intent(   in), optional :: zero_mode_stype
+    integer :: q,stype_q
+    real(rp) :: lambda_scale,lambda_tol
+    lambda_scale = 1._rp
+    if(present(lambda)) lambda_scale = max(lambda_scale,maxval(abs(lambda)))
+    lambda_tol = 100._rp*epsilon(lambda_scale)*lambda_scale
     do q=1,n
-      call create_solver(maxiter,maxerror,is_symm_matrix,stype,asolver(q))
+      stype_q = stype
+      if(present(lambda).and.present(zero_mode_stype)) then
+        if(q <= size(lambda).and.zero_mode_stype > 0) then
+          if(abs(lambda(q)) <= lambda_tol) stype_q = zero_mode_stype
+        end if
+      end if
+      call create_solver(maxiter,maxerror,is_symm_matrix,stype_q,asolver(q))
     end do
   end subroutine create_n_solvers
   subroutine setup_n_solvers(n,asolver)
@@ -1215,6 +1285,8 @@ module mod_solver
       else if ( stype == HYPRESolverBiCGSTAB ) then
         call HYPRE_StructBiCGSTABSolve(solver,mat,rhs,sol,ierr)
         !call HYPRE_StructBiCGSTABGetNumItera(solver, num_iterations,ierr)
+      else if ( stype == HYPRESolverFlexGMRES ) then
+        call HYPRE_StructFGMRESSolve(solver,mat,rhs,sol,ierr)
       end if ! stype
       !
       ! end of part based on the Paris Simulator code

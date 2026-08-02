@@ -50,14 +50,17 @@ program snac
                                  vol_all,my_block,id_first,nblocks,nrank,  &
                                  is_periodic,l_periodic,                   &
                                  lmax_max,lmin_min,                        &
-                                 hypre_tol,hypre_maxiter,hypre_solver_i
+                                 hypre_tol,hypre_maxiter,hypre_solver_i, &
+                                 hypre_fft_zero_mode_solver_i, &
+                                 hypre_precond_i,hypre_precond_maxiter,hypre_gmres_k_dim, &
+                                 hypre_pfmg_relax_type,hypre_pfmg_num_pre_relax,hypre_pfmg_num_post_relax
   use mod_updt_pressure  , only: updt_pressure
   use mod_rk             , only: rk_mom,rk_scal
   use mod_post           , only: cmpt_wall_forces, updt_wall_forces
   use mod_scal           , only: scalar,initialize_scalars,bulk_forcing_s
   use mod_sanity         , only: test_sanity
   use mod_solver         , only: init_bc_rhs,init_matrix_3d,create_solver,setup_solver, &
-                                 solve_helmholtz,finalize_matrix,hypre_solver
+                                 solve_helmholtz,finalize_matrix,hypre_solver,configure_hypre_options
 #ifdef _IMPDIFF
   use mod_solve_helmholtz, only: solve_impdiff_field
 #endif
@@ -193,6 +196,15 @@ program snac
   ! read parameter file
   !
   call read_input()
+  call configure_hypre_options(hypre_precond_i,hypre_precond_maxiter,hypre_gmres_k_dim, &
+                               hypre_pfmg_relax_type,hypre_pfmg_num_pre_relax,hypre_pfmg_num_post_relax)
+#ifdef _FFT_USE_SLICED_PENCILS
+  if(hypre_fft_zero_mode_solver_i > 0) then
+    if(myid == 0) write(stderr,*) 'WARNING: the FFT zero-mode solver override is unavailable with sliced pencils.'
+    if(myid == 0) write(stderr,*) 'Using hypre_solver_i for every sliced-pencil system.'
+    hypre_fft_zero_mode_solver_i = 0
+  end if
+#endif
   !
   ! check sanity of input file
   !
@@ -759,7 +771,12 @@ end if
   call init_n_3d_matrices(idir,nslices,cbcpre,bcpre,dl,.true.,is_bound,is_centered,lo,periods, &
                           lo_sp,hi_sp,dxc,dxf,dyc,dyf,dzc,dzf,alpha,alpha_bc,lambda_p_a,psolver_fft)
 #endif
+#ifndef _FFT_USE_SLICED_PENCILS
+  call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,.true.,hypre_solver_i,psolver_fft, &
+                        lambda=lambda_p_a,zero_mode_stype=hypre_fft_zero_mode_solver_i)
+#else
   call create_n_solvers(npsolvers,hypre_maxiter,hypre_tol,.true.,hypre_solver_i,psolver_fft)
+#endif
   call setup_n_solvers(npsolvers,psolver_fft)
 #else
   call init_matrix_3d(cbcpre,bcpre,dl,.true.,is_bound,is_centered,lo,hi,periods, &
