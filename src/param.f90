@@ -82,11 +82,11 @@ contains
   implicit none
   integer :: iunit,iblock,ierr
   integer, allocatable, dimension(:) :: nranks
-  integer :: q
+  integer :: q,inb,ifriend
   character(len=1024) :: iomsg
-  character(len=2) :: cbc_pair
   integer           , dimension(      3,max_blocks) :: block_dims,block_ng,block_gt
   real(rp)          , dimension(      3,max_blocks) :: block_lmin,block_lmax,block_gr
+  real(rp)          , dimension(      3           ) :: block_lmin_min,block_lmax_max
   character(len=1  ), dimension(0:1,3,3,max_blocks) :: block_cbcvel
   real(rp)          , dimension(0:1,3,3,max_blocks) :: block_bcvel
   character(len=1  ), dimension(0:1,3,  max_blocks) :: block_cbcpre
@@ -223,7 +223,13 @@ contains
     call MPI_FINALIZE(ierr)
     error stop
   end if
-  is_periodic(:) = .true.
+  block_lmin_min(:) = minval(block_lmin(:,1:nblocks),dim=2)
+  block_lmax_max(:) = maxval(block_lmax(:,1:nblocks),dim=2)
+  !
+  ! a periodic direction has reciprocal friend faces spanning the global extent;
+  ! internal physical boundaries may interrupt the remaining block connections.
+  !
+  is_periodic(:) = .false.
   do iblock = 1,nblocks
     if( myid >= sum(nranks(1:iblock-1)).and. &
         myid <  sum(nranks(1:iblock  )) ) then
@@ -246,12 +252,26 @@ contains
       my_block = iblock
       id_first = sum(nranks(1:iblock-1))
     end if
-    do q=1,3
-      cbc_pair = block_cbcpre(0,q,iblock)//block_cbcpre(1,q,iblock)
-      is_periodic(q) = is_periodic(q).and.(cbc_pair == 'FF')
+    do q = 1,3
+      do inb = 0,1
+        if(block_cbcpre(inb,q,iblock) /= 'F') cycle
+        ifriend = nint(block_bcpre(inb,q,iblock))
+        if(ifriend < 1 .or. ifriend > nblocks) cycle
+        if(block_cbcpre(1-inb,q,ifriend) /= 'F') cycle
+        if(nint(block_bcpre(1-inb,q,ifriend)) /= iblock) cycle
+        if(inb == 0) then
+          is_periodic(q) = is_periodic(q).or. &
+                           (same_coordinate(block_lmin(q,iblock),block_lmin_min(q)).and. &
+                            same_coordinate(block_lmax(q,ifriend),block_lmax_max(q)))
+        else
+          is_periodic(q) = is_periodic(q).or. &
+                           (same_coordinate(block_lmax(q,iblock),block_lmax_max(q)).and. &
+                            same_coordinate(block_lmin(q,ifriend),block_lmin_min(q)))
+        end if
+      end do
     end do
   end do
-  call mpi_allreduce(MPI_IN_PLACE,is_periodic,3,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD,ierr)
+  call mpi_allreduce(MPI_IN_PLACE,is_periodic,3,MPI_LOGICAL,MPI_LOR,MPI_COMM_WORLD,ierr)
   deallocate(nranks)
   !
   ! compute volume of all blocks (useful to compute bulk averages)
@@ -329,5 +349,9 @@ contains
       call MPI_FINALIZE(ierr)
       error stop
     end subroutine abort_input
+    pure logical function same_coordinate(a,b)
+      real(rp), intent(in) :: a,b
+      same_coordinate = abs(a-b) <= small*max(1._rp,abs(a),abs(b))
+    end function same_coordinate
   end subroutine read_input
 end module mod_param

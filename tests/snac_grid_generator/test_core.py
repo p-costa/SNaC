@@ -276,10 +276,10 @@ class GridGeneratorTests(unittest.TestCase):
                 self.assertEqual(block.cbcvel[component][4:6], ["F", "F"])
                 self.assertEqual(block.bcvel[component][4:6], [float(block.id), float(block.id)])
 
-    def test_periodic_axis_requires_common_extent(self) -> None:
+    def test_periodic_axis_wraps_a_multi_block_chain(self) -> None:
         project = Project.from_dict(
             {
-                "name": "bad-periodic",
+                "name": "periodic-chain",
                 "periodicAxes": [True, False, False],
                 "blocks": [
                     {"id": 1, "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
@@ -287,9 +287,57 @@ class GridGeneratorTests(unittest.TestCase):
                 ],
             }
         )
+        updated, result = update_project_structure(project)
+        self.assertTrue(result.ok)
+        self.assertEqual(updated.blocks[0].bcpre[0:2], [2.0, 2.0])
+        self.assertEqual(updated.blocks[1].bcpre[0:2], [1.0, 1.0])
+
+    def test_periodic_axis_rejects_unmatched_outer_faces(self) -> None:
+        project = Project.from_dict(
+            {
+                "name": "bad-periodic",
+                "periodicAxes": [True, False, False],
+                "blocks": [
+                    {"id": 1, "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "lmin": [2, 1, 0], "lmax": [3, 2, 1]},
+                ],
+            }
+        )
         result = check_project(project)
         self.assertFalse(result.ok)
         self.assertTrue(any("periodic x" in error for error in result.errors))
+
+    def test_periodic_axis_can_be_interrupted_by_a_hole(self) -> None:
+        extents = [
+            (1, [0, 0, 0], [0.5, 1, 1], [4, 4, 4]),
+            (2, [0.5, 0, 0], [1.5, 1, 1], [8, 4, 4]),
+            (3, [1.5, 0, 0], [2, 1, 1], [4, 4, 4]),
+            (4, [0, 1, 0], [0.5, 2, 1], [4, 4, 4]),
+            (5, [1.5, 1, 0], [2, 2, 1], [4, 4, 4]),
+            (6, [0, 2, 0], [0.5, 3, 1], [4, 4, 4]),
+            (7, [0.5, 2, 0], [1.5, 3, 1], [8, 4, 4]),
+            (8, [1.5, 2, 0], [2, 3, 1], [4, 4, 4]),
+        ]
+        project = Project.from_dict(
+            {
+                "name": "periodic-hole",
+                "periodicAxes": [True, False, False],
+                "blocks": [
+                    {"id": block_id, "lmin": lmin, "lmax": lmax, "ng": ng}
+                    for block_id, lmin, lmax, ng in extents
+                ],
+            }
+        )
+        updated, result = update_project_structure(project)
+        self.assertTrue(result.ok, result.errors)
+        by_id = {block.id: block for block in updated.blocks}
+        self.assertEqual(by_id[1].bcpre[0], 3.0)
+        self.assertEqual(by_id[4].bcpre[0], 5.0)
+        self.assertEqual(by_id[6].bcpre[0], 8.0)
+        self.assertEqual(by_id[4].cbcpre[1], "N")
+        self.assertEqual(by_id[5].cbcpre[0], "N")
+        self.assertEqual(by_id[4].cbcvel[0][1], "D")
+        self.assertEqual(by_id[5].cbcvel[0][0], "D")
 
     def test_export_rejects_unstructured_partitioning(self) -> None:
         project = Project.from_dict(
