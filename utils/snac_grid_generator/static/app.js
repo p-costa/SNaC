@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
 
 const AXES = ["x", "y", "z"];
 const FACE_ORDER = ["x-", "x+", "y-", "y+", "z-", "z+"];
@@ -19,13 +20,43 @@ const PROFILE_OPTIONS = [
   ["tanh", "tanh"],
   ["erf", "erf"],
 ];
+const MONOTONE_CONTROL_LABELS = {
+  n: "Cells",
+  ratio: "Upper/lower ratio",
+  cell_ratio: "Cell-to-cell ratio",
+  width_start: "Lower spacing",
+  width_end: "Upper spacing",
+};
+const MONOTONE_CONTROL_PAIRS = [
+  ["n", "ratio"],
+  ["n", "cell_ratio"],
+  ["n", "width_start"],
+  ["n", "width_end"],
+  ["ratio", "cell_ratio"],
+  ["ratio", "width_start"],
+  ["ratio", "width_end"],
+  ["cell_ratio", "width_start"],
+  ["cell_ratio", "width_end"],
+  ["width_start", "width_end"],
+];
 const COLORS = [0x43c989, 0x76a9ff, 0xd28a3e, 0xc789e8, 0xe46868, 0x82c6c2, 0xd6bf5b, 0x9ba7ff];
+const BOUNDARY_COLORS = { D: 0xe46868, F: 0x43c989, N: 0x76a9ff, mixed: 0xd6bf5b };
 
 let project = null;
 let selectedId = 1;
 let currentAxis = "x";
 let groundGridVisible = true;
+let boundaryColorsVisible = true;
+let partitionPlanesVisible = true;
+let blockTool = "select";
 let lastCheck = null;
+let previewTimer = null;
+let previewSequence = 0;
+const previewCache = new Map();
+let historyTimer = null;
+let historyIndex = -1;
+let projectHistory = [];
+const HISTORY_LIMIT = 100;
 
 const els = {};
 let scene;
@@ -35,9 +66,15 @@ let controls;
 let raycaster;
 let pointer;
 let blockGroup;
+let boundaryFaceGroup;
 let gridHelper;
 let axesGroup;
+let partitionGroup;
 let selectedGridGroup;
+let transformControls;
+let selectedBlockMesh = null;
+let transformDrag = null;
+let isTransformDragging = false;
 const axisLabelMaterials = new Map();
 
 bootstrap();
@@ -50,6 +87,8 @@ async function bootstrap() {
   project = await response.json();
   selectedId = project.blocks[0]?.id ?? null;
   renderAll();
+  resetHistory();
+  schedulePreview(selectedId, 0);
   animate();
 }
 
@@ -63,6 +102,8 @@ function bindElements() {
     "update-structure",
     "download-json",
     "open-json",
+    "undo-project",
+    "redo-project",
     "reset-project",
     "status",
     "block-list",
@@ -73,6 +114,11 @@ function bindElements() {
     "scene",
     "fit-view",
     "toggle-grid",
+    "tool-select",
+    "tool-move",
+    "tool-scale",
+    "toggle-boundaries",
+    "toggle-partitions",
     "block-title",
     "remove-block",
     "block-name",
@@ -85,6 +131,7 @@ function bindElements() {
     "spacing-preview",
     "spacing-stats",
     "infer-connectivity",
+    "write-external-grid",
     "grid-source",
     "boundary-table",
     "check-results",
@@ -96,18 +143,26 @@ function bindElements() {
 function bindStaticEvents() {
   els.projectName.addEventListener("input", () => {
     project.name = els.projectName.value;
+    markProjectDirty();
   });
   els.scalarCount.addEventListener("input", () => {
     project.nscal = normalizedScalarCount(els.scalarCount.value);
     for (const block of project.blocks) ensureBoundaryArrays(block);
     renderInspector();
-    clearCheckState();
+    markProjectDirty();
   });
   els.inferConnectivity.addEventListener("change", () => {
     project.inferConnectivity = els.inferConnectivity.checked;
+    markProjectDirty();
+  });
+  els.writeExternalGrid.addEventListener("change", () => {
+    project.writeExternalGrid = els.writeExternalGrid.checked;
+    els.gridSource.disabled = !project.writeExternalGrid;
+    markProjectDirty();
   });
   els.gridSource.addEventListener("change", () => {
     project.externalGridSource = els.gridSource.value;
+    markProjectDirty();
   });
   els.addBlock.addEventListener("click", addFreeBlock);
   els.addAdjacent.addEventListener("click", addAdjacentBlock);
@@ -118,11 +173,27 @@ function bindStaticEvents() {
     gridHelper.visible = groundGridVisible;
     els.toggleGrid.classList.toggle("active", groundGridVisible);
   });
+  els.toolSelect.addEventListener("click", () => setBlockTool("select"));
+  els.toolMove.addEventListener("click", () => setBlockTool("translate"));
+  els.toolScale.addEventListener("click", () => setBlockTool("scale"));
+  els.toggleBoundaries.addEventListener("click", () => {
+    boundaryColorsVisible = !boundaryColorsVisible;
+    renderScene();
+  });
+  els.togglePartitions.addEventListener("click", () => {
+    partitionPlanesVisible = !partitionPlanesVisible;
+    renderScene();
+  });
   els.exportCase.addEventListener("click", exportCase);
-  els.checkProject.addEventListener("click", () => checkProject());
+  els.checkProject.addEventListener("click", () => {
+    if (project.inferConnectivity) updateStructure({ successMessage: "Grid checks passed" });
+    else checkProject();
+  });
   els.updateStructure.addEventListener("click", updateStructure);
   els.downloadJson.addEventListener("click", downloadProjectJson);
   els.openJson.addEventListener("change", openProjectJson);
+  els.undoProject.addEventListener("click", undoProject);
+  els.redoProject.addEventListener("click", redoProject);
   els.resetProject.addEventListener("click", resetProject);
   els.scene.addEventListener("pointerdown", selectFromScene);
   window.addEventListener("resize", resizeRenderer);
@@ -142,14 +213,25 @@ function initScene() {
   raycaster = new THREE.Raycaster();
   pointer = new THREE.Vector2();
   blockGroup = new THREE.Group();
+  boundaryFaceGroup = new THREE.Group();
   selectedGridGroup = new THREE.Group();
+  partitionGroup = new THREE.Group();
   axesGroup = new THREE.Group();
   gridHelper = new THREE.GridHelper(10, 20, 0x46515c, 0x252b32);
   gridHelper.rotation.x = Math.PI / 2;
   scene.add(gridHelper);
   scene.add(axesGroup);
   scene.add(blockGroup);
+  scene.add(boundaryFaceGroup);
   scene.add(selectedGridGroup);
+  scene.add(partitionGroup);
+
+  transformControls = new TransformControls(camera, renderer.domElement);
+  transformControls.setSpace("world");
+  transformControls.setSize(0.82);
+  transformControls.addEventListener("dragging-changed", handleTransformDragging);
+  transformControls.addEventListener("objectChange", handleTransformObjectChange);
+  scene.add(transformControls.getHelper ? transformControls.getHelper() : transformControls);
 
   const ambient = new THREE.HemisphereLight(0xffffff, 0x1a2028, 1.9);
   const key = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -160,6 +242,7 @@ function initScene() {
 
 function renderAll() {
   if (!project) return;
+  project.schemaVersion = project.schemaVersion ?? 1;
   project.blocks = project.blocks || [];
   project.nscal = normalizedScalarCount(project.nscal ?? project.nScal);
   project.periodicAxes = normalizedPeriodicAxes();
@@ -169,14 +252,20 @@ function renderAll() {
   els.projectName.value = project.name ?? "snac-grid";
   els.scalarCount.value = project.nscal;
   els.inferConnectivity.checked = project.inferConnectivity !== false;
+  project.writeExternalGrid = project.writeExternalGrid !== false;
+  els.writeExternalGrid.checked = project.writeExternalGrid;
   if (!["grid", "both"].includes(project.externalGridSource)) project.externalGridSource = "grid";
   els.gridSource.value = project.externalGridSource;
+  els.gridSource.disabled = !project.writeExternalGrid;
   els.addAdjacent.disabled = !selectedBlock();
   renderBlockList();
   renderInspector();
   renderScene();
   renderSpacingPreview();
   renderCheckResults();
+  updateHistoryButtons();
+  renderViewControls();
+  if (selectedId != null && !previewCache.has(selectedId)) schedulePreview(selectedId);
   if (window.lucide) window.lucide.createIcons();
 }
 
@@ -221,6 +310,7 @@ function renderInspector() {
   els.blockName.value = block.name ?? "";
   els.blockName.oninput = () => {
     block.name = els.blockName.value;
+    markProjectDirty();
     renderBlockList();
     renderScene();
   };
@@ -229,6 +319,7 @@ function renderInspector() {
   els.inivel.value = block.inivel ?? "zer";
   els.inivel.onchange = () => {
     block.inivel = els.inivel.value;
+    markProjectDirty();
   };
 
   renderPeriodicInputs();
@@ -266,7 +357,9 @@ function renderGeometryInputs(block) {
   `;
   els.resolutionGrid.innerHTML = `
     <span></span>${AXES.map((axis) => `<span class="axis-label">${axis.toUpperCase()}</span>`).join("")}
-    <span class="axis-label">ng</span>${AXES.map((axis, index) => numberInput("ng", index, block.ng[index], 1)).join("")}
+    <span class="axis-label">ng</span>${AXES.map((axis, index) =>
+      numberInput("ng", index, block.ng[index], 1, isCellCountDerived(ensureAxis(block, axis)))
+    ).join("")}
     <span class="axis-label">mpi</span>${AXES.map((axis, index) => numberInput("dims", index, block.dims[index], 1)).join("")}
   `;
   for (const input of [...els.geometryGrid.querySelectorAll("input"), ...els.resolutionGrid.querySelectorAll("input")]) {
@@ -276,10 +369,14 @@ function renderGeometryInputs(block) {
       const value = field === "ng" || field === "dims" ? Math.max(1, Math.round(Number(input.value) || 1)) : Number(input.value);
       block[field][index] = value;
       if (field === "dims") propagateMpiPartition(block.id, index, value);
-      if (field === "ng" || field === "lmin" || field === "lmax") renderSpacingPreview();
+      markProjectDirty(field === "ng" || field === "lmin" || field === "lmax" ? block.id : null);
+      if (field === "ng" || field === "lmin" || field === "lmax") schedulePreview(block.id);
       renderScene();
       renderBlockList();
     });
+    if (input.dataset.field === "dims") {
+      input.addEventListener("change", () => updateStructure({ silent: true }));
+    }
   }
 }
 
@@ -302,23 +399,30 @@ function renderAxisEditor(block) {
     <label class="field">
       <span>Mode</span>
       <select id="grid-kind">
-        <option value="snac">SNaC mapping</option>
-        <option value="multi">OpenFOAM multi-grading</option>
-        <option value="simple_ratio">Single ratio</option>
-        <option value="max_min">Min/max spacing</option>
+        <option value="snac">Native SNaC</option>
+        <option value="simple_ratio">Monotone grading</option>
+        <option value="max_min">Symmetric grading</option>
+        <option value="multi">Multi-region grading</option>
       </select>
     </label>
     <div id="grid-kind-body"></div>
+    <button id="apply-axis" class="button" type="button"><i data-lucide="copy-check"></i><span>Apply to aligned blocks</span></button>
   `;
   const kindSelect = document.getElementById("grid-kind");
   kindSelect.value = selectedKind;
   kindSelect.onchange = () => {
     axis.kind = kindSelect.value;
+    if (axis.kind === "simple_ratio") {
+      axis.controls = axis.controls?.length === 2 ? axis.controls : ["n", "ratio"];
+      setMonotoneControlsFromPreview(block, axis, axis.controls);
+    }
+    if (axis.kind === "max_min" && !["both", "middle"].includes(axis.side)) axis.side = "both";
     renderAxisEditor(block);
-    renderSpacingPreview();
-    renderScene();
+    renderGeometryInputs(block);
+    gridDefinitionChanged(block);
   };
   renderAxisKindBody(block, axis);
+  document.getElementById("apply-axis").onclick = applyAxisToAlignedBlocks;
 }
 
 function profileSelect(axis) {
@@ -333,20 +437,26 @@ function profileSelect(axis) {
   `;
 }
 
-function bindProfileSelect(axis) {
+function bindProfileSelect(block, axis) {
   const select = document.getElementById("grid-profile");
   if (!select) return;
   select.onchange = () => {
     axis.profile = select.value;
-    renderSpacingPreview();
-    renderScene();
+    if (axis.kind === "simple_ratio") {
+      if (axis.profile !== "geometric" && axis.controls?.includes("cell_ratio")) {
+        setMonotoneControlsFromPreview(block, axis, ["n", "ratio"]);
+      }
+      renderAxisKindBody(block, axis);
+    }
+    gridDefinitionChanged(block);
   };
 }
 
 function renderAxisKindBody(block, axis) {
   const body = document.getElementById("grid-kind-body");
+  const preview = previewCache.get(block.id)?.[currentAxis];
   if (axis.kind === "multi") {
-    axis.segments = axis.segments?.length ? axis.segments : [{ length: 1, cells: 1, ratio: 1 }];
+    axis.segments = axis.segments?.length ? axis.segments : [{ length: 1, cells: 1, ratio: 1, continuous: false }];
     body.innerHTML = `
       ${profileSelect(axis)}
       <div class="segment-table">
@@ -354,94 +464,92 @@ function renderAxisKindBody(block, axis) {
           .map(
             (segment, index) => `
           <div class="segment-row" data-segment="${index}">
-            <label class="field"><span>Length</span><input data-key="length" type="number" step="any" min="1e-12" value="${segment.length}"></label>
-            <label class="field"><span>Cells</span><input data-key="cells" type="number" step="any" min="1e-12" value="${segment.cells}"></label>
-            <label class="field"><span>Ratio</span><input data-key="ratio" type="number" step="any" min="1e-12" value="${segment.ratio}"></label>
+            <label class="field"><span>Length weight</span><input data-key="length" type="number" step="any" min="1e-12" value="${segment.length}"></label>
+            <label class="field"><span>Cell weight</span><input data-key="cells" type="number" step="any" min="1e-12" value="${segment.cells}"></label>
+            <label class="field"><span>End/start</span><input data-key="ratio" type="number" step="any" min="1e-12" value="${segment.ratio}" ${index > 0 && segment.continuous ? "disabled" : ""}></label>
+            <label class="segment-link" title="Match the previous segment spacing"><input data-key="continuous" type="checkbox" ${index > 0 && segment.continuous ? "checked" : ""} ${index === 0 ? "disabled" : ""}><i data-lucide="link"></i></label>
             <button class="button icon segment-remove" title="Remove segment"><i data-lucide="minus"></i></button>
           </div>
+          ${segmentMetricMarkup(preview?.segments?.[index], index)}
         `
           )
           .join("")}
       </div>
       <button id="add-segment" class="button"><i data-lucide="list-plus"></i><span>Add Segment</span></button>
     `;
-    bindProfileSelect(axis);
+    bindProfileSelect(block, axis);
     for (const row of body.querySelectorAll(".segment-row")) {
       const index = Number(row.dataset.segment);
-      for (const input of row.querySelectorAll("input")) {
+      for (const input of row.querySelectorAll('input[type="number"]')) {
         input.oninput = () => {
           axis.segments[index][input.dataset.key] = positiveNumber(input.value, 1);
-          renderSpacingPreview();
-          renderScene();
+          gridDefinitionChanged(block);
         };
       }
+      const continuity = row.querySelector('input[data-key="continuous"]');
+      continuity.onchange = () => {
+        axis.segments[index].continuous = continuity.checked;
+        renderAxisKindBody(block, axis);
+        gridDefinitionChanged(block);
+      };
       row.querySelector(".segment-remove").onclick = () => {
         if (axis.segments.length > 1) axis.segments.splice(index, 1);
         renderAxisKindBody(block, axis);
-        renderSpacingPreview();
-        renderScene();
+        gridDefinitionChanged(block);
       };
     }
     document.getElementById("add-segment").onclick = () => {
-      axis.segments.push({ length: 1, cells: 1, ratio: 1 });
+      axis.segments.push({ length: 1, cells: 1, ratio: 1, continuous: false });
       renderAxisKindBody(block, axis);
-      renderSpacingPreview();
-      renderScene();
+      gridDefinitionChanged(block);
     };
   } else if (axis.kind === "simple_ratio") {
+    normalizeMonotoneAxis(axis);
+    const pairs = MONOTONE_CONTROL_PAIRS.filter((pair) => axis.profile === "geometric" || !pair.includes("cell_ratio"));
+    const pairValue = axis.controls.join(",");
     body.innerHTML = `
       ${profileSelect(axis)}
-      <div class="form-grid two">
-        <label class="field"><span>Expansion</span><input id="simple-ratio" type="number" step="any" min="1e-12" value="${axis.ratio ?? 1}"></label>
-        <label class="field"><span>Bias</span>
-          <select id="simple-side">
-            <option value="end">Lower end</option>
-            <option value="start">Upper end</option>
-          </select>
-        </label>
-      </div>
+      <label class="field"><span>Controls</span><select id="monotone-controls">
+        ${pairs.map((pair) => `<option value="${pair.join(",")}" ${pair.join(",") === pairValue ? "selected" : ""}>${pair.map((key) => MONOTONE_CONTROL_LABELS[key]).join(" + ")}</option>`).join("")}
+      </select></label>
+      <div class="form-grid two">${axis.controls.map((key) => monotoneControlInput(block, axis, key)).join("")}</div>
     `;
-    bindProfileSelect(axis);
-    document.getElementById("simple-side").value = axis.side ?? "end";
-    document.getElementById("simple-ratio").oninput = (event) => {
-      axis.ratio = positiveNumber(event.target.value, 1);
-      renderSpacingPreview();
-      renderScene();
+    bindProfileSelect(block, axis);
+    document.getElementById("monotone-controls").onchange = (event) => {
+      setMonotoneControlsFromPreview(block, axis, event.target.value.split(","));
+      renderAxisKindBody(block, axis);
+      renderGeometryInputs(block);
+      gridDefinitionChanged(block);
     };
-    document.getElementById("simple-side").onchange = (event) => {
-      axis.side = event.target.value;
-      renderSpacingPreview();
-      renderScene();
-    };
+    for (const input of body.querySelectorAll("input[data-control]")) {
+      input.oninput = () => updateMonotoneControl(block, axis, input);
+    }
   } else if (axis.kind === "max_min") {
     body.innerHTML = `
       ${profileSelect(axis)}
       <div class="form-grid two">
-        <label class="field"><span>Min dx</span><input id="min-dx" type="number" step="any" min="1e-12" value="${axis.min ?? 0.01}"></label>
-        <label class="field"><span>Max dx</span><input id="max-dx" type="number" step="any" min="1e-12" value="${axis.max ?? 0.02}"></label>
+        <label class="field"><span>Minimum spacing</span><input id="min-dx" type="number" step="any" min="1e-12" value="${axis.min ?? 0.01}"></label>
+        <label class="field"><span>Maximum spacing</span><input id="max-dx" type="number" step="any" min="1e-12" value="${axis.max ?? 0.02}"></label>
       </div>
       <label class="field"><span>Cluster</span>
         <select id="max-min-side">
-          <option value="end">Lower end</option>
-          <option value="start">Upper end</option>
           <option value="both">Both ends</option>
           <option value="middle">Middle</option>
         </select>
       </label>
     `;
-    bindProfileSelect(axis);
-    document.getElementById("max-min-side").value = axis.side ?? "end";
+    bindProfileSelect(block, axis);
+    if (!["both", "middle"].includes(axis.side)) axis.side = "both";
+    document.getElementById("max-min-side").value = axis.side;
     for (const id of ["min-dx", "max-dx"]) {
       document.getElementById(id).oninput = () => {
         axis[id === "min-dx" ? "min" : "max"] = positiveNumber(document.getElementById(id).value, 0.01);
-        renderSpacingPreview();
-        renderScene();
+        gridDefinitionChanged(block);
       };
     }
     document.getElementById("max-min-side").onchange = (event) => {
       axis.side = event.target.value;
-      renderSpacingPreview();
-      renderScene();
+      gridDefinitionChanged(block);
     };
   } else {
     body.innerHTML = `
@@ -456,16 +564,108 @@ function renderAxisKindBody(block, axis) {
     document.getElementById("snac-gt").value = axis.gt ?? 0;
     document.getElementById("snac-gt").onchange = (event) => {
       axis.gt = Number(event.target.value);
-      renderSpacingPreview();
-      renderScene();
+      gridDefinitionChanged(block);
     };
     document.getElementById("snac-gr").oninput = (event) => {
       axis.gr = Math.max(0, Number(event.target.value) || 0);
-      renderSpacingPreview();
-      renderScene();
+      gridDefinitionChanged(block);
     };
   }
   if (window.lucide) window.lucide.createIcons();
+}
+
+function normalizeMonotoneAxis(axis) {
+  axis.controls = Array.isArray(axis.controls) && axis.controls.length === 2 ? axis.controls : ["n", "ratio"];
+  if (axis.profile !== "geometric" && axis.controls.includes("cell_ratio")) axis.controls = ["n", "ratio"];
+  axis.ratio = positiveNumber(axis.ratio, 1);
+  axis.cell_ratio = positiveNumber(axis.cell_ratio, 1);
+  axis.width_start = positiveNumber(axis.width_start, 0.01);
+  axis.width_end = positiveNumber(axis.width_end, 0.02);
+  axis.side = "end";
+}
+
+function monotoneControlInput(block, axis, key) {
+  const axisIndex = AXES.indexOf(currentAxis);
+  const value = key === "n" ? block.ng[axisIndex] : axis[key];
+  const step = key === "n" ? "1" : "any";
+  const min = key === "n" ? "1" : "1e-12";
+  return `<label class="field"><span>${MONOTONE_CONTROL_LABELS[key]}</span><input data-control="${key}" type="number" step="${step}" min="${min}" value="${value}"></label>`;
+}
+
+function updateMonotoneControl(block, axis, input) {
+  const key = input.dataset.control;
+  if (key === "n") {
+    const axisIndex = AXES.indexOf(currentAxis);
+    block.ng[axisIndex] = Math.max(1, Math.round(Number(input.value) || 1));
+    const overview = els.resolutionGrid.querySelector(`input[data-field="ng"][data-index="${axisIndex}"]`);
+    if (overview) overview.value = block.ng[axisIndex];
+  } else {
+    axis[key] = positiveNumber(input.value, axis[key] ?? 1);
+  }
+  gridDefinitionChanged(block);
+}
+
+function setMonotoneControlsFromPreview(block, axis, controls) {
+  const preview = previewCache.get(block.id)?.[currentAxis];
+  axis.controls = controls;
+  const axisIndex = AXES.indexOf(currentAxis);
+  const values = {
+    n: preview?.n ?? block.ng[axisIndex],
+    ratio: preview?.expansion ?? axis.ratio ?? 1,
+    cell_ratio: preview?.cellRatio ?? axis.cell_ratio ?? 1,
+    width_start: preview?.lower ?? axis.width_start ?? 0.01,
+    width_end: preview?.upper ?? axis.width_end ?? 0.02,
+  };
+  for (const key of controls) {
+    if (key === "n") block.ng[axisIndex] = Math.max(1, Math.round(values.n));
+    else axis[key] = positiveNumber(values[key], axis[key] ?? 1);
+  }
+  axis.side = "end";
+}
+
+function segmentMetricMarkup(metric, fallbackIndex = "") {
+  const index = metric?.index ?? fallbackIndex;
+  if (!metric) return `<div class="segment-metrics" data-segment-metric="${index}"></div>`;
+  return `<div class="segment-metrics" data-segment-metric="${index}">
+    <span>N <strong>${metric.cells}</strong></span>
+    <span>lower <strong>${formatNumber(metric.widthStart)}</strong></span>
+    <span>upper <strong>${formatNumber(metric.widthEnd)}</strong></span>
+    <span>jump <strong>${formatNumber(metric.jump)}</strong></span>
+  </div>`;
+}
+
+function updateSegmentMetrics(preview) {
+  for (const metric of preview?.segments ?? []) {
+    const container = els.axisEditor.querySelector(`[data-segment-metric="${metric.index}"]`);
+    if (container) container.outerHTML = segmentMetricMarkup(metric);
+    if (metric.continuous) {
+      const ratio = els.axisEditor.querySelector(`.segment-row[data-segment="${metric.index}"] input[data-key="ratio"]`);
+      if (ratio) ratio.value = formatNumber(metric.ratio);
+    }
+  }
+}
+
+async function applyAxisToAlignedBlocks() {
+  const block = selectedBlock();
+  if (!block) return;
+  setStatus(`Applying ${currentAxis.toUpperCase()} grid...`);
+  try {
+    const payload = await postJson("/api/apply-axis", {
+      project,
+      sourceBlockId: block.id,
+      axis: currentAxis,
+    });
+    project = payload.project;
+    previewCache.clear();
+    previewSequence += 1;
+    lastCheck = null;
+    renderAll();
+    scheduleHistoryCommit();
+    const count = payload.changedBlockIds?.length ?? 0;
+    setStatus(count ? `Applied ${currentAxis.toUpperCase()} grid to ${count} aligned block${count === 1 ? "" : "s"}` : "No other aligned blocks");
+  } catch (error) {
+    setStatus(error.message);
+  }
 }
 
 function renderBoundaryTable(block) {
@@ -496,7 +696,8 @@ function renderBoundaryTable(block) {
       } else {
         block.cbcpre[index] = select.value;
       }
-      clearCheckState();
+      markProjectDirty();
+      renderScene();
     };
   }
   for (const input of els.boundaryTable.querySelectorAll("input")) {
@@ -511,7 +712,7 @@ function renderBoundaryTable(block) {
       } else {
         block.bcvel[Number(input.dataset.component)][face] = value;
       }
-      clearCheckState();
+      markProjectDirty();
     };
   }
 }
@@ -520,7 +721,7 @@ function renderCheckResults() {
   if (!els.checkResults) return;
   const errors = lastCheck?.errors ?? [];
   const warnings = lastCheck?.warnings ?? [];
-  els.exportCase.disabled = false;
+  els.exportCase.disabled = !project.blocks.length || errors.length > 0;
   if (!lastCheck) {
     els.checkResults.innerHTML = "";
     return;
@@ -536,8 +737,15 @@ function renderCheckResults() {
 }
 
 function renderScene() {
-  blockGroup.clear();
-  selectedGridGroup.clear();
+  transformControls.detach();
+  selectedBlockMesh = null;
+  boundaryFaceGroup.visible = true;
+  selectedGridGroup.visible = true;
+  partitionGroup.visible = true;
+  clearDisposableGroup(blockGroup);
+  clearDisposableGroup(boundaryFaceGroup);
+  clearDisposableGroup(selectedGridGroup);
+  clearDisposableGroup(partitionGroup);
   for (const block of project.blocks) {
     const size = blockSize(block);
     const center = blockCenter(block);
@@ -553,21 +761,131 @@ function renderScene() {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), material);
     mesh.position.set(center[0], center[1], center[2]);
     mesh.userData.blockId = block.id;
+    mesh.userData.baseSize = size;
+    if (block.id === selectedId) selectedBlockMesh = mesh;
     blockGroup.add(mesh);
 
     const edges = new THREE.LineSegments(
       new THREE.EdgesGeometry(mesh.geometry),
       new THREE.LineBasicMaterial({ color: block.id === selectedId ? 0xffffff : 0x9aa6b2, transparent: true, opacity: block.id === selectedId ? 0.95 : 0.48 })
     );
-    edges.position.copy(mesh.position);
-    blockGroup.add(edges);
+    mesh.add(edges);
   }
+  drawBoundaryFaces();
   drawSelectedGrid();
+  drawPartitionPlanes();
   updateAxesHelper();
+  attachSelectedTransform();
+  renderViewControls();
+}
+
+function drawBoundaryFaces() {
+  const block = selectedBlock();
+  if (!block || !boundaryColorsVisible) return;
+  const size = blockSize(block);
+  const center = blockCenter(block);
+  for (let face = 0; face < 6; face += 1) {
+    const axisIndex = Math.floor(face / 2);
+    const side = face % 2;
+    const dimensions = axisIndex === 0 ? [size[1], size[2]] : axisIndex === 1 ? [size[0], size[2]] : [size[0], size[1]];
+    const geometry = new THREE.PlaneGeometry(dimensions[0], dimensions[1]);
+    if (axisIndex === 0) geometry.rotateY(Math.PI / 2);
+    if (axisIndex === 1) geometry.rotateX(Math.PI / 2);
+    const material = new THREE.MeshBasicMaterial({
+      color: boundaryFaceColor(block, face),
+      transparent: true,
+      opacity: 0.2,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(...center);
+    mesh.position.setComponent(axisIndex, side === 0 ? block.lmin[axisIndex] : block.lmax[axisIndex]);
+    mesh.renderOrder = 2;
+    boundaryFaceGroup.add(mesh);
+  }
+}
+
+function boundaryFaceColor(block, face) {
+  const velocityCodes = block.cbcvel.map((component) => component[face]);
+  const allCodes = [block.cbcpre[face], ...velocityCodes, ...block.cbcscal.map((scalar) => scalar[face])];
+  if (allCodes.every((code) => code === "F")) return BOUNDARY_COLORS.F;
+  const velocityCode = velocityCodes[0];
+  if (["D", "N"].includes(velocityCode) && velocityCodes.every((code) => code === velocityCode)) {
+    return BOUNDARY_COLORS[velocityCode];
+  }
+  return BOUNDARY_COLORS.mixed;
+}
+
+function drawPartitionPlanes() {
+  const block = selectedBlock();
+  const preview = block ? previewCache.get(block.id) : null;
+  if (!block || !preview || !partitionPlanesVisible) return;
+  const scale = Math.max(...blockSize(block), 1.0);
+  const material = new THREE.LineDashedMaterial({
+    color: 0xd6bf5b,
+    transparent: true,
+    opacity: 0.82,
+    dashSize: scale * 0.025,
+    gapSize: scale * 0.014,
+  });
+  for (let axisIndex = 0; axisIndex < 3; axisIndex += 1) {
+    const faces = preview[AXES[axisIndex]]?.faces ?? [];
+    for (const faceIndex of partitionFaceIndices(block.ng[axisIndex], block.dims[axisIndex])) {
+      if (faceIndex <= 0 || faceIndex >= faces.length - 1) continue;
+      const geometry = new THREE.BufferGeometry().setFromPoints(planeOutlinePoints(block, axisIndex, faces[faceIndex]));
+      const line = new THREE.Line(geometry, material);
+      line.computeLineDistances();
+      line.renderOrder = 3;
+      partitionGroup.add(line);
+    }
+  }
+}
+
+function partitionFaceIndices(n, partitions) {
+  if (partitions <= 1) return [];
+  const base = Math.floor(n / partitions);
+  const remainder = n % partitions;
+  return Array.from({ length: partitions - 1 }, (_, rank) => {
+    const count = rank + 1;
+    return count * base + Math.min(count, remainder);
+  });
+}
+
+function planeOutlinePoints(block, axisIndex, value) {
+  const [xmin, ymin, zmin] = block.lmin;
+  const [xmax, ymax, zmax] = block.lmax;
+  if (axisIndex === 0) {
+    return [
+      new THREE.Vector3(value, ymin, zmin),
+      new THREE.Vector3(value, ymax, zmin),
+      new THREE.Vector3(value, ymax, zmax),
+      new THREE.Vector3(value, ymin, zmax),
+      new THREE.Vector3(value, ymin, zmin),
+    ];
+  }
+  if (axisIndex === 1) {
+    return [
+      new THREE.Vector3(xmin, value, zmin),
+      new THREE.Vector3(xmax, value, zmin),
+      new THREE.Vector3(xmax, value, zmax),
+      new THREE.Vector3(xmin, value, zmax),
+      new THREE.Vector3(xmin, value, zmin),
+    ];
+  }
+  return [
+    new THREE.Vector3(xmin, ymin, value),
+    new THREE.Vector3(xmax, ymin, value),
+    new THREE.Vector3(xmax, ymax, value),
+    new THREE.Vector3(xmin, ymax, value),
+    new THREE.Vector3(xmin, ymin, value),
+  ];
 }
 
 function updateAxesHelper() {
-  axesGroup.clear();
+  clearDisposableGroup(axesGroup, false);
   const box = projectBox();
   const size = box.getSize(new THREE.Vector3());
   const origin = box.min.clone();
@@ -591,7 +909,11 @@ function updateAxesHelper() {
 
 function axisLabel(label, color) {
   const key = `${label}-${color}`;
-  if (axisLabelMaterials.has(key)) return new THREE.Sprite(axisLabelMaterials.get(key));
+  if (axisLabelMaterials.has(key)) {
+    const sprite = new THREE.Sprite(axisLabelMaterials.get(key));
+    sprite.userData.sharedMaterial = true;
+    return sprite;
+  }
   const canvas = document.createElement("canvas");
   canvas.width = 64;
   canvas.height = 64;
@@ -606,30 +928,24 @@ function axisLabel(label, color) {
   texture.colorSpace = THREE.SRGBColorSpace;
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
   axisLabelMaterials.set(key, material);
-  return new THREE.Sprite(material);
+  const sprite = new THREE.Sprite(material);
+  sprite.userData.sharedMaterial = true;
+  return sprite;
 }
 
 function drawSelectedGrid() {
-  selectedGridGroup.clear();
   const block = selectedBlock();
   if (!block) return;
+  const preview = previewCache.get(block.id);
+  if (!preview) return;
   const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32 });
-  const [xmin, ymin, zmin] = block.lmin;
-  const [xmax, ymax, zmax] = block.lmax;
   for (const axis of AXES) {
     const idx = AXES.indexOf(axis);
-    const faces = axisFaces(block, axis);
+    const faces = preview[axis]?.faces ?? [];
     const step = Math.max(1, Math.floor(faces.length / 34));
     for (let i = 0; i < faces.length; i += step) {
       const value = faces[i];
-      const points = [];
-      if (idx === 0) {
-        points.push(new THREE.Vector3(value, ymin, zmin), new THREE.Vector3(value, ymax, zmin), new THREE.Vector3(value, ymax, zmax), new THREE.Vector3(value, ymin, zmax), new THREE.Vector3(value, ymin, zmin));
-      } else if (idx === 1) {
-        points.push(new THREE.Vector3(xmin, value, zmin), new THREE.Vector3(xmax, value, zmin), new THREE.Vector3(xmax, value, zmax), new THREE.Vector3(xmin, value, zmax), new THREE.Vector3(xmin, value, zmin));
-      } else {
-        points.push(new THREE.Vector3(xmin, ymin, value), new THREE.Vector3(xmax, ymin, value), new THREE.Vector3(xmax, ymax, value), new THREE.Vector3(xmin, ymax, value), new THREE.Vector3(xmin, ymin, value));
-      }
+      const points = planeOutlinePoints(block, idx, value);
       selectedGridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
     }
   }
@@ -648,11 +964,15 @@ function renderSpacingPreview() {
     els.spacingStats.innerHTML = "";
     return;
   }
-  const faces = axisFaces(block, currentAxis);
-  const widths = [];
-  for (let i = 1; i < faces.length; i += 1) widths.push(faces[i] - faces[i - 1]);
-  const min = Math.min(...widths);
-  const max = Math.max(...widths);
+  const preview = previewCache.get(block.id)?.[currentAxis];
+  if (!preview?.faces?.length) {
+    els.spacingStats.innerHTML = "";
+    return;
+  }
+  const faces = preview.faces;
+  const widths = faces.slice(1).map((face, index) => face - faces[index]);
+  const min = preview.min;
+  const max = preview.max;
   const span = faces[faces.length - 1] - faces[0];
   ctx.strokeStyle = "#2fa872";
   ctx.lineWidth = 1;
@@ -672,181 +992,153 @@ function renderSpacingPreview() {
     else ctx.lineTo(x, y);
   });
   ctx.stroke();
+  const residuals = Object.values(preview.residuals ?? {}).map((value) => Math.abs(Number(value)));
+  const fitError = residuals.length ? Math.max(...residuals) : 0;
+  const idealCells = Number.isFinite(preview.idealN) ? formatNumber(preview.idealN) : "-";
   els.spacingStats.innerHTML = `
+    <span>cells<strong>${preview.n ?? widths.length}</strong></span>
+    <span>lower<strong>${formatNumber(preview.lower ?? widths[0])}</strong></span>
+    <span>upper<strong>${formatNumber(preview.upper ?? widths[widths.length - 1])}</strong></span>
     <span>min<strong>${formatNumber(min)}</strong></span>
     <span>max<strong>${formatNumber(max)}</strong></span>
-    <span>ratio<strong>${formatNumber(max / min)}</strong></span>
+    <span>upper/lower<strong>${formatNumber(preview.expansion ?? 1)}</strong></span>
+    <span>max growth<strong>${formatNumber(preview.maxGrowth ?? 1)}</strong></span>
+    <span>ideal cells<strong>${idealCells}</strong></span>
+    <span>fit error<strong>${formatPercent(fitError)}</strong></span>
   `;
 }
 
-function axisFaces(block, axisName) {
-  const idx = AXES.indexOf(axisName);
-  const n = Math.max(1, Math.round(block.ng[idx]));
-  const lmin = block.lmin[idx];
-  const lmax = block.lmax[idx];
-  const axis = ensureAxis(block, axisName);
-  if (axis.kind === "multi" || axis.kind === "simple_ratio") {
-    const segments = segmentsFromAxis(axis, lmax - lmin);
-    const widths = multiWidths(lmax - lmin, n, segments, axis.profile ?? "geometric");
-    const faces = [lmin];
-    for (const width of widths) faces.push(faces[faces.length - 1] + width);
-    faces[faces.length - 1] = lmax;
-    return faces;
-  }
-  if (axis.kind === "max_min") {
-    const segments = segmentsFromAxis(axis, lmax - lmin);
-    const widths = multiWidths(lmax - lmin, n, segments, axis.profile ?? "geometric");
-    const faces = [lmin];
-    for (const width of widths) faces.push(faces[faces.length - 1] + width);
-    faces[faces.length - 1] = lmax;
-    return faces;
-  }
-  const mapper = snacMapper(axis.gt ?? 0);
-  const faces = [lmin];
-  for (let q = 1; q <= n; q += 1) {
-    const r0 = q / n;
-    faces.push(lmin + mapper(axis.gr ?? 0, r0) * (lmax - lmin));
-  }
-  faces[faces.length - 1] = lmax;
-  return faces;
+function schedulePreview(blockId = selectedId, delay = 120) {
+  if (blockId == null) return;
+  window.clearTimeout(previewTimer);
+  const sequence = ++previewSequence;
+  previewTimer = window.setTimeout(() => requestPreview(blockId, sequence), delay);
 }
 
-function segmentsFromAxis(axis, length) {
-  if (axis.kind === "multi") return axis.segments?.length ? axis.segments : [{ length: 1, cells: 1, ratio: 1 }];
-  if (axis.kind === "simple_ratio") {
-    const ratio = positiveNumber(axis.ratio, 1);
-    return [{ length: 1, cells: 1, ratio: axis.side === "start" ? 1 / ratio : ratio }];
-  }
-  if (axis.kind === "max_min") {
-    const min = positiveNumber(axis.min, length);
-    const max = positiveNumber(axis.max, length);
-    const ratio = Math.max(min, max) / Math.min(min, max);
-    if (axis.side === "start") return [{ length: 1, cells: 1, ratio: 1 / ratio }];
-    if (axis.side === "both") return [{ length: 0.5, cells: 0.5, ratio }, { length: 0.5, cells: 0.5, ratio: 1 / ratio }];
-    if (axis.side === "middle") return [{ length: 0.5, cells: 0.5, ratio: 1 / ratio }, { length: 0.5, cells: 0.5, ratio }];
-    return [{ length: 1, cells: 1, ratio }];
-  }
-  return [{ length: 1, cells: 1, ratio: 1 }];
-}
-
-function multiWidths(length, n, segments, profile = "geometric") {
-  const lengthSum = segments.reduce((sum, item) => sum + positiveNumber(item.length, 1), 0);
-  const cellWeights = segments.map((item) => positiveNumber(item.cells, 1));
-  const cellSum = cellWeights.reduce((sum, value) => sum + value, 0);
-  let cells = cellWeights.map((value) => Math.max(1, Math.floor((value / cellSum) * n)));
-  while (cells.reduce((sum, value) => sum + value, 0) > n) {
-    const index = cells.findIndex((value) => value > 1);
-    if (index < 0) break;
-    cells[index] -= 1;
-  }
-  while (cells.reduce((sum, value) => sum + value, 0) < n) {
-    let best = 0;
-    let bestRem = -1;
-    for (let i = 0; i < cellWeights.length; i += 1) {
-      const rem = (cellWeights[i] / cellSum) * n - Math.floor((cellWeights[i] / cellSum) * n);
-      if (rem > bestRem) {
-        best = i;
-        bestRem = rem;
-      }
+async function requestPreview(blockId, sequence) {
+  try {
+    const payload = await postJson("/api/preview", { project, blockId });
+    if (sequence !== previewSequence) return;
+    const block = project.blocks.find((item) => item.id === payload.blockId);
+    if (!block) return;
+    block.ng = payload.ng;
+    scheduleHistoryCommit();
+    previewCache.set(block.id, payload.axes);
+    for (const input of els.resolutionGrid.querySelectorAll('input[data-field="ng"]')) {
+      const index = Number(input.dataset.index);
+      if (block.id === selectedId) input.value = block.ng[index];
     }
-    cells[best] += 1;
+    const monotoneCells = els.axisEditor.querySelector('input[data-control="n"]');
+    if (monotoneCells && block.id === selectedId) monotoneCells.value = block.ng[AXES.indexOf(currentAxis)];
+    updateSegmentMetrics(payload.axes[currentAxis]);
+    renderSpacingPreview();
+    renderScene();
+  } catch (error) {
+    if (sequence !== previewSequence) return;
+    previewCache.delete(blockId);
+    renderSpacingPreview();
+    renderScene();
+    setStatus(error.message);
   }
-  const widths = [];
-  segments.forEach((segment, index) => {
-    const segLength = (positiveNumber(segment.length, 1) / lengthSum) * length;
-    widths.push(...profileWidths(segLength, cells[index], positiveNumber(segment.ratio, 1), profile));
-  });
-  widths[widths.length - 1] += length - widths.reduce((sum, value) => sum + value, 0);
-  return widths;
 }
 
-function profileWidths(length, n, ratio, profile) {
-  if (profile === "geometric") return geometricWidths(length, n, ratio);
-  if (profile === "tanh" || profile === "erf") return mappedRatioWidths(length, n, ratio, profile);
-  return geometricWidths(length, n, ratio);
+function gridDefinitionChanged(block) {
+  if (!block) return;
+  markProjectDirty(block.id);
+  schedulePreview(block.id);
+  renderSpacingPreview();
+  renderScene();
 }
 
-function geometricWidths(length, n, ratio) {
-  if (n <= 1) return [length];
-  const cellRatio = Math.pow(ratio, 1 / (n - 1));
-  const first = Math.abs(cellRatio - 1) < 1e-12 ? length / n : (length * (1 - cellRatio)) / (1 - Math.pow(cellRatio, n));
-  const widths = Array.from({ length: n }, (_, index) => first * Math.pow(cellRatio, index));
-  widths[widths.length - 1] += length - widths.reduce((sum, value) => sum + value, 0);
-  return widths;
-}
-
-function mappedRatioWidths(length, n, ratio, profile) {
-  if (n <= 1 || Math.abs(ratio - 1) < 1e-12) return Array.from({ length: n }, () => length / n);
-  const target = Math.max(ratio, 1 / ratio);
-  const alpha = solveMappingAlpha(n, target, profile);
-  const faces = Array.from({ length: n + 1 }, (_, index) => mapOneEnd(alpha, index / n, profile));
-  let widths = Array.from({ length: n }, (_, index) => (faces[index + 1] - faces[index]) * length);
-  if (ratio < 1) widths = widths.reverse();
-  widths[widths.length - 1] += length - widths.reduce((sum, value) => sum + value, 0);
-  return widths;
-}
-
-function solveMappingAlpha(n, target, profile) {
-  let high = 1;
-  while (mappingRatio(n, high, profile) < target && high < 80) high *= 2;
-  if (mappingRatio(n, high, profile) < target) return high;
-  let low = 0;
-  for (let step = 0; step < 80; step += 1) {
-    const mid = 0.5 * (low + high);
-    if (mappingRatio(n, mid, profile) < target) low = mid;
-    else high = mid;
+function clearDisposableGroup(group, disposeGeometries = true) {
+  const geometries = new Set();
+  const materials = new Set();
+  for (const child of [...group.children]) {
+    child.traverse((object) => {
+      if (object.userData.sharedMaterial) return;
+      if (disposeGeometries && object.geometry) geometries.add(object.geometry);
+      if (!object.material) return;
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material);
+    });
+    group.remove(child);
   }
-  return 0.5 * (low + high);
+  for (const geometry of geometries) geometry.dispose();
+  for (const material of materials) material.dispose();
 }
 
-function mappingRatio(n, alpha, profile) {
-  const faces = Array.from({ length: n + 1 }, (_, index) => mapOneEnd(alpha, index / n, profile));
-  const start = faces[1] - faces[0];
-  const end = faces[n] - faces[n - 1];
-  return end / start;
+function setBlockTool(tool) {
+  blockTool = tool;
+  renderScene();
 }
 
-function mapOneEnd(alpha, r0, profile) {
-  if (!alpha) return r0;
-  if (profile === "erf") return 1 + erf((r0 - 1) * alpha) / erf(alpha);
-  return 1 + Math.tanh((r0 - 1) * alpha) / Math.tanh(alpha);
+function attachSelectedTransform() {
+  if (!selectedBlockMesh || blockTool === "select") return;
+  transformControls.setMode(blockTool);
+  transformControls.attach(selectedBlockMesh);
 }
 
-function erf(value) {
-  const sign = value < 0 ? -1 : 1;
-  const x = Math.abs(value);
-  const a1 = 0.254829592;
-  const a2 = -0.284496736;
-  const a3 = 1.421413741;
-  const a4 = -1.453152027;
-  const a5 = 1.061405429;
-  const p = 0.3275911;
-  const t = 1 / (1 + p * x);
-  const y = 1 - (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) * Math.exp(-x * x);
-  return sign * y;
+function handleTransformDragging(event) {
+  if (event.value) {
+    if (!selectedBlockMesh) return;
+    commitHistory();
+    isTransformDragging = true;
+    transformDrag = {
+      blockId: selectedBlockMesh.userData.blockId,
+      baseSize: [...selectedBlockMesh.userData.baseSize],
+    };
+    controls.enabled = false;
+    boundaryFaceGroup.visible = false;
+    selectedGridGroup.visible = false;
+    partitionGroup.visible = false;
+    return;
+  }
+
+  controls.enabled = true;
+  if (!isTransformDragging || !transformDrag) return;
+  const blockId = transformDrag.blockId;
+  isTransformDragging = false;
+  transformDrag = null;
+  commitHistory();
+  window.setTimeout(() => {
+    renderAll();
+    schedulePreview(blockId, 0);
+  }, 0);
 }
 
-function snacMapper(gt) {
-  const functions = [
-    (alpha, r0) => (alpha ? 0.5 * (1 + Math.tanh((r0 - 0.5) * alpha) / Math.tanh(alpha / 2)) : r0),
-    (alpha, r0) => (alpha ? 1 + Math.tanh((r0 - 1) * alpha) / Math.tanh(alpha) : r0),
-    (alpha, r0) => {
-      if (!alpha) return r0;
-      if (r0 <= 0.5) return 0.5 * Math.tanh(2 * alpha * r0) / Math.tanh(alpha);
-      return 0.5 * (2 + Math.tanh(2 * alpha * (r0 - 1)) / Math.tanh(alpha));
-    },
-    (alpha, r0) => (alpha ? 1 - (1 + Math.tanh(((1 - r0) - 1) * alpha) / Math.tanh(alpha)) : r0),
-    geometricOneEnd,
-    (alpha, r0) => 1 - geometricOneEnd(alpha, 1 - r0),
-    (alpha, r0) => (r0 <= 0.5 ? 0.5 * geometricOneEnd(alpha / 2, 2 * r0) : 1 - 0.5 * geometricOneEnd(alpha / 2, 2 * (1 - r0))),
-    (alpha, r0) => (r0 <= 0.5 ? 0.5 * (1 - geometricOneEnd(alpha / 2, (0.5 - r0) * 2)) : 0.5 * (1 + geometricOneEnd(alpha / 2, (r0 - 0.5) * 2))),
-  ];
-  return functions[gt] ?? functions[0];
+function handleTransformObjectChange() {
+  const mesh = transformControls.object;
+  if (!isTransformDragging || !transformDrag || !mesh) return;
+  const block = project.blocks.find((item) => item.id === transformDrag.blockId);
+  if (!block) return;
+  const center = mesh.position.toArray();
+  const size = transformDrag.baseSize.map((value, index) => Math.max(1.0e-9, value * Math.abs(mesh.scale.getComponent(index))));
+  block.lmin = center.map((value, index) => value - 0.5 * size[index]);
+  block.lmax = center.map((value, index) => value + 0.5 * size[index]);
+  updateGeometryInputValues(block);
+  markProjectDirty(block.id);
+  renderBlockList();
 }
 
-function geometricOneEnd(alpha, r0) {
-  if (r0 === 1 || !alpha) return r0;
-  return r0 * Math.pow((1 - Math.pow(r0, alpha)) / (1 - r0) / alpha, 1 / 3);
+function updateGeometryInputValues(block) {
+  for (const field of ["lmin", "lmax"]) {
+    for (const input of els.geometryGrid.querySelectorAll(`input[data-field="${field}"]`)) {
+      input.value = formatInputNumber(block[field][Number(input.dataset.index)]);
+    }
+  }
+}
+
+function renderViewControls() {
+  if (!selectedBlock() && blockTool !== "select") blockTool = "select";
+  const toolButtons = {
+    select: els.toolSelect,
+    translate: els.toolMove,
+    scale: els.toolScale,
+  };
+  for (const [tool, button] of Object.entries(toolButtons)) button.classList.toggle("active", blockTool === tool);
+  els.toolMove.disabled = !selectedBlock();
+  els.toolScale.disabled = !selectedBlock();
+  els.toggleBoundaries.classList.toggle("active", boundaryColorsVisible);
+  els.togglePartitions.classList.toggle("active", partitionPlanesVisible);
 }
 
 function addFreeBlock() {
@@ -862,6 +1154,7 @@ function addFreeBlock() {
   resetFriendBoundaries(copy);
   project.blocks.push(copy);
   selectedId = copy.id;
+  markProjectDirty(copy.id);
   renderAll();
 }
 
@@ -885,13 +1178,16 @@ function addAdjacentBlock() {
   resetFriendBoundaries(copy);
   project.blocks.push(copy);
   selectedId = copy.id;
+  markProjectDirty(copy.id);
   renderAll();
 }
 
 function removeSelectedBlock() {
   if (!selectedBlock()) return;
   project.blocks = project.blocks.filter((block) => block.id !== selectedId);
+  previewCache.delete(selectedId);
   selectedId = project.blocks[0]?.id ?? null;
+  markProjectDirty();
   renderAll();
 }
 
@@ -899,7 +1195,10 @@ function resetProject() {
   project.blocks = [];
   selectedId = null;
   lastCheck = null;
+  previewCache.clear();
+  previewSequence += 1;
   renderAll();
+  commitHistory();
   setStatus("All blocks erased");
 }
 
@@ -924,26 +1223,34 @@ async function checkProject(options = {}) {
   }
 }
 
-async function updateStructure() {
-  setStatus("Updating structure...");
+async function updateStructure(options = {}) {
+  if (!options.silent) setStatus("Updating structure...");
   try {
     const payload = await postJson("/api/update", { project, sourceBlockId: selectedId }, { allowInvalid: true });
     if (payload.project) {
       const oldSelectedId = selectedId;
       project = payload.project;
       selectedId = project.blocks.find((block) => block.id === oldSelectedId)?.id ?? project.blocks[0]?.id ?? null;
+      previewCache.clear();
+      previewSequence += 1;
     }
     lastCheck = payload;
     renderAll();
+    scheduleHistoryCommit();
     const warningText = payload.warnings?.length ? `, ${payload.warnings.length} warnings` : "";
-    setStatus(payload.ok ? `Structure updated${warningText}` : `${payload.errors.length} check issue${payload.errors.length === 1 ? "" : "s"}`);
+    if (!options.silent || !payload.ok) {
+      const successMessage = options.successMessage ?? "Structure updated";
+      setStatus(payload.ok ? `${successMessage}${warningText}` : `${payload.errors.length} check issue${payload.errors.length === 1 ? "" : "s"}`);
+    }
+    return payload.ok;
   } catch (error) {
     setStatus(error.message);
+    return false;
   }
 }
 
 async function exportCase() {
-  const valid = await checkProject({ silent: true });
+  const valid = project.inferConnectivity ? await updateStructure({ silent: true }) : await checkProject({ silent: true });
   if (!valid) {
     setStatus("Fix grid checks before writing");
     return;
@@ -990,7 +1297,10 @@ function openProjectJson(event) {
       project.blocks = project.blocks || [];
       selectedId = project.blocks[0]?.id ?? null;
       lastCheck = null;
+      previewCache.clear();
+      previewSequence += 1;
       renderAll();
+      resetHistory();
       setStatus(`Loaded ${file.name}`);
     } catch (error) {
       setStatus(error.message);
@@ -1001,12 +1311,13 @@ function openProjectJson(event) {
 }
 
 function selectFromScene(event) {
+  if (blockTool !== "select") return;
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
   const hit = raycaster.intersectObjects(blockGroup.children, false).find((item) => item.object.userData.blockId);
-  if (hit) {
+  if (hit && hit.object.userData.blockId !== selectedId) {
     selectedId = hit.object.userData.blockId;
     renderAll();
   }
@@ -1077,9 +1388,15 @@ function blockCenter(block) {
 function ensureAxis(block, axis) {
   block.axes = block.axes || {};
   block.axes[axis] = block.axes[axis] || defaultAxis();
-  block.axes[axis].segments = block.axes[axis].segments || [{ length: 1, cells: 1, ratio: 1 }];
+  block.axes[axis].segments = block.axes[axis].segments || [{ length: 1, cells: 1, ratio: 1, continuous: false }];
+  for (const segment of block.axes[axis].segments) segment.continuous = Boolean(segment.continuous);
   block.axes[axis].profile = block.axes[axis].profile || "geometric";
+  block.axes[axis].controls = block.axes[axis].controls || ["n", "ratio"];
   return block.axes[axis];
+}
+
+function isCellCountDerived(axis) {
+  return axis.kind === "max_min" || (axis.kind === "simple_ratio" && !axis.controls?.includes("n"));
 }
 
 function defaultAxis() {
@@ -1088,11 +1405,15 @@ function defaultAxis() {
     gt: 0,
     gr: 0,
     ratio: 1,
+    cell_ratio: 1,
+    width_start: 0.01,
+    width_end: 0.02,
+    controls: ["n", "ratio"],
     profile: "geometric",
     min: 0.01,
     max: 0.02,
     side: "end",
-    segments: [{ length: 1, cells: 1, ratio: 1 }],
+    segments: [{ length: 1, cells: 1, ratio: 1, continuous: false }],
   };
 }
 
@@ -1208,9 +1529,10 @@ function nextBlockId() {
   return Math.max(0, ...project.blocks.map((block) => block.id)) + 1;
 }
 
-function numberInput(field, index, value, min = null) {
+function numberInput(field, index, value, min = null, disabled = false) {
   const minAttr = min == null ? "" : `min="${min}"`;
-  return `<label class="field"><input data-field="${field}" data-index="${index}" type="number" step="any" ${minAttr} value="${value}"></label>`;
+  const disabledAttr = disabled ? 'disabled title="Derived from min/max spacing"' : "";
+  return `<label class="field"><input data-field="${field}" data-index="${index}" type="number" step="any" ${minAttr} ${disabledAttr} value="${value}"></label>`;
 }
 
 function boundaryComponent(name, face, code, value, component = null, forcedKind = null) {
@@ -1248,6 +1570,15 @@ function formatNumber(value) {
   return value.toPrecision(5);
 }
 
+function formatPercent(value) {
+  if (!Number.isFinite(value)) return "n/a";
+  return `${(100 * value).toPrecision(value < 0.001 ? 2 : 3)}%`;
+}
+
+function formatInputNumber(value) {
+  return Number(value.toPrecision(12)).toString();
+}
+
 function setStatus(message) {
   els.status.textContent = message;
 }
@@ -1256,6 +1587,78 @@ function clearCheckState() {
   lastCheck = null;
   renderCheckResults();
   setStatus("");
+}
+
+function markProjectDirty(blockId = null) {
+  if (blockId != null) previewCache.delete(blockId);
+  clearCheckState();
+  scheduleHistoryCommit();
+}
+
+function projectSnapshot() {
+  return {
+    project: JSON.stringify(project),
+    selectedId,
+    currentAxis,
+  };
+}
+
+function resetHistory() {
+  window.clearTimeout(historyTimer);
+  historyTimer = null;
+  projectHistory = [projectSnapshot()];
+  historyIndex = 0;
+  updateHistoryButtons();
+}
+
+function scheduleHistoryCommit(delay = 250) {
+  if (isTransformDragging) return;
+  window.clearTimeout(historyTimer);
+  historyTimer = window.setTimeout(commitHistory, delay);
+}
+
+function commitHistory() {
+  window.clearTimeout(historyTimer);
+  historyTimer = null;
+  const snapshot = projectSnapshot();
+  if (projectHistory[historyIndex]?.project === snapshot.project) return;
+  projectHistory = projectHistory.slice(0, historyIndex + 1);
+  projectHistory.push(snapshot);
+  if (projectHistory.length > HISTORY_LIMIT) projectHistory.shift();
+  historyIndex = projectHistory.length - 1;
+  updateHistoryButtons();
+}
+
+function undoProject() {
+  commitHistory();
+  if (historyIndex <= 0) return;
+  restoreHistory(historyIndex - 1);
+}
+
+function redoProject() {
+  if (historyIndex >= projectHistory.length - 1) return;
+  restoreHistory(historyIndex + 1);
+}
+
+function restoreHistory(index) {
+  window.clearTimeout(historyTimer);
+  historyTimer = null;
+  historyIndex = index;
+  const state = projectHistory[historyIndex];
+  project = JSON.parse(state.project);
+  selectedId = project.blocks.some((block) => block.id === state.selectedId) ? state.selectedId : project.blocks[0]?.id ?? null;
+  currentAxis = state.currentAxis;
+  lastCheck = null;
+  previewCache.clear();
+  previewSequence += 1;
+  renderAll();
+  setStatus("");
+}
+
+function updateHistoryButtons() {
+  if (!els.undoProject || !els.redoProject) return;
+  els.undoProject.disabled = historyIndex <= 0;
+  els.redoProject.disabled = historyIndex < 0 || historyIndex >= projectHistory.length - 1;
 }
 
 function escapeHtml(value) {

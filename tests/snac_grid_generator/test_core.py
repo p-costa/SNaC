@@ -3,15 +3,19 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+import warnings
 from pathlib import Path
 
 import numpy as np
 
 from utils.snac_grid_generator import (
     Project,
+    apply_axis_to_aligned_blocks,
     axis_grid_arrays,
+    axis_grid_diagnostics,
     check_project,
     export_project,
+    fit_monotone_spacing,
     solve_spacing,
     update_project_structure,
 )
@@ -23,6 +27,134 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertAlmostEqual(solution.cell_ratio, 2.0)
         self.assertAlmostEqual(solution.width_start, 1.0)
         self.assertAlmostEqual(solution.width_end, 4.0)
+
+    def test_spacing_solver_derives_cell_count_without_overflow(self) -> None:
+        solution = solve_spacing(length=1.0, width_start=0.1, ratio=3.0)
+        self.assertEqual(solution.n, 5)
+        self.assertAlmostEqual(solution.width_end / solution.width_start, 3.0)
+        geometric_sum = solution.width_start * sum(solution.cell_ratio**index for index in range(solution.n))
+        self.assertAlmostEqual(geometric_sum, solution.length)
+
+        single = solve_spacing(length=2.0, n=1)
+        self.assertEqual(single.width_start, 2.0)
+        self.assertEqual(single.width_end, 2.0)
+        with self.assertRaisesRegex(ValueError, "n=1"):
+            solve_spacing(length=2.0, n=1, ratio=2.0)
+
+    def test_geometric_monotone_accepts_every_control_pair(self) -> None:
+        for n, ratio in ((2, 0.1), (3, 0.7), (15, 1.3), (32, 10.0)):
+            reference = solve_spacing(length=1.0, n=n, ratio=ratio)
+            values = {
+                "n": reference.n,
+                "ratio": reference.ratio,
+                "cell_ratio": reference.cell_ratio,
+                "width_start": reference.width_start,
+                "width_end": reference.width_end,
+            }
+            controls = tuple(values)
+            for left_index, left in enumerate(controls):
+                for right in controls[left_index + 1 :]:
+                    axis = {
+                        "profile": "geometric",
+                        "controls": [left, right],
+                        left: values[left],
+                        right: values[right],
+                    }
+                    with self.subTest(n=n, ratio=ratio, controls=(left, right)):
+                        fit = fit_monotone_spacing(axis, 1.0, reference.n)
+                        self.assertEqual(fit.n, reference.n)
+                        self.assertAlmostEqual(fit.ratio / reference.ratio, 1.0, places=8)
+                        self.assertAlmostEqual(fit.cell_ratio / reference.cell_ratio, 1.0, places=8)
+                        self.assertAlmostEqual(fit.width_start / reference.width_start, 1.0, places=8)
+                        self.assertAlmostEqual(fit.width_end / reference.width_end, 1.0, places=8)
+
+    def test_mapped_monotone_inverts_endpoint_controls(self) -> None:
+        for profile in ("tanh", "erf"):
+            for n, ratio in ((4, 0.25), (8, 2.0), (32, 8.0)):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("error")
+                    reference = axis_grid_diagnostics(
+                        {
+                            "kind": "simple_ratio",
+                            "profile": profile,
+                            "controls": ["n", "ratio"],
+                            "ratio": ratio,
+                        },
+                        0.0,
+                        1.0,
+                        n,
+                    )
+                    values = {
+                        "n": n,
+                        "ratio": reference["expansion"],
+                        "width_start": reference["lower"],
+                        "width_end": reference["upper"],
+                    }
+                    pairs = (
+                        ("n", "width_start"),
+                        ("n", "width_end"),
+                        ("ratio", "width_start"),
+                        ("ratio", "width_end"),
+                        ("width_start", "width_end"),
+                    )
+                    for controls in pairs:
+                        axis = {
+                            "profile": profile,
+                            "controls": list(controls),
+                            **{control: values[control] for control in controls},
+                        }
+                        with self.subTest(profile=profile, n=n, ratio=ratio, controls=controls):
+                            fit = fit_monotone_spacing(axis, 1.0, n)
+                            self.assertEqual(fit.n, n)
+                            self.assertAlmostEqual(fit.ratio / ratio, 1.0, places=7)
+                            self.assertAlmostEqual(fit.width_start / reference["lower"], 1.0, places=7)
+                            self.assertAlmostEqual(fit.width_end / reference["upper"], 1.0, places=7)
+
+    def test_monotone_rejects_underdetermined_or_profile_specific_controls(self) -> None:
+        with self.assertRaisesRegex(ValueError, "do not determine n"):
+            fit_monotone_spacing(
+                {"profile": "geometric", "controls": ["ratio", "cell_ratio"], "ratio": 1.0, "cell_ratio": 1.0},
+                1.0,
+                32,
+            )
+        with self.assertRaisesRegex(ValueError, "only for geometric"):
+            fit_monotone_spacing(
+                {"profile": "tanh", "controls": ["n", "cell_ratio"], "cell_ratio": 1.01},
+                1.0,
+                32,
+            )
+
+    def test_monotone_diagnostics_report_achieved_fit(self) -> None:
+        metrics = axis_grid_diagnostics(
+            {
+                "kind": "simple_ratio",
+                "profile": "geometric",
+                "controls": ["width_start", "width_end"],
+                "width_start": 0.03,
+                "width_end": 0.12,
+            },
+            0.0,
+            1.0,
+            32,
+        )
+        self.assertEqual(metrics["n"], 15)
+        self.assertAlmostEqual(metrics["expansion"], 4.0)
+        self.assertAlmostEqual(metrics["idealN"], 15.236778, places=5)
+        self.assertAlmostEqual(metrics["residuals"]["width_start"], 0.015599, places=5)
+        self.assertAlmostEqual(metrics["residuals"]["width_end"], 0.015599, places=5)
+        arrays = axis_grid_arrays(
+            {
+                "kind": "simple_ratio",
+                "profile": "geometric",
+                "controls": ["width_start", "width_end"],
+                "width_start": 0.03,
+                "width_end": 0.12,
+            },
+            0.0,
+            1.0,
+            32,
+        )
+        self.assertEqual(arrays.faces[-2], 1.0)
 
     def test_multi_grading_normalizes_weights(self) -> None:
         arrays = axis_grid_arrays(
@@ -42,6 +174,48 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertAlmostEqual(arrays.faces[0], 0.0)
         self.assertAlmostEqual(arrays.faces[-2], 10.0)
         self.assertTrue(np.all(np.diff(arrays.faces[:-1]) > 0.0))
+
+    def test_multi_grading_distributes_remainder_across_segments(self) -> None:
+        arrays = axis_grid_arrays(
+            {
+                "kind": "multi",
+                "segments": [
+                    {"length": 1, "cells": 1, "ratio": 1},
+                    {"length": 1, "cells": 1, "ratio": 1},
+                    {"length": 1, "cells": 1, "ratio": 1},
+                ],
+            },
+            0.0,
+            1.0,
+            5,
+        )
+        widths = arrays.face_spacing[1:-1]
+        np.testing.assert_allclose(widths[:4], np.full(4, 1.0 / 6.0))
+        self.assertAlmostEqual(widths[4], 1.0 / 3.0)
+
+    def test_multi_grading_can_link_segment_spacing(self) -> None:
+        base = {
+            "kind": "multi",
+            "profile": "geometric",
+            "segments": [
+                {"length": 1, "cells": 1, "ratio": 4},
+                {"length": 1, "cells": 1, "ratio": 4},
+            ],
+        }
+        unlinked = axis_grid_diagnostics(base, 0.0, 1.0, 32)
+        self.assertGreater(unlinked["segments"][1]["jump"], 1.1)
+
+        base["segments"][1]["continuous"] = True
+        linked = axis_grid_diagnostics(base, 0.0, 1.0, 32)
+        self.assertAlmostEqual(linked["segments"][1]["jump"], 1.0, places=10)
+        self.assertTrue(linked["segments"][1]["continuous"])
+
+        project = Project.from_dict(
+            {"blocks": [{"id": 1, "ng": [32, 2, 2], "axes": {"x": base}}]}
+        )
+        saved = project.to_dict()
+        self.assertTrue(saved["blocks"][0]["axes"]["x"]["segments"][1]["continuous"])
+        self.assertEqual(Project.from_dict(saved).to_dict(), saved)
 
     def test_ratio_profiles_preserve_requested_direction(self) -> None:
         for profile in ("geometric", "tanh", "erf"):
@@ -69,6 +243,81 @@ class GridGeneratorTests(unittest.TestCase):
         widths = arrays.face_spacing[1:-1]
         self.assertGreater(widths[0], widths[15])
         self.assertGreater(widths[-1], widths[16])
+
+    def test_min_max_spacing_derives_cell_count_and_preserves_odd_symmetry(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "ng": [31, 2, 2],
+                        "lmin": [0, 0, 0],
+                        "lmax": [1, 1, 1],
+                        "axes": {"x": {"kind": "max_min", "min": 0.01, "max": 0.04, "side": "both"}},
+                    }
+                ]
+            }
+        )
+        block = project.blocks[0]
+        arrays = axis_grid_arrays(block.axes["x"].to_dict(), 0.0, 1.0, block.ng[0])
+        widths = arrays.face_spacing[1:-1]
+        self.assertEqual(block.ng[0], 46)
+        np.testing.assert_allclose(widths, widths[::-1], rtol=1.0e-12, atol=1.0e-14)
+        self.assertAlmostEqual(float(widths.min()), 0.01, delta=3.0e-5)
+        self.assertAlmostEqual(float(widths.max()), 0.04, delta=1.1e-4)
+
+        odd = axis_grid_arrays(
+            {"kind": "max_min", "min": 0.01, "max": 0.04, "side": "middle"},
+            0.0,
+            1.0,
+            31,
+        ).face_spacing[1:-1]
+        np.testing.assert_allclose(odd, odd[::-1], rtol=1.0e-12, atol=1.0e-14)
+
+        with self.assertRaisesRegex(ValueError, "max width"):
+            axis_grid_arrays({"kind": "max_min", "min": 0.04, "max": 0.01}, 0.0, 1.0, 32)
+
+    def test_legacy_one_sided_min_max_migrates_to_monotone_controls(self) -> None:
+        lower = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "ng": [32, 2, 2],
+                        "axes": {"x": {"kind": "max_min", "min": 0.01, "max": 0.04, "side": "end"}},
+                    }
+                ]
+            }
+        ).blocks[0].axes["x"]
+        self.assertEqual(lower.kind, "simple_ratio")
+        self.assertEqual(lower.controls, ["width_start", "width_end"])
+        self.assertEqual((lower.width_start, lower.width_end), (0.01, 0.04))
+
+        upper = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "ng": [32, 2, 2],
+                        "axes": {"x": {"kind": "max_min", "min": 0.01, "max": 0.04, "side": "start"}},
+                    }
+                ]
+            }
+        ).blocks[0].axes["x"]
+        self.assertEqual((upper.width_start, upper.width_end), (0.04, 0.01))
+
+        symmetric = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "axes": {"x": {"kind": "max_min", "min": 0.01, "max": 0.04, "side": "both"}},
+                    }
+                ]
+            }
+        ).blocks[0].axes["x"]
+        self.assertEqual(symmetric.kind, "max_min")
+        self.assertEqual(symmetric.side, "both")
 
     def test_export_writes_block_and_external_grids(self) -> None:
         project = Project.from_dict(
@@ -198,14 +447,99 @@ class GridGeneratorTests(unittest.TestCase):
             self.assertEqual(lines[0].split(), ["5", "1", "1"])
             self.assertEqual(lines[1].split(), ["10", "5", "2"])
 
-    def test_empty_project_exports_project_file(self) -> None:
+    def test_empty_project_can_exist_but_cannot_be_exported(self) -> None:
         project = Project.from_dict({"name": "empty", "blocks": []})
+        check = check_project(project)
+        self.assertFalse(check.ok)
+        self.assertTrue(any("no blocks" in error for error in check.errors))
         with tempfile.TemporaryDirectory() as tmp:
-            result = export_project(project, tmp)
+            with self.assertRaises(ValueError):
+                export_project(project, tmp)
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_model_rejects_non_finite_extents_and_normalizes_face_arrays(self) -> None:
+        with self.assertRaisesRegex(ValueError, "finite"):
+            Project.from_dict({"blocks": [{"id": 1, "lmin": [float("nan"), 0, 0]}]})
+
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "cbcpre": ["D"],
+                        "bcpre": [2.0],
+                        "inflow": [3],
+                    }
+                ]
+            }
+        )
+        block = project.blocks[0]
+        self.assertEqual(block.cbcpre, ["D", "N", "N", "N", "N", "N"])
+        self.assertEqual(block.bcpre, [2.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        self.assertEqual(block.inflow, [3, 0, 0, 0, 0, 0])
+
+    def test_project_json_has_an_explicit_schema_version(self) -> None:
+        project = Project.from_dict({"blocks": []})
+        self.assertEqual(project.to_dict()["schemaVersion"], 1)
+        with self.assertRaisesRegex(ValueError, "schema version"):
+            Project.from_dict({"schemaVersion": 2, "blocks": []})
+
+    def test_check_rejects_disconnected_blocks(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {"id": 1, "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "lmin": [2, 0, 0], "lmax": [3, 1, 1]},
+                ]
+            }
+        )
+        result = check_project(project)
+        self.assertFalse(result.ok)
+        self.assertTrue(any("disconnected" in error for error in result.errors))
+
+    def test_export_removes_stale_owned_grids_and_preserves_other_files(self) -> None:
+        project = Project.from_dict({"name": "managed", "blocks": [{"id": 1, "ng": [4, 4, 4]}]})
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            self.assertTrue((root / "blocks.nml").exists())
-            self.assertTrue((root / "snac_grid_project.json").exists())
-            self.assertEqual(len(result.files), 2)
+            export_project(project, root)
+            stale_grid = root / "grid" / "grid_x_b_001.bin"
+            self.assertTrue(stale_grid.exists())
+            unrelated = root / "data" / "simulation.out"
+            unrelated.write_text("keep\n", encoding="utf-8")
+
+            updated = project.to_dict()
+            updated["writeExternalGrid"] = False
+            export_project(updated, root)
+
+            self.assertFalse(stale_grid.exists())
+            self.assertFalse((root / "data" / "geometry_b_001.out").exists())
+            self.assertEqual(unrelated.read_text(encoding="utf-8"), "keep\n")
+            manifest = json.loads((root / ".snac_grid_generator_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["version"], 1)
+            self.assertNotIn("grid/grid_x_b_001.bin", manifest["files"])
+
+    def test_failed_export_does_not_replace_an_existing_case(self) -> None:
+        valid = Project.from_dict({"name": "valid", "blocks": [{"id": 1, "ng": [4, 4, 4]}]})
+        invalid = Project.from_dict(
+            {
+                "name": "invalid",
+                "blocks": [
+                    {"id": 1, "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "lmin": [2, 0, 0], "lmax": [3, 1, 1]},
+                ],
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_project(valid, root)
+            old_blocks = (root / "blocks.nml").read_bytes()
+            old_project = (root / "snac_grid_project.json").read_bytes()
+
+            with self.assertRaises(ValueError):
+                export_project(invalid, root)
+
+            self.assertEqual((root / "blocks.nml").read_bytes(), old_blocks)
+            self.assertEqual((root / "snac_grid_project.json").read_bytes(), old_project)
 
     def test_check_rejects_partial_face_contact(self) -> None:
         project = Project.from_dict(
@@ -238,6 +572,30 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertEqual(updated.blocks[1].cbcpre[0], "F")
         self.assertEqual(updated.blocks[0].bcpre[1], 2.0)
         self.assertEqual(updated.blocks[1].bcpre[0], 1.0)
+
+    def test_apply_axis_propagates_only_across_aligned_block_faces(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {"id": 1, "ng": [12, 17, 8], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "ng": [20, 9, 8], "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+                    {"id": 3, "ng": [12, 5, 8], "lmin": [0, 1, 0], "lmax": [1, 2, 1]},
+                ],
+            }
+        )
+        project.blocks[0].axes["y"].kind = "simple_ratio"
+        project.blocks[0].axes["y"].ratio = 3.0
+
+        updated, changed = apply_axis_to_aligned_blocks(project, 1, "y")
+        self.assertEqual(changed, [2])
+        self.assertEqual(updated.blocks[1].ng[1], 17)
+        self.assertEqual(updated.blocks[1].axes["y"].ratio, 3.0)
+        self.assertEqual(updated.blocks[2].ng[1], 5)
+
+        transverse, changed = apply_axis_to_aligned_blocks(project, 1, "x")
+        self.assertEqual(changed, [3])
+        self.assertEqual(transverse.blocks[1].ng[0], 20)
+        self.assertEqual(transverse.blocks[2].ng[0], 12)
 
     def test_check_rejects_broken_manual_friend_value(self) -> None:
         project = Project.from_dict(

@@ -8,7 +8,7 @@ external-grid option.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import erf, isclose, pow, tanh
+from math import erf, exp, isclose, log, pow, tanh
 from typing import Callable, Sequence
 
 import numpy as np
@@ -65,6 +65,30 @@ class SpacingSolution:
     width_end: float
 
 
+@dataclass(frozen=True)
+class MinMaxFit:
+    """Integer cell count and achieved spacings for min/max targets."""
+
+    n: int
+    width_min: float
+    width_max: float
+
+
+@dataclass(frozen=True)
+class MonotoneFit:
+    """Resolved one-way grading controls and their achieved endpoint widths."""
+
+    n: int
+    ratio: float
+    cell_ratio: float | None
+    width_start: float
+    width_end: float
+    ideal_n: float | None
+
+
+MONOTONE_CONTROLS = ("n", "ratio", "cell_ratio", "width_start", "width_end")
+
+
 def solve_spacing(
     *,
     length: float | None = None,
@@ -108,14 +132,145 @@ def solve_spacing(
     if missing:
         raise ValueError(f"not enough independent spacing parameters: missing {sorted(missing)}")
 
+    n_value = int(values["n"])
+    length_value = float(values["length"])
+    cell_ratio_value = float(values["cell_ratio"])
+    width_start_value = _first_width_from_cell_ratio(length_value, n_value, cell_ratio_value)
+    width_end_value = width_start_value * pow(cell_ratio_value, max(n_value - 1, 0))
+    ratio_value = width_end_value / width_start_value
+
     return SpacingSolution(
-        n=int(values["n"]),
-        length=float(values["length"]),
-        ratio=float(values["ratio"]),
-        cell_ratio=float(values["cell_ratio"]),
-        width_start=float(values["width_start"]),
-        width_end=float(values["width_end"]),
+        n=n_value,
+        length=length_value,
+        ratio=ratio_value,
+        cell_ratio=cell_ratio_value,
+        width_start=width_start_value,
+        width_end=width_end_value,
     )
+
+
+def fit_monotone_spacing(axis: dict, length: float, n: int) -> MonotoneFit:
+    """Resolve two user-selected controls for a monotone spacing profile."""
+
+    length = _positive(length, "axis length")
+    profile = str(axis.get("profile", "geometric")).lower()
+    raw_controls = axis.get("controls")
+    legacy = not isinstance(raw_controls, (list, tuple))
+    controls = tuple(dict.fromkeys(str(value) for value in (raw_controls or ("n", "ratio"))))
+    if len(controls) != 2 or any(value not in MONOTONE_CONTROLS for value in controls):
+        raise ValueError("monotone grading requires two distinct supported controls")
+    if profile not in {"geometric", "tanh", "erf"}:
+        raise ValueError(f"unknown grid profile {profile!r}")
+    if profile != "geometric" and "cell_ratio" in controls:
+        raise ValueError("cell-to-cell ratio is available only for geometric grading")
+
+    ratio_value = _positive(axis.get("ratio", 1.0), "ratio")
+    if legacy and str(axis.get("side", "end")) == "start":
+        ratio_value = 1.0 / ratio_value
+    supplied = {
+        "n": int(n),
+        "ratio": ratio_value,
+        "cell_ratio": _positive(axis.get("cell_ratio", 1.0), "cell ratio"),
+        "width_start": _positive(axis.get("width_start", length / max(n, 1)), "lower spacing"),
+        "width_end": _positive(axis.get("width_end", length / max(n, 1)), "upper spacing"),
+    }
+
+    if profile == "geometric":
+        kwargs: dict[str, float | int] = {"length": length}
+        for control in controls:
+            kwargs[control] = supplied[control]
+        solution = solve_spacing(**kwargs)
+        ideal_n = _ideal_geometric_count(length, controls, supplied, solution)
+        return MonotoneFit(
+            n=solution.n,
+            ratio=solution.ratio,
+            cell_ratio=solution.cell_ratio,
+            width_start=solution.width_start,
+            width_end=solution.width_end,
+            ideal_n=ideal_n,
+        )
+
+    if "n" in controls:
+        n_value = int(supplied["n"])
+        other = next(value for value in controls if value != "n")
+        if other == "ratio":
+            ratio = float(supplied["ratio"])
+        else:
+            ratio = _solve_profile_ratio_from_endpoint(
+                length,
+                n_value,
+                float(supplied[other]),
+                profile,
+                endpoint=other,
+            )
+        ideal_n: float | None = float(n_value)
+    else:
+        if set(controls) == {"width_start", "width_end"}:
+            ratio = float(supplied["width_end"]) / float(supplied["width_start"])
+        elif "ratio" in controls:
+            ratio = float(supplied["ratio"])
+        else:
+            raise ValueError("this profile requires cells, endpoint ratio, or both endpoint spacings")
+        targets = {control: float(supplied[control]) for control in controls if control.startswith("width_")}
+        n_value, ideal_n = _fit_profile_cell_count(length, ratio, profile, targets)
+
+    widths = _profile_widths(length, n_value, ratio, profile)
+    return MonotoneFit(
+        n=n_value,
+        ratio=float(widths[-1] / widths[0]),
+        cell_ratio=None,
+        width_start=float(widths[0]),
+        width_end=float(widths[-1]),
+        ideal_n=ideal_n,
+    )
+
+
+def fit_min_max_cell_count(axis: dict, length: float, *, max_cells: int = 1_000_000) -> MinMaxFit:
+    """Fit an integer cell count to absolute min/max spacing targets.
+
+    The requested spacing ratio and clustering profile are retained exactly.
+    Since an integer number of cells generally cannot satisfy both absolute
+    targets exactly, the closest common scaling of the two targets is used.
+    """
+
+    length = _positive(length, "axis length")
+    target_min = _positive(axis.get("min", length), "min width")
+    target_max = _positive(axis.get("max", length), "max width")
+    if target_max < target_min:
+        raise ValueError("max width must be greater than or equal to min width")
+
+    estimated_max = int(length / target_min) + 2
+    upper = max(2, min(max_cells, estimated_max))
+    lower = 1
+
+    while lower <= upper:
+        mid = (lower + upper) // 2
+        widths = _max_min_widths(length, mid, axis)
+        if float(widths.min()) > target_min:
+            lower = mid + 1
+        else:
+            upper = mid - 1
+
+    if lower > max_cells:
+        raise ValueError(f"min/max spacing requires more than {max_cells} cells")
+
+    candidates = {
+        max(1, min(max_cells, value))
+        for value in range(max(1, lower - 4), min(max_cells, lower + 4) + 1)
+    }
+    best: tuple[float, int, float, float] | None = None
+    for candidate in sorted(candidates):
+        widths = _max_min_widths(length, candidate, axis)
+        width_min = float(widths.min())
+        width_max = float(widths.max())
+        error = max(abs(_log_ratio(width_min, target_min)), abs(_log_ratio(width_max, target_max)))
+        score = (error, candidate, width_min, width_max)
+        if best is None or score < best:
+            best = score
+
+    if best is None:
+        raise ValueError("could not fit min/max spacing targets")
+    return MinMaxFit(n=best[1], width_min=best[2], width_max=best[3])
 
 
 def axis_grid_arrays(axis: dict, lmin: float, lmax: float, n: int) -> GridArrays:
@@ -137,18 +292,79 @@ def axis_grid_arrays(axis: dict, lmin: float, lmax: float, n: int) -> GridArrays
             gt=int(axis.get("gt", 0)),
             gr=float(axis.get("gr", 0.0)),
         )
-    elif kind in {"multi", "simple_ratio"}:
+    elif kind == "multi":
         segments = _segments_from_axis(axis, length)
         widths = _multi_grading_widths(length, n, segments, profile=str(axis.get("profile", "geometric")))
         faces = np.concatenate(([float(lmin)], float(lmin) + np.cumsum(widths)))
+    elif kind == "simple_ratio":
+        fit = fit_monotone_spacing(axis, length, n)
+        widths = _profile_widths(length, fit.n, fit.ratio, str(axis.get("profile", "geometric")))
+        faces = np.concatenate(([float(lmin)], float(lmin) + np.cumsum(widths)))
     elif kind == "max_min":
-        segments = _segments_from_axis(axis, length)
-        widths = _multi_grading_widths(length, n, segments, profile=str(axis.get("profile", "geometric")))
+        widths = _max_min_widths(length, n, axis)
         faces = np.concatenate(([float(lmin)], float(lmin) + np.cumsum(widths)))
     else:
         raise ValueError(f"unknown axis grid kind {kind!r}")
 
+    faces[-1] = float(lmax)
     return _arrays_from_faces(faces)
+
+
+def axis_grid_diagnostics(axis: dict, lmin: float, lmax: float, n: int) -> dict:
+    """Return achieved spacing metrics used by the GUI and validation."""
+
+    arrays = axis_grid_arrays(axis, lmin, lmax, n)
+    widths = arrays.face_spacing[1:-1]
+    effective_n = int(widths.size)
+    adjacent = widths[1:] / widths[:-1] if effective_n > 1 else np.ones(1, dtype=float)
+    growth = np.maximum(adjacent, 1.0 / adjacent)
+    result: dict[str, object] = {
+        "n": effective_n,
+        "lower": float(widths[0]),
+        "upper": float(widths[-1]),
+        "min": float(widths.min()),
+        "max": float(widths.max()),
+        "expansion": float(widths[-1] / widths[0]),
+        "ratio": float(widths.max() / widths.min()),
+        "maxGrowth": float(growth.max()),
+        "cellRatio": None,
+        "idealN": None,
+        "residuals": {},
+        "segments": [],
+    }
+
+    kind = str(axis.get("kind", "snac"))
+    length = float(lmax) - float(lmin)
+    if kind == "simple_ratio":
+        fit = fit_monotone_spacing(axis, length, n)
+        result["cellRatio"] = fit.cell_ratio
+        result["idealN"] = fit.ideal_n
+        achieved = {
+            "n": float(fit.n),
+            "ratio": fit.ratio,
+            "cell_ratio": fit.cell_ratio,
+            "width_start": fit.width_start,
+            "width_end": fit.width_end,
+        }
+        controls = axis.get("controls") or ("n", "ratio")
+        residuals: dict[str, float] = {}
+        for control in controls:
+            requested = float(n) if control == "n" else float(axis.get(control, achieved.get(control) or 1.0))
+            value = achieved.get(control)
+            if value is not None and requested > 0.0:
+                residuals[str(control)] = float(value / requested - 1.0)
+        result["residuals"] = residuals
+    elif kind == "multi":
+        segments = _segments_from_axis(axis, length)
+        _, segment_data = _multi_grading_data(
+            length,
+            effective_n,
+            segments,
+            profile=str(axis.get("profile", "geometric")),
+        )
+        result["segments"] = segment_data
+
+    return result
 
 
 def spacing_from_widths(widths: Sequence[float], lmin: float) -> GridArrays:
@@ -171,10 +387,24 @@ def _derive(values: dict[str, float | int]) -> None:
     width_end = float(values["width_end"]) if "width_end" in values else None
     length = float(values["length"]) if "length" in values else None
 
+    if n == 1 and length is not None:
+        if ratio is not None and not isclose(ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL):
+            raise ValueError("n=1 requires a unit expansion ratio")
+        if cell_ratio is not None and not isclose(cell_ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL):
+            raise ValueError("n=1 requires a unit cell ratio")
+        if width_start is not None and not isclose(width_start, length, rel_tol=_REL_TOL, abs_tol=_REL_TOL):
+            raise ValueError("n=1 requires width_start to equal length")
+        if width_end is not None and not isclose(width_end, length, rel_tol=_REL_TOL, abs_tol=_REL_TOL):
+            raise ValueError("n=1 requires width_end to equal length")
+        values.update(ratio=1.0, cell_ratio=1.0, width_start=length, width_end=length)
+        return
+
     if n is not None and n > 1 and ratio is not None and "cell_ratio" not in values:
         values["cell_ratio"] = pow(ratio, 1.0 / (n - 1))
     if n is not None and n > 1 and cell_ratio is not None and "ratio" not in values:
         values["ratio"] = pow(cell_ratio, n - 1)
+    if n is None and ratio is not None and cell_ratio is not None:
+        values["n"] = _solve_n_from_ratio_cell_ratio(ratio, cell_ratio)
     if width_start is not None and width_end is not None and "ratio" not in values:
         values["ratio"] = width_end / width_start
     if width_start is not None and ratio is not None and "width_end" not in values:
@@ -200,6 +430,10 @@ def _derive(values: dict[str, float | int]) -> None:
         values["cell_ratio"] = _solve_cell_ratio_from_start(n, width_start, length)
     if n is not None and width_end is not None and length is not None and "cell_ratio" not in values:
         values["cell_ratio"] = _solve_cell_ratio_from_end(n, width_end, length)
+    if n is None and cell_ratio is not None and width_start is not None and length is not None:
+        values["n"] = _solve_n_from_cell_ratio_start(cell_ratio, width_start, length)
+    if n is None and cell_ratio is not None and width_end is not None and length is not None:
+        values["n"] = _solve_n_from_cell_ratio_end(cell_ratio, width_end, length)
 
     ratio = float(values["ratio"]) if "ratio" in values else None
     width_start = float(values["width_start"]) if "width_start" in values else None
@@ -208,7 +442,7 @@ def _derive(values: dict[str, float | int]) -> None:
         values["n"] = _solve_n_from_ratio_start(ratio, width_start, length)
 
 
-def _segments_from_axis(axis: dict, length: float) -> list[dict[str, float]]:
+def _segments_from_axis(axis: dict, length: float) -> list[dict[str, float | bool]]:
     kind = axis.get("kind", "snac")
     if kind == "multi":
         segments = axis.get("segments") or []
@@ -219,38 +453,41 @@ def _segments_from_axis(axis: dict, length: float) -> list[dict[str, float]]:
                 "length": _positive(seg.get("length", 1.0), "segment length weight"),
                 "cells": _positive(seg.get("cells", 1.0), "segment cell weight"),
                 "ratio": _positive(seg.get("ratio", 1.0), "segment ratio"),
+                "continuous": bool(seg.get("continuous", False)),
             }
             for seg in segments
         ]
-    if kind == "simple_ratio":
-        ratio = _positive(axis.get("ratio", 1.0), "ratio")
-        if axis.get("side", "end") == "start":
-            ratio = 1.0 / ratio
-        return [{"length": 1.0, "cells": 1.0, "ratio": ratio}]
     if kind == "max_min":
         min_width = _positive(axis.get("min", length), "min width")
         max_width = _positive(axis.get("max", length), "max width")
         if max_width < min_width:
-            min_width, max_width = max_width, min_width
+            raise ValueError("max width must be greater than or equal to min width")
         ratio = max_width / min_width
         side = axis.get("side", "end")
         if side == "start":
             return [{"length": 1.0, "cells": 1.0, "ratio": 1.0 / ratio}]
-        if side == "both":
-            return [
-                {"length": 0.5, "cells": 0.5, "ratio": ratio},
-                {"length": 0.5, "cells": 0.5, "ratio": 1.0 / ratio},
-            ]
-        if side == "middle":
-            return [
-                {"length": 0.5, "cells": 0.5, "ratio": 1.0 / ratio},
-                {"length": 0.5, "cells": 0.5, "ratio": ratio},
-            ]
         return [{"length": 1.0, "cells": 1.0, "ratio": ratio}]
     raise ValueError(f"unsupported axis kind {kind!r}")
 
 
-def _multi_grading_widths(length: float, n: int, segments: Sequence[dict[str, float]], *, profile: str = "geometric") -> np.ndarray:
+def _multi_grading_widths(
+    length: float,
+    n: int,
+    segments: Sequence[dict[str, float | bool]],
+    *,
+    profile: str = "geometric",
+) -> np.ndarray:
+    result, _ = _multi_grading_data(length, n, segments, profile=profile)
+    return result
+
+
+def _multi_grading_data(
+    length: float,
+    n: int,
+    segments: Sequence[dict[str, float | bool]],
+    *,
+    profile: str = "geometric",
+) -> tuple[np.ndarray, list[dict[str, float | int | bool]]]:
     if n < len(segments):
         raise ValueError(f"axis has {n} cells but {len(segments)} grading segments")
 
@@ -262,11 +499,42 @@ def _multi_grading_widths(length: float, n: int, segments: Sequence[dict[str, fl
     segment_cells = _allocate_cells(n, cell_weights)
 
     widths: list[np.ndarray] = []
-    for seg_length, seg_n, ratio in zip(segment_lengths, segment_cells, ratios):
-        widths.append(_profile_widths(float(seg_length), int(seg_n), float(ratio), profile))
+    diagnostics: list[dict[str, float | int | bool]] = []
+    previous_end: float | None = None
+    for index, (seg_length, seg_n, ratio) in enumerate(zip(segment_lengths, segment_cells, ratios)):
+        linked = index > 0 and bool(segments[index].get("continuous", False))
+        if linked and previous_end is not None:
+            ratio = _solve_profile_ratio_from_endpoint(
+                float(seg_length),
+                int(seg_n),
+                previous_end,
+                profile,
+                endpoint="width_start",
+            )
+        segment_widths = _profile_widths(float(seg_length), int(seg_n), float(ratio), profile)
+        start = float(segment_widths[0])
+        end = float(segment_widths[-1])
+        jump = 1.0 if previous_end is None else max(start / previous_end, previous_end / start)
+        widths.append(segment_widths)
+        diagnostics.append(
+            {
+                "index": index,
+                "length": float(seg_length),
+                "cells": int(seg_n),
+                "ratio": end / start,
+                "widthStart": start,
+                "widthEnd": end,
+                "jump": jump,
+                "continuous": linked,
+            }
+        )
+        previous_end = end
     result = np.concatenate(widths)
     result[-1] += length - float(result.sum())
-    return result
+    if diagnostics:
+        diagnostics[-1]["widthEnd"] = float(result[-1])
+        diagnostics[-1]["ratio"] = float(result[-1]) / float(diagnostics[-1]["widthStart"])
+    return result, diagnostics
 
 
 def _allocate_cells(n: int, weights: np.ndarray) -> np.ndarray:
@@ -276,14 +544,54 @@ def _allocate_cells(n: int, weights: np.ndarray) -> np.ndarray:
         candidates = np.where(cells > 1)[0]
         if candidates.size == 0:
             raise ValueError("cannot allocate at least one cell to each grading segment")
-        idx = candidates[np.argmin(scaled[candidates] - np.floor(scaled[candidates]))]
+        idx = candidates[np.argmax(cells[candidates] - scaled[candidates])]
         cells[idx] -= 1
     while int(cells.sum()) < n:
-        remainder = scaled - np.floor(scaled)
-        idx = int(np.argmax(remainder))
+        idx = int(np.argmax(scaled - cells))
         cells[idx] += 1
-        remainder[idx] = 0.0
     return cells
+
+
+def _max_min_widths(length: float, n: int, axis: dict) -> np.ndarray:
+    min_width = _positive(axis.get("min", length), "min width")
+    max_width = _positive(axis.get("max", length), "max width")
+    if max_width < min_width:
+        raise ValueError("max width must be greater than or equal to min width")
+    ratio = max_width / min_width
+    side = str(axis.get("side", "end"))
+    profile = str(axis.get("profile", "geometric"))
+
+    if side not in {"end", "start", "both", "middle"}:
+        raise ValueError(f"unknown min/max clustering side {side!r}")
+
+    if side == "start":
+        return _profile_widths(length, n, 1.0 / ratio, profile)
+    if side == "both":
+        return _symmetric_profile_widths(length, n, ratio, profile, cluster_middle=False)
+    if side == "middle":
+        return _symmetric_profile_widths(length, n, ratio, profile, cluster_middle=True)
+    return _profile_widths(length, n, ratio, profile)
+
+
+def _symmetric_profile_widths(
+    length: float,
+    n: int,
+    ratio: float,
+    profile: str,
+    *,
+    cluster_middle: bool,
+) -> np.ndarray:
+    half_n = (n + 1) // 2
+    half = _profile_widths(1.0, half_n, ratio, profile)
+    if cluster_middle:
+        half = half[::-1]
+    if n % 2:
+        widths = np.concatenate((half, half[-2::-1]))
+    else:
+        widths = np.concatenate((half, half[::-1]))
+    widths *= length / float(widths.sum())
+    widths[-1] += length - float(widths.sum())
+    return widths
 
 
 def _geometric_widths(length: float, n: int, ratio: float) -> np.ndarray:
@@ -304,6 +612,166 @@ def _profile_widths(length: float, n: int, ratio: float, profile: str) -> np.nda
     if profile_key in {"tanh", "erf"}:
         return _mapped_ratio_widths(length, n, ratio, profile_key)
     raise ValueError(f"unknown grid profile {profile!r}")
+
+
+def _solve_profile_ratio_from_endpoint(
+    length: float,
+    n: int,
+    target: float,
+    profile: str,
+    *,
+    endpoint: str,
+) -> float:
+    target = _positive(target, "endpoint spacing")
+    if endpoint not in {"width_start", "width_end"}:
+        raise ValueError(f"unknown spacing endpoint {endpoint!r}")
+    if n < 1:
+        raise ValueError("n must be >= 1")
+    if n == 1:
+        if not isclose(target, length, rel_tol=_REL_TOL, abs_tol=_REL_TOL * length):
+            raise ValueError("one cell requires its spacing to equal the axis length")
+        return 1.0
+
+    index = 0 if endpoint == "width_start" else -1
+
+    def error(log_ratio: float) -> float:
+        widths = _profile_widths(length, n, exp(log_ratio), profile)
+        return float(widths[index] - target)
+
+    limit = log(_RMAX)
+    try:
+        root = _bisect(error, -limit, limit)
+    except ValueError as exc:
+        uniform = length / n
+        raise ValueError(
+            f"{endpoint.replace('_', ' ')} {target:g} cannot be reached with {n} cells "
+            f"and {profile} grading (uniform spacing is {uniform:g})"
+        ) from exc
+    return exp(root)
+
+
+def _fit_profile_cell_count(
+    length: float,
+    ratio: float,
+    profile: str,
+    targets: dict[str, float],
+    *,
+    max_cells: int = 1_000_000,
+) -> tuple[int, float | None]:
+    if not targets:
+        raise ValueError("a spacing target is required when cell count is derived")
+    ratio = _positive(ratio, "ratio")
+    for key, value in targets.items():
+        targets[key] = _positive(value, key.replace("_", " "))
+
+    primary = "width_start" if "width_start" in targets else "width_end"
+    index = 0 if primary == "width_start" else -1
+    target = targets[primary]
+    minimum_n = 1 if isclose(ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL) else 2
+
+    def width_for(n_value: int) -> float:
+        return float(_profile_widths(length, n_value, ratio, profile)[index])
+
+    if width_for(minimum_n) < target:
+        crossing = minimum_n
+    else:
+        high = max(minimum_n + 1, int(length / target) + 2)
+        high = min(high, max_cells)
+        while width_for(high) > target and high < max_cells:
+            high = min(max_cells, high * 2)
+        if high >= max_cells and width_for(high) > target:
+            raise ValueError(f"spacing controls require more than {max_cells} cells")
+        low = minimum_n
+        while low < high:
+            mid = (low + high) // 2
+            if width_for(mid) > target:
+                low = mid + 1
+            else:
+                high = mid
+        crossing = low
+
+    candidates = range(max(minimum_n, crossing - 4), min(max_cells, crossing + 4) + 1)
+
+    def score(n_value: int) -> float:
+        widths = _profile_widths(length, n_value, ratio, profile)
+        errors = []
+        if "width_start" in targets:
+            errors.append(abs(_log_ratio(float(widths[0]), targets["width_start"])))
+        if "width_end" in targets:
+            errors.append(abs(_log_ratio(float(widths[-1]), targets["width_end"])))
+        return max(errors)
+
+    best = min(candidates, key=lambda value: (score(value), value))
+    lower = max(minimum_n, crossing - 1)
+    upper = max(lower + 1, crossing)
+    lower_width = width_for(lower)
+    upper_width = width_for(upper)
+    if lower_width > 0.0 and upper_width > 0.0 and not isclose(lower_width, upper_width):
+        fraction = log(target / lower_width) / log(upper_width / lower_width)
+        ideal_n = float(lower + min(1.0, max(0.0, fraction)))
+    else:
+        ideal_n = float(best)
+    return best, ideal_n
+
+
+def _ideal_geometric_count(
+    length: float,
+    controls: tuple[str, ...],
+    supplied: dict[str, float | int],
+    solution: SpacingSolution,
+) -> float | None:
+    if "n" in controls:
+        return float(solution.n)
+    if set(controls) == {"ratio", "cell_ratio"}:
+        ratio = float(supplied["ratio"])
+        cell_ratio = float(supplied["cell_ratio"])
+        if isclose(cell_ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL):
+            return None
+        return 1.0 + log(ratio) / log(cell_ratio)
+    if "cell_ratio" in controls:
+        cell_ratio = float(supplied["cell_ratio"])
+        if "width_start" in controls:
+            width = float(supplied["width_start"])
+            if isclose(cell_ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL):
+                return length / width
+            argument = 1.0 - length / width * (1.0 - cell_ratio)
+            return log(argument) / log(cell_ratio) if argument > 0.0 else None
+        if "width_end" in controls:
+            width = float(supplied["width_end"])
+            if isclose(cell_ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL):
+                return length / width
+            argument = 1.0 / (1.0 + length / width * (1.0 - cell_ratio) / cell_ratio)
+            return log(argument) / log(cell_ratio) if argument > 0.0 else None
+
+    ratio = solution.ratio
+    if "width_start" in controls:
+        width_start = float(supplied["width_start"])
+    elif "width_end" in controls:
+        width_start = float(supplied["width_end"]) / ratio
+    else:
+        return None
+    return _continuous_n_from_ratio_start(length, ratio, width_start)
+
+
+def _continuous_n_from_ratio_start(length: float, ratio: float, width_start: float) -> float | None:
+    if isclose(ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL):
+        return length / width_start
+
+    def implied_length(n_value: float) -> float:
+        cell_ratio = pow(ratio, 1.0 / (n_value - 1.0))
+        if isclose(cell_ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL):
+            return width_start * n_value
+        return width_start * (1.0 - pow(cell_ratio, n_value)) / (1.0 - cell_ratio)
+
+    low = 2.0
+    if implied_length(low) >= length:
+        return low
+    high = max(4.0, length / min(width_start, width_start * ratio) + 2.0)
+    while implied_length(high) < length and high < 1_000_000.0:
+        high *= 2.0
+    if high >= 1_000_000.0 and implied_length(high) < length:
+        return None
+    return _bisect(lambda value: implied_length(value) - length, low, high)
 
 
 def _mapped_ratio_widths(length: float, n: int, ratio: float, profile: str) -> np.ndarray:
@@ -328,6 +796,8 @@ def _solve_mapping_alpha(n: int, ratio: float, profile: str) -> float:
         r0 = np.arange(0, n + 1, dtype=float) / float(n)
         faces = np.array([_map_one_end(alpha, value, profile) for value in r0], dtype=float)
         widths = np.diff(faces)
+        if widths[0] <= 0.0:
+            return float("inf")
         return float(widths[-1] / widths[0])
 
     high = 1.0
@@ -358,6 +828,8 @@ def _snac_faces(n: int, lmin: float, lmax: float, gt: int, gr: float) -> np.ndar
 def _arrays_from_faces(faces: np.ndarray) -> GridArrays:
     if faces.ndim != 1 or faces.size < 2:
         raise ValueError("faces must be a one-dimensional array with at least two entries")
+    if not np.all(np.isfinite(faces)):
+        raise ValueError("grid faces must be finite")
     widths = np.diff(faces)
     if np.any(widths <= 0.0):
         raise ValueError("grid faces must be strictly increasing")
@@ -499,16 +971,68 @@ def _solve_n_from_ratio_start(ratio: float, width_start: float, length: float) -
     if isclose(ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL):
         return max(1, round(length / width_start))
 
-    def f(n_float: float) -> float:
-        if n_float <= 1.0:
-            return width_start - length
-        c = pow(ratio, 1.0 / (n_float - 1.0))
-        return width_start * (1.0 - pow(c, n_float)) / (1.0 - c) - length
+    def implied_length(n_value: int) -> float:
+        if n_value <= 1:
+            return width_start
+        cell_ratio_value = pow(ratio, 1.0 / (n_value - 1))
+        return _sum_geometric(width_start, cell_ratio_value, n_value)
 
-    d_min = min(width_start, width_start * ratio)
-    high = max(2.0, length / d_min + 1.0)
-    n_float = _bisect(f, 1.000001, high)
-    return max(1, round(n_float))
+    estimate = max(2, int(length / min(width_start, width_start * ratio)) + 2)
+    return _closest_integer_count(length, implied_length, estimate)
+
+
+def _solve_n_from_ratio_cell_ratio(ratio: float, cell_ratio: float) -> int:
+    if isclose(ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL) and isclose(
+        cell_ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL
+    ):
+        raise ValueError("ratio and cell_ratio do not determine n for a uniform grid")
+    if isclose(cell_ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL):
+        raise ValueError("cell_ratio=1 is incompatible with a non-unit expansion ratio")
+    n_float = 1.0 + np.log(ratio) / np.log(cell_ratio)
+    if not np.isfinite(n_float) or n_float < 1.0:
+        raise ValueError("ratio and cell_ratio imply an invalid cell count")
+    return max(1, round(float(n_float)))
+
+
+def _solve_n_from_cell_ratio_start(cell_ratio: float, width_start: float, length: float) -> int:
+    def implied_length(n_value: int) -> float:
+        return _sum_geometric(width_start, cell_ratio, n_value)
+
+    estimate = max(2, int(length / min(width_start, width_start * cell_ratio)) + 2)
+    return _closest_integer_count(length, implied_length, estimate)
+
+
+def _solve_n_from_cell_ratio_end(cell_ratio: float, width_end: float, length: float) -> int:
+    def implied_length(n_value: int) -> float:
+        return _sum_geometric(width_end, 1.0 / cell_ratio, n_value)
+
+    estimate = max(2, int(length / min(width_end, width_end / cell_ratio)) + 2)
+    return _closest_integer_count(length, implied_length, estimate)
+
+
+def _closest_integer_count(length: float, implied_length: Callable[[int], float], estimate: int) -> int:
+    def evaluate(n_value: int) -> float:
+        try:
+            value = float(implied_length(n_value))
+        except OverflowError:
+            return float("inf")
+        return value if np.isfinite(value) else float("inf")
+
+    high = max(2, estimate)
+    while evaluate(high) < length and high < 1_000_000:
+        high = min(1_000_000, high * 2)
+    if high >= 1_000_000 and evaluate(high) < length:
+        raise ValueError("spacing parameters require more than 1000000 cells")
+
+    low = 1
+    while low < high:
+        mid = (low + high) // 2
+        if evaluate(mid) < length:
+            low = mid + 1
+        else:
+            high = mid
+    candidates = range(max(1, low - 2), min(1_000_000, low + 2) + 1)
+    return min(candidates, key=lambda n_value: abs(_log_ratio(evaluate(n_value), length)))
 
 
 def _bisect(f: Callable[[float], float], left: float, right: float, *, max_steps: int = 500) -> float:
@@ -536,6 +1060,10 @@ def _bisect(f: Callable[[float], float], left: float, right: float, *, max_steps
 
 def _positive(value: float | int | str, name: str) -> float:
     value_f = float(value)
-    if value_f <= 0.0:
+    if not np.isfinite(value_f) or value_f <= 0.0:
         raise ValueError(f"{name} must be positive")
     return value_f
+
+
+def _log_ratio(value: float, reference: float) -> float:
+    return float(np.log(value / reference))
