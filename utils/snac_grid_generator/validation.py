@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 
 from .grid import AXIS_NAMES, axis_grid_arrays
-from .model import Block, Project
+from .model import AxisSpec, Block, Project
 
 FACE_ORDER = ("x-", "x+", "y-", "y+", "z-", "z+")
 FACE_INDEX = {
@@ -97,6 +97,9 @@ def check_project(project: Project | dict[str, Any]) -> CheckResult:
     topology = _build_topology(project.blocks, project.periodic_axes)
     result.errors.extend(topology.errors)
     result.warnings.extend(topology.warnings)
+    if not project.blocks:
+        result.errors.append("project has no blocks and cannot be exported as a SNaC case")
+    result.errors.extend(_check_connected_components(project.blocks, topology.connections))
     by_id = {block.id: block for block in project.blocks}
 
     result.errors.extend(_check_block_basics(project.blocks))
@@ -139,6 +142,56 @@ def update_project_structure(
     result.warnings.extend(_propagate_mpi_partitions(project.blocks, topology.connections, source_block_id))
     result.extend(check_project(project))
     return project, result
+
+
+def apply_axis_to_aligned_blocks(
+    project: Project | dict[str, Any],
+    source_block_id: int,
+    axis: str,
+) -> tuple[Project, list[int]]:
+    """Copy one axis grid to face-connected blocks with the same axis extent."""
+
+    project = _project_copy(project)
+    if axis not in AXIS_NAMES:
+        raise ValueError(f"unknown axis {axis!r}")
+    source = next((block for block in project.blocks if block.id == source_block_id), None)
+    if source is None:
+        raise ValueError(f"block {source_block_id} does not exist")
+
+    axis_index = AXIS_NAMES.index(axis)
+    topology = _build_topology(project.blocks, project.periodic_axes)
+    if topology.errors:
+        raise ValueError(topology.errors[0])
+    by_id = {block.id: block for block in project.blocks}
+    adjacency: dict[int, list[tuple[int, int]]] = {block.id: [] for block in project.blocks}
+    for connection in topology.connections:
+        adjacency[connection.a_id].append((connection.b_id, connection.axis_index))
+        adjacency[connection.b_id].append((connection.a_id, connection.axis_index))
+
+    aligned = {source.id}
+    pending = [source.id]
+    while pending:
+        current = pending.pop()
+        for neighbor_id, normal_axis in adjacency[current]:
+            neighbor = by_id[neighbor_id]
+            if normal_axis == axis_index or neighbor_id in aligned:
+                continue
+            if not (
+                _touches(neighbor.lmin[axis_index], source.lmin[axis_index])
+                and _touches(neighbor.lmax[axis_index], source.lmax[axis_index])
+            ):
+                continue
+            aligned.add(neighbor_id)
+            pending.append(neighbor_id)
+
+    changed: list[int] = []
+    for block_id in sorted(aligned - {source.id}):
+        block = by_id[block_id]
+        block.axes[axis] = AxisSpec.from_dict(source.axes[axis].to_dict())
+        block.ng[axis_index] = source.ng[axis_index]
+        changed.append(block_id)
+    project.validate()
+    return project, changed
 
 
 def _project_copy(project: Project | dict[str, Any]) -> Project:
@@ -269,6 +322,30 @@ def _check_block_basics(blocks: list[Block]) -> list[str]:
             except Exception as exc:
                 errors.append(f"block {block.id}: invalid {axis} grid ({exc})")
     return errors
+
+
+def _check_connected_components(blocks: list[Block], connections: list[FaceConnection]) -> list[str]:
+    if len(blocks) < 2:
+        return []
+
+    graph: dict[int, set[int]] = {block.id: set() for block in blocks}
+    for connection in connections:
+        graph[connection.a_id].add(connection.b_id)
+        graph[connection.b_id].add(connection.a_id)
+
+    seed = min(graph)
+    seen = {seed}
+    queue = [seed]
+    while queue:
+        current = queue.pop(0)
+        for neighbor in graph[current]:
+            if neighbor not in seen:
+                seen.add(neighbor)
+                queue.append(neighbor)
+    missing = sorted(set(graph) - seen)
+    if missing:
+        return [f"blocks {missing} are disconnected from block {seed}"]
+    return []
 
 
 def _check_boundary_pairs(blocks: list[Block]) -> list[str]:

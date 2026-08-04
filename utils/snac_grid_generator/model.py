@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from math import isfinite
 from typing import Any
 
-from .grid import AXIS_NAMES
+from .grid import AXIS_NAMES, fit_min_max_cell_count, fit_monotone_spacing
+
+PROJECT_SCHEMA_VERSION = 1
 
 
 @dataclass
@@ -15,6 +18,7 @@ class GradingSegment:
     length: float = 1.0
     cells: float = 1.0
     ratio: float = 1.0
+    continuous: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "GradingSegment":
@@ -22,10 +26,16 @@ class GradingSegment:
             length=float(data.get("length", 1.0)),
             cells=float(data.get("cells", 1.0)),
             ratio=float(data.get("ratio", 1.0)),
+            continuous=bool(data.get("continuous", False)),
         )
 
-    def to_dict(self) -> dict[str, float]:
-        return {"length": self.length, "cells": self.cells, "ratio": self.ratio}
+    def to_dict(self) -> dict[str, float | bool]:
+        return {
+            "length": self.length,
+            "cells": self.cells,
+            "ratio": self.ratio,
+            "continuous": self.continuous,
+        }
 
 
 @dataclass
@@ -36,6 +46,10 @@ class AxisSpec:
     gt: int = 0
     gr: float = 0.0
     ratio: float = 1.0
+    cell_ratio: float = 1.0
+    width_start: float = 0.01
+    width_end: float = 0.02
+    controls: list[str] = field(default_factory=lambda: ["n", "ratio"])
     profile: str = "geometric"
     min: float = 0.01
     max: float = 0.02
@@ -46,15 +60,40 @@ class AxisSpec:
     def from_dict(cls, data: dict[str, Any] | None) -> "AxisSpec":
         if not data:
             return cls()
+        kind = str(data.get("kind", "snac"))
+        side = str(data.get("side", "end"))
+        ratio = float(data.get("ratio", 1.0))
+        width_start = float(data.get("width_start", data.get("widthStart", data.get("min", 0.01))))
+        width_end = float(data.get("width_end", data.get("widthEnd", data.get("max", 0.02))))
+        controls_data = data.get("controls")
+
+        if kind == "simple_ratio" and controls_data is None:
+            if side == "start":
+                ratio = 1.0 / ratio
+            controls_data = ["n", "ratio"]
+            side = "end"
+        elif kind == "max_min" and side in {"end", "start"}:
+            minimum = float(data.get("min", 0.01))
+            maximum = float(data.get("max", 0.02))
+            width_start, width_end = (minimum, maximum) if side == "end" else (maximum, minimum)
+            ratio = width_end / width_start
+            controls_data = ["width_start", "width_end"]
+            kind = "simple_ratio"
+            side = "end"
+
         return cls(
-            kind=str(data.get("kind", "snac")),
+            kind=kind,
             gt=int(data.get("gt", 0)),
             gr=float(data.get("gr", 0.0)),
-            ratio=float(data.get("ratio", 1.0)),
+            ratio=ratio,
+            cell_ratio=float(data.get("cell_ratio", data.get("cellRatio", 1.0))),
+            width_start=width_start,
+            width_end=width_end,
+            controls=[str(value) for value in (controls_data or ["n", "ratio"])],
             profile=str(data.get("profile", "geometric")),
             min=float(data.get("min", 0.01)),
             max=float(data.get("max", 0.02)),
-            side=str(data.get("side", "end")),
+            side=side,
             segments=[GradingSegment.from_dict(item) for item in data.get("segments", [{"length": 1, "cells": 1, "ratio": 1}])],
         )
 
@@ -64,6 +103,10 @@ class AxisSpec:
             "gt": self.gt,
             "gr": self.gr,
             "ratio": self.ratio,
+            "cell_ratio": self.cell_ratio,
+            "width_start": self.width_start,
+            "width_end": self.width_end,
+            "controls": self.controls,
             "profile": self.profile,
             "min": self.min,
             "max": self.max,
@@ -105,12 +148,12 @@ class Block:
             lmax=[float(v) for v in data.get("lmax", [1.0, 1.0, 0.05])],
             axes={axis: AxisSpec.from_dict(axes_data.get(axis)) for axis in AXIS_NAMES},
             cbcvel=_string_rows(data.get("cbcvel"), 3, ["D"] * 6),
-            cbcpre=[str(v)[:1] for v in data.get("cbcpre", ["N"] * 6)],
+            cbcpre=_string_list(data.get("cbcpre"), ["N"] * 6),
             bcvel=_float_rows(data.get("bcvel"), 3, [0.0] * 6),
-            bcpre=[float(v) for v in data.get("bcpre", [0.0] * 6)],
+            bcpre=_float_list(data.get("bcpre"), [0.0] * 6),
             cbcscal=_string_rows(data.get("cbcscal"), scalar_rows, ["N"] * 6),
             bcscal=_float_rows(data.get("bcscal"), scalar_rows, [0.0] * 6),
-            inflow=[int(v) for v in data.get("inflow", [0] * 6)],
+            inflow=_int_list(data.get("inflow"), [0] * 6),
             inivel=str(data.get("inivel", "zer")),
         )
         block.validate()
@@ -125,10 +168,21 @@ class Block:
             raise ValueError(f"block {self.id}: ng must contain three positive integers")
         if len(self.lmin) != 3 or len(self.lmax) != 3:
             raise ValueError(f"block {self.id}: lmin/lmax must contain three coordinates")
+        if not all(isfinite(value) for value in [*self.lmin, *self.lmax]):
+            raise ValueError(f"block {self.id}: lmin/lmax coordinates must be finite")
         if any(high <= low for low, high in zip(self.lmin, self.lmax)):
             raise ValueError(f"block {self.id}: every lmax coordinate must exceed lmin")
-        for axis in AXIS_NAMES:
+        if not all(isfinite(value) for row in [*self.bcvel, *self.bcscal] for value in row):
+            raise ValueError(f"block {self.id}: velocity/scalar boundary values must be finite")
+        if not all(isfinite(value) for value in self.bcpre):
+            raise ValueError(f"block {self.id}: pressure boundary values must be finite")
+        for index, axis in enumerate(AXIS_NAMES):
             self.axes.setdefault(axis, AxisSpec())
+            length = self.lmax[index] - self.lmin[index]
+            if self.axes[axis].kind == "max_min":
+                self.ng[index] = fit_min_max_cell_count(self.axes[axis].to_dict(), length).n
+            elif self.axes[axis].kind == "simple_ratio":
+                self.ng[index] = fit_monotone_spacing(self.axes[axis].to_dict(), length, self.ng[index]).n
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -164,6 +218,9 @@ class Project:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Project":
+        schema_version = int(data.get("schemaVersion", PROJECT_SCHEMA_VERSION))
+        if schema_version != PROJECT_SCHEMA_VERSION:
+            raise ValueError(f"unsupported project schema version {schema_version}")
         blocks = [Block.from_dict(item) for item in data.get("blocks", [Block(id=1).to_dict()])]
         inferred_nscal = max((len(block.cbcscal) for block in blocks), default=0)
         project = cls(
@@ -182,6 +239,8 @@ class Project:
         self.nscal = max(0, int(self.nscal))
         self.periodic_axes.extend([False] * (3 - len(self.periodic_axes)))
         self.periodic_axes = self.periodic_axes[:3]
+        if self.external_grid_source not in {"grid", "data", "both"}:
+            raise ValueError("external grid source must be 'grid', 'data', or 'both'")
         seen: set[int] = set()
         for block in self.blocks:
             block.cbcscal = _resize_string_rows(block.cbcscal, self.nscal, ["N"] * 6)
@@ -193,6 +252,7 @@ class Project:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "schemaVersion": PROJECT_SCHEMA_VERSION,
             "name": self.name,
             "nscal": self.nscal,
             "periodicAxes": self.periodic_axes,
@@ -227,6 +287,24 @@ def _float_rows(data: Any, rows: int, default: list[float]) -> list[list[float]]
     while len(result) < rows:
         result.append(list(default))
     return result
+
+
+def _string_list(data: Any, default: list[str]) -> list[str]:
+    values = [str(value)[:1] for value in (data or [])[: len(default)]]
+    values.extend(default[len(values) :])
+    return values
+
+
+def _float_list(data: Any, default: list[float]) -> list[float]:
+    values = [float(value) for value in (data or [])[: len(default)]]
+    values.extend(default[len(values) :])
+    return values
+
+
+def _int_list(data: Any, default: list[int]) -> list[int]:
+    values = [int(value) for value in (data or [])[: len(default)]]
+    values.extend(default[len(values) :])
+    return values
 
 
 def _resize_string_rows(data: list[list[str]], rows: int, default: list[str]) -> list[list[str]]:

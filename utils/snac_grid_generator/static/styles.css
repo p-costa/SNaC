@@ -38,7 +38,7 @@ select {
 .toolbar {
   height: 58px;
   display: grid;
-  grid-template-columns: auto minmax(150px, 220px) minmax(74px, 90px) minmax(200px, 1fr) auto auto auto auto auto auto minmax(120px, 260px);
+  grid-template-columns: auto minmax(150px, 220px) minmax(74px, 90px) minmax(200px, 1fr) auto auto auto auto auto auto auto minmax(120px, 260px);
   gap: 10px;
   align-items: center;
   padding: 8px 12px;
@@ -163,6 +163,11 @@ select {
   background: #2b323a;
 }
 
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
 .button.primary {
   border-color: #2d8f64;
   background: #237d59;
@@ -175,6 +180,11 @@ select {
 .button.icon {
   width: 34px;
   padding: 0;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 6px;
 }
 
 .button.active {
@@ -380,9 +390,57 @@ select {
 
 .segment-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 34px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 34px 34px;
   gap: 6px;
   align-items: end;
+}
+
+.segment-link {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.segment-link:has(input:checked) {
+  border-color: #326b55;
+  color: var(--accent-strong);
+  background: #25362f;
+}
+
+.segment-link:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.segment-link input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segment-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+.segment-metrics {
+  min-height: 17px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  padding: 0 2px 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.segment-metrics strong {
+  color: var(--text);
+  font-weight: 600;
 }
 
 #spacing-preview {

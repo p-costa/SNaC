@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>SNaC Grid Generator</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="/styles.css" />
     <script type="importmap">
       {
@@ -38,6 +39,10 @@
         <i data-lucide="folder-open"></i>
         <input id="open-json" type="file" accept="application/json,.json" />
       </label>
+      <div class="toolbar-group">
+        <button id="undo-project" class="button icon" title="Undo" disabled><i data-lucide="undo-2"></i></button>
+        <button id="redo-project" class="button icon" title="Redo" disabled><i data-lucide="redo-2"></i></button>
+      </div>
       <button id="reset-project" class="button icon danger" title="Erase all blocks"><i data-lucide="rotate-ccw"></i></button>
       <div id="status" class="status"></div>
     </header>
@@ -74,6 +79,11 @@
       <section class="viewport-shell">
         <canvas id="scene"></canvas>
         <div class="view-tools">
+          <button id="tool-select" class="button icon active" title="Select blocks"><i data-lucide="mouse-pointer-2"></i></button>
+          <button id="tool-move" class="button icon" title="Move selected block"><i data-lucide="move-3d"></i></button>
+          <button id="tool-scale" class="button icon" title="Resize selected block"><i data-lucide="scaling"></i></button>
+          <button id="toggle-boundaries" class="button icon active" title="Toggle boundary colors: D red, N blue, F green, mixed velocity amber"><i data-lucide="palette"></i></button>
+          <button id="toggle-partitions" class="button icon active" title="Toggle MPI partition planes"><i data-lucide="panels-top-left"></i></button>
           <button id="fit-view" class="button icon" title="Fit view"><i data-lucide="scan"></i></button>
           <button id="toggle-grid" class="button icon active" title="Toggle ground grid"><i data-lucide="grid-3x3"></i></button>
         </div>
@@ -112,6 +122,7 @@
           <div class="section-title">Boundaries</div>
           <div class="form-grid two">
             <label class="check"><input id="infer-connectivity" type="checkbox" checked /> <span>Infer friends</span></label>
+            <label class="check"><input id="write-external-grid" type="checkbox" checked /> <span>Write external grid</span></label>
             <label class="field">
               <span>Grid files</span>
               <select id="grid-source">

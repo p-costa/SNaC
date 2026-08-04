@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 from .grid import AXIS_NAMES, axis_grid_arrays
 from .model import Block, Project
 from .validation import check_project, infer_project_connectivity
+
+_MANIFEST_NAME = ".snac_grid_generator_manifest.json"
+_MANIFEST_VERSION = 1
 
 @dataclass
 class ExportResult:
@@ -46,18 +50,45 @@ def export_project(project: Project | dict[str, Any], output_dir: str | Path) ->
     warnings.extend(check.warnings)
 
     output_path = Path(output_dir).expanduser().resolve()
+    output_path.mkdir(parents=True, exist_ok=True)
+    previous_files = _read_manifest(output_path)
+    if not previous_files and (output_path / "snac_grid_project.json").is_file():
+        previous_files = _legacy_generator_files(output_path)
+
+    with TemporaryDirectory(prefix=".snac_grid_stage_", dir=output_path) as temporary:
+        stage_path = Path(temporary)
+        staged_files, stage_warnings = _write_project(project, stage_path)
+        warnings.extend(stage_warnings)
+        relative_files = [path.relative_to(stage_path) for path in staged_files]
+        _write_manifest(stage_path, relative_files)
+
+        for relative in [*relative_files, Path(_MANIFEST_NAME)]:
+            target = output_path / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            (stage_path / relative).replace(target)
+
+    current_files = set(relative_files)
+    for relative in previous_files - current_files:
+        stale = output_path / relative
+        if stale.is_file():
+            stale.unlink()
+    _remove_empty_generated_directories(output_path)
+
+    files = [output_path / relative for relative in relative_files]
+    return ExportResult(output_dir=output_path, files=files, warnings=warnings)
+
+
+def _write_project(project: Project, output_path: Path) -> tuple[list[Path], list[str]]:
     grid_path = output_path / "grid"
     data_path = output_path / "data"
-    output_path.mkdir(parents=True, exist_ok=True)
     if project.write_external_grid:
         grid_path.mkdir(parents=True, exist_ok=True)
         data_path.mkdir(parents=True, exist_ok=True)
 
     blocks = _renumber_blocks(project.blocks)
-    extents, extent_warnings = _global_index_extents(blocks)
-    warnings.extend(extent_warnings)
-
+    extents, warnings = _global_index_extents(blocks)
     files: list[Path] = []
+
     blocks_file = output_path / "blocks.nml"
     blocks_file.write_text(_format_blocks_nml(blocks, project.nscal), encoding="utf-8")
     files.append(blocks_file)
@@ -71,8 +102,61 @@ def export_project(project: Project | dict[str, Any], output_dir: str | Path) ->
     project_file = output_path / "snac_grid_project.json"
     project_file.write_text(json.dumps(project.to_dict(), indent=2) + "\n", encoding="utf-8")
     files.append(project_file)
+    return files, warnings
 
-    return ExportResult(output_dir=output_path, files=files, warnings=warnings)
+
+def _write_manifest(output_path: Path, files: list[Path]) -> None:
+    payload = {
+        "version": _MANIFEST_VERSION,
+        "files": sorted(path.as_posix() for path in files),
+    }
+    (output_path / _MANIFEST_NAME).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _read_manifest(output_path: Path) -> set[Path]:
+    path = output_path / _MANIFEST_NAME
+    if not path.is_file():
+        return set()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return set()
+    if payload.get("version") != _MANIFEST_VERSION or not isinstance(payload.get("files"), list):
+        return set()
+    files: set[Path] = set()
+    for item in payload["files"]:
+        relative = _safe_relative_path(item)
+        if relative is not None:
+            files.add(relative)
+    return files
+
+
+def _legacy_generator_files(output_path: Path) -> set[Path]:
+    files = {Path("blocks.nml"), Path("snac_grid_project.json")}
+    patterns = (
+        "grid/grid_[xyz]_b_*.bin",
+        "grid/grid_[xyz]_b_*.out",
+        "data/grid_[xyz]_b_*.bin",
+        "data/grid_[xyz]_b_*.out",
+        "data/geometry_b_*.out",
+    )
+    for pattern in patterns:
+        files.update(path.relative_to(output_path) for path in output_path.glob(pattern) if path.is_file())
+    return files
+
+
+def _safe_relative_path(value: Any) -> Path | None:
+    path = Path(str(value))
+    if path.is_absolute() or ".." in path.parts or path == Path(_MANIFEST_NAME):
+        return None
+    return path
+
+
+def _remove_empty_generated_directories(output_path: Path) -> None:
+    for name in ("grid", "data"):
+        path = output_path / name
+        if path.is_dir() and not any(path.iterdir()):
+            path.rmdir()
 
 
 def _renumber_blocks(blocks: list[Block]) -> list[Block]:
