@@ -33,6 +33,7 @@
       </label>
       <button id="check-project" class="button" title="Check structured grid"><i data-lucide="circle-check"></i><span>Check</span></button>
       <button id="update-structure" class="button" title="Update connectivity and MPI partitions"><i data-lucide="refresh-cw"></i><span>Update</span></button>
+      <button id="repair-grids" class="button" title="Repair grid congruence"><i data-lucide="wand-sparkles"></i><span>Repair</span></button>
       <button id="export-case" class="button primary" title="Write case files"><i data-lucide="hard-drive-download"></i><span>Write</span></button>
       <button id="download-json" class="button icon" title="Download project JSON"><i data-lucide="file-json"></i></button>
       <label class="button icon file-button" title="Open project JSON">
@@ -73,6 +74,24 @@
             </label>
           </div>
           <button id="add-adjacent" class="button"><i data-lucide="panel-top-open"></i><span>Add Adjacent</span></button>
+        </div>
+        <div class="decomposition-panel">
+          <div class="section-title">MPI decomposition</div>
+          <label class="field"><span>Total ranks</span><input id="target-ranks" type="number" value="0" min="0" step="1" /></label>
+          <div id="decomposition-mode" class="mode-buttons" role="group" aria-label="Decomposition mode">
+            <button type="button" data-mode="auto" class="active">Auto</button>
+            <button type="button" data-mode="1d">1D</button>
+            <button type="button" data-mode="2d">2D</button>
+            <button type="button" data-mode="3d">3D</button>
+          </div>
+          <div id="decomposition-axes" class="axis-choices">
+            <span>Partition axes</span>
+            <label class="check"><input type="checkbox" data-axis="0" checked /><span>X</span></label>
+            <label class="check"><input type="checkbox" data-axis="1" checked /><span>Y</span></label>
+            <label class="check"><input type="checkbox" data-axis="2" checked /><span>Z</span></label>
+          </div>
+          <button id="balance-decomposition" class="button"><i data-lucide="network"></i><span>Balance</span></button>
+          <div id="decomposition-summary" class="decomposition-summary"></div>
         </div>
       </aside>
 
@@ -136,6 +155,17 @@
         </section>
       </aside>
     </main>
+
+    <dialog id="repair-dialog">
+      <div class="dialog-body">
+        <div class="dialog-title">Repair grids</div>
+        <div id="repair-summary" class="repair-summary"></div>
+        <div class="dialog-actions">
+          <button id="cancel-repair" class="button" type="button">Cancel</button>
+          <button id="confirm-repair" class="button primary" type="button">Apply</button>
+        </div>
+      </div>
+    </dialog>
 
     <script type="module" src="/app.js"></script>
   </body>

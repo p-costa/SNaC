@@ -50,6 +50,8 @@ let boundaryColorsVisible = true;
 let partitionPlanesVisible = true;
 let blockTool = "select";
 let lastCheck = null;
+let pendingRepair = null;
+let decompositionResult = null;
 let previewTimer = null;
 let previewSequence = 0;
 const previewCache = new Map();
@@ -100,6 +102,7 @@ function bindElements() {
     "export-case",
     "check-project",
     "update-structure",
+    "repair-grids",
     "download-json",
     "open-json",
     "undo-project",
@@ -111,6 +114,11 @@ function bindElements() {
     "add-adjacent",
     "adjacent-face",
     "adjacent-size",
+    "target-ranks",
+    "decomposition-mode",
+    "decomposition-axes",
+    "balance-decomposition",
+    "decomposition-summary",
     "scene",
     "fit-view",
     "toggle-grid",
@@ -135,6 +143,10 @@ function bindElements() {
     "grid-source",
     "boundary-table",
     "check-results",
+    "repair-dialog",
+    "repair-summary",
+    "cancel-repair",
+    "confirm-repair",
   ]) {
     els[toCamel(id)] = document.getElementById(id);
   }
@@ -190,6 +202,36 @@ function bindStaticEvents() {
     else checkProject();
   });
   els.updateStructure.addEventListener("click", updateStructure);
+  els.repairGrids.addEventListener("click", previewGridRepair);
+  els.targetRanks.addEventListener("change", () => {
+    project.decomposition.targetRanks = Math.max(0, Math.round(Number(els.targetRanks.value) || 0));
+    markProjectDirty();
+    renderDecompositionControls();
+  });
+  for (const button of els.decompositionMode.querySelectorAll("button")) {
+    button.addEventListener("click", () => {
+      project.decomposition.mode = button.dataset.mode;
+      markProjectDirty();
+      renderDecompositionControls();
+    });
+  }
+  for (const input of els.decompositionAxes.querySelectorAll("input")) {
+    input.addEventListener("change", () => {
+      const axisIndex = Number(input.dataset.axis);
+      const enabledCount = project.decomposition.axes.filter(Boolean).length;
+      if (!input.checked && enabledCount === 1) {
+        input.checked = true;
+        setStatus("Keep at least one partition axis enabled");
+        return;
+      }
+      project.decomposition.axes[axisIndex] = input.checked;
+      markProjectDirty();
+      renderDecompositionControls();
+    });
+  }
+  els.balanceDecomposition.addEventListener("click", balanceDecomposition);
+  els.cancelRepair.addEventListener("click", closeRepairDialog);
+  els.confirmRepair.addEventListener("click", applyGridRepair);
   els.downloadJson.addEventListener("click", downloadProjectJson);
   els.openJson.addEventListener("change", openProjectJson);
   els.undoProject.addEventListener("click", undoProject);
@@ -246,7 +288,11 @@ function renderAll() {
   project.blocks = project.blocks || [];
   project.nscal = normalizedScalarCount(project.nscal ?? project.nScal);
   project.periodicAxes = normalizedPeriodicAxes();
-  for (const block of project.blocks) ensureBoundaryArrays(block);
+  project.decomposition = normalizedDecomposition();
+  for (const block of project.blocks) {
+    ensureBoundaryArrays(block);
+    block.axisLocks = normalizedAxisLocks(block.axisLocks);
+  }
   project.blocks.sort((a, b) => a.id - b.id);
   if (!selectedBlock()) selectedId = project.blocks[0]?.id ?? null;
   els.projectName.value = project.name ?? "snac-grid";
@@ -259,6 +305,7 @@ function renderAll() {
   els.gridSource.disabled = !project.writeExternalGrid;
   els.addAdjacent.disabled = !selectedBlock();
   renderBlockList();
+  renderDecompositionControls();
   renderInspector();
   renderScene();
   renderSpacingPreview();
@@ -394,6 +441,8 @@ function renderAxisTabs() {
 
 function renderAxisEditor(block) {
   const axis = ensureAxis(block, currentAxis);
+  const axisIndex = AXES.indexOf(currentAxis);
+  const locked = block.axisLocks[axisIndex];
   const selectedKind = axis.kind ?? "snac";
   els.axisEditor.innerHTML = `
     <label class="field">
@@ -406,7 +455,10 @@ function renderAxisEditor(block) {
       </select>
     </label>
     <div id="grid-kind-body"></div>
-    <button id="apply-axis" class="button" type="button"><i data-lucide="copy-check"></i><span>Apply to aligned blocks</span></button>
+    <div class="axis-actions">
+      <button id="axis-lock" class="button icon${locked ? " active" : ""}" type="button" title="${locked ? "Unlock" : "Lock"} ${currentAxis.toUpperCase()} grid"><i data-lucide="${locked ? "lock" : "unlock"}"></i></button>
+      <button id="apply-axis" class="button" type="button"><i data-lucide="copy-check"></i><span>Apply to aligned blocks</span></button>
+    </div>
   `;
   const kindSelect = document.getElementById("grid-kind");
   kindSelect.value = selectedKind;
@@ -422,6 +474,12 @@ function renderAxisEditor(block) {
     gridDefinitionChanged(block);
   };
   renderAxisKindBody(block, axis);
+  document.getElementById("axis-lock").onclick = () => {
+    block.axisLocks[axisIndex] = !block.axisLocks[axisIndex];
+    markProjectDirty();
+    renderAxisEditor(block);
+    if (window.lucide) window.lucide.createIcons();
+  };
   document.getElementById("apply-axis").onclick = applyAxisToAlignedBlocks;
 }
 
@@ -659,10 +717,149 @@ async function applyAxisToAlignedBlocks() {
     previewCache.clear();
     previewSequence += 1;
     lastCheck = null;
+    decompositionResult = null;
     renderAll();
     scheduleHistoryCommit();
     const count = payload.changedBlockIds?.length ?? 0;
     setStatus(count ? `Applied ${currentAxis.toUpperCase()} grid to ${count} aligned block${count === 1 ? "" : "s"}` : "No other aligned blocks");
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function renderDecompositionControls() {
+  if (!project?.decomposition) return;
+  const spec = project.decomposition;
+  els.targetRanks.value = spec.targetRanks;
+  for (const button of els.decompositionMode.querySelectorAll("button")) {
+    button.classList.toggle("active", button.dataset.mode === spec.mode);
+  }
+  for (const input of els.decompositionAxes.querySelectorAll("input")) {
+    input.checked = spec.axes[Number(input.dataset.axis)];
+  }
+  els.balanceDecomposition.disabled = !project.blocks.length || spec.targetRanks < project.blocks.length;
+  renderDecompositionSummary();
+}
+
+function renderDecompositionSummary() {
+  if (!decompositionResult) {
+    const target = project.decomposition.targetRanks;
+    els.decompositionSummary.textContent = target > 0 ? "Balance to apply an exact decomposition." : "Set total ranks to enable balancing.";
+    return;
+  }
+  const result = decompositionResult;
+  if (!result.ok) {
+    const nearby = result.nearbyRanks?.length
+      ? `<div class="nearby-ranks"><span>Nearby feasible totals</span><div>${result.nearbyRanks
+          .map((ranks) => `<button type="button" class="nearby-rank" data-ranks="${ranks}">${formatInteger(ranks)}</button>`)
+          .join("")}</div></div>`
+      : "";
+    els.decompositionSummary.innerHTML = `${(result.errors ?? []).map((message) => `<div class="error-text">${escapeHtml(message)}</div>`).join("")}${nearby}`;
+    for (const button of els.decompositionSummary.querySelectorAll(".nearby-rank")) {
+      button.addEventListener("click", () => {
+        project.decomposition.targetRanks = Number(button.dataset.ranks);
+        markProjectDirty();
+        renderDecompositionControls();
+        void balanceDecomposition();
+      });
+    }
+    return;
+  }
+  const axes = result.activeAxes?.length ? result.activeAxes.map((axis) => axis.toUpperCase()).join("") : "serial";
+  const quality = result.optimal ? "best found" : "bounded search";
+  els.decompositionSummary.innerHTML = `
+    <div><strong>${formatInteger(result.totalRanks)}</strong> ranks · ${axes} · ${quality}</div>
+    <div>${formatInteger(result.minCells)}-${formatInteger(result.maxCells)} cells/rank · imbalance <strong>${formatNumber(result.imbalance)}</strong></div>
+    <div>minimum local edge <strong>${formatInteger(result.minLocalExtent)}</strong> cells · maximum aspect <strong>${formatNumber(result.maxLocalAspect)}</strong></div>
+    ${(result.blocks ?? [])
+      .map((block) => `<div>B${block.blockId}: ${block.dims.join(" × ")} · ${block.ranks} ranks</div>`)
+      .join("")}
+  `;
+}
+
+async function previewGridRepair() {
+  if (!project.blocks.length) {
+    setStatus("Add a block before repairing grids");
+    return;
+  }
+  setStatus("Checking grid congruence...");
+  try {
+    const payload = await postJson(
+      "/api/repair",
+      { project, sourceBlockId: selectedId },
+      { allowInvalid: true }
+    );
+    if (!payload.ok) {
+      pendingRepair = null;
+      lastCheck = payload;
+      renderCheckResults();
+      setStatus(`${payload.errors.length} repair issue${payload.errors.length === 1 ? "" : "s"}`);
+      return;
+    }
+    if (!payload.changes?.length) {
+      pendingRepair = null;
+      setStatus("Tangential grids are already congruent");
+      return;
+    }
+    pendingRepair = payload;
+    els.repairSummary.innerHTML = payload.changes
+      .map(
+        (change) => `<div class="repair-change"><strong>Block ${change.blockId} · ${change.axis.toUpperCase()}</strong><br>${change.oldN} → ${change.newN} cells, copied from block ${change.sourceBlockId}</div>`
+      )
+      .join("");
+    els.repairDialog.showModal();
+    setStatus(`${payload.changes.length} proposed grid repair${payload.changes.length === 1 ? "" : "s"}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function closeRepairDialog() {
+  pendingRepair = null;
+  if (els.repairDialog.open) els.repairDialog.close();
+}
+
+async function applyGridRepair() {
+  if (!pendingRepair?.project) return;
+  const count = pendingRepair.changes?.length ?? 0;
+  project = pendingRepair.project;
+  pendingRepair = null;
+  decompositionResult = null;
+  if (els.repairDialog.open) els.repairDialog.close();
+  previewCache.clear();
+  previewSequence += 1;
+  lastCheck = null;
+  renderAll();
+  scheduleHistoryCommit();
+  const options = { successMessage: `Applied ${count} grid repair${count === 1 ? "" : "s"}` };
+  if (project.inferConnectivity) await updateStructure(options);
+  else {
+    const valid = await checkProject({ silent: true });
+    setStatus(valid ? options.successMessage : "Grid repair applied; checks still need attention");
+  }
+}
+
+async function balanceDecomposition() {
+  setStatus("Balancing MPI decomposition...");
+  try {
+    const payload = await postJson("/api/decompose", { project }, { allowInvalid: true });
+    decompositionResult = payload;
+    if (!payload.ok) {
+      renderDecompositionSummary();
+      scheduleHistoryCommit();
+      setStatus(payload.errors?.[0] ?? "No exact decomposition found");
+      return;
+    }
+    project = payload.project;
+    previewCache.clear();
+    previewSequence += 1;
+    lastCheck = null;
+    renderAll();
+    scheduleHistoryCommit();
+    const warningText = payload.warnings?.length ? `, ${payload.warnings.length} warning${payload.warnings.length === 1 ? "" : "s"}` : "";
+    setStatus(`Balanced ${payload.totalRanks} MPI ranks${warningText}`);
+    if (project.inferConnectivity) await updateStructure({ silent: true });
+    else await checkProject({ silent: true });
   } catch (error) {
     setStatus(error.message);
   }
@@ -1146,6 +1343,7 @@ function addFreeBlock() {
   const copy = source ? structuredClone(source) : defaultBlock(nextBlockId());
   copy.id = nextBlockId();
   copy.name = `block-${copy.id}`;
+  copy.axisLocks = [false, false, false];
   if (source) {
     const width = source.lmax[0] - source.lmin[0];
     copy.lmin[0] += width;
@@ -1168,6 +1366,7 @@ function addAdjacentBlock() {
   const copy = structuredClone(source);
   copy.id = nextBlockId();
   copy.name = `block-${copy.id}`;
+  copy.axisLocks = [false, false, false];
   if (sign > 0) {
     copy.lmin[axis] = source.lmax[axis];
     copy.lmax[axis] = source.lmax[axis] + thickness;
@@ -1195,6 +1394,8 @@ function resetProject() {
   project.blocks = [];
   selectedId = null;
   lastCheck = null;
+  pendingRepair = null;
+  decompositionResult = null;
   previewCache.clear();
   previewSequence += 1;
   renderAll();
@@ -1297,6 +1498,8 @@ function openProjectJson(event) {
       project.blocks = project.blocks || [];
       selectedId = project.blocks[0]?.id ?? null;
       lastCheck = null;
+      pendingRepair = null;
+      decompositionResult = null;
       previewCache.clear();
       previewSequence += 1;
       renderAll();
@@ -1426,6 +1629,7 @@ function defaultBlock(id) {
     lmin: [0, 0, 0],
     lmax: [1, 1, 0.05],
     axes: { x: defaultAxis(), y: defaultAxis(), z: defaultAxis() },
+    axisLocks: [false, false, false],
     cbcvel: Array.from({ length: 3 }, () => ["D", "D", "D", "D", "D", "D"]),
     cbcpre: ["N", "N", "N", "N", "N", "N"],
     bcvel: Array.from({ length: 3 }, () => [0, 0, 0, 0, 0, 0]),
@@ -1457,6 +1661,21 @@ function completeArray(values, fallback) {
 function normalizedPeriodicAxes() {
   const values = Array.isArray(project.periodicAxes) ? project.periodicAxes : [false, false, false];
   return AXES.map((_, index) => Boolean(values[index]));
+}
+
+function normalizedDecomposition() {
+  const value = project.decomposition ?? {};
+  const targetRanks = Math.max(0, Math.round(Number(value.targetRanks ?? value.target_ranks) || 0));
+  const mode = ["auto", "1d", "2d", "3d"].includes(value.mode) ? value.mode : "auto";
+  const sourceAxes = Array.isArray(value.axes) ? value.axes : [true, true, true];
+  const axes = AXES.map((_, index) => (index < sourceAxes.length ? Boolean(sourceAxes[index]) : true));
+  if (!axes.some(Boolean)) axes[0] = true;
+  return { targetRanks, mode, axes };
+}
+
+function normalizedAxisLocks(values) {
+  const source = Array.isArray(values) ? values : [];
+  return AXES.map((_, index) => Boolean(source[index]));
 }
 
 function normalizedScalarCount(value = project?.nscal ?? 0) {
@@ -1570,6 +1789,10 @@ function formatNumber(value) {
   return value.toPrecision(5);
 }
 
+function formatInteger(value) {
+  return Number.isFinite(value) ? Math.round(value).toLocaleString() : "n/a";
+}
+
 function formatPercent(value) {
   if (!Number.isFinite(value)) return "n/a";
   return `${(100 * value).toPrecision(value < 0.001 ? 2 : 3)}%`;
@@ -1591,13 +1814,17 @@ function clearCheckState() {
 
 function markProjectDirty(blockId = null) {
   if (blockId != null) previewCache.delete(blockId);
+  pendingRepair = null;
+  decompositionResult = null;
   clearCheckState();
+  renderDecompositionSummary();
   scheduleHistoryCommit();
 }
 
 function projectSnapshot() {
   return {
     project: JSON.stringify(project),
+    decompositionResult: decompositionResult ? JSON.stringify(decompositionResult) : null,
     selectedId,
     currentAxis,
   };
@@ -1621,7 +1848,8 @@ function commitHistory() {
   window.clearTimeout(historyTimer);
   historyTimer = null;
   const snapshot = projectSnapshot();
-  if (projectHistory[historyIndex]?.project === snapshot.project) return;
+  const current = projectHistory[historyIndex];
+  if (current?.project === snapshot.project && current?.decompositionResult === snapshot.decompositionResult) return;
   projectHistory = projectHistory.slice(0, historyIndex + 1);
   projectHistory.push(snapshot);
   if (projectHistory.length > HISTORY_LIMIT) projectHistory.shift();
@@ -1649,6 +1877,8 @@ function restoreHistory(index) {
   selectedId = project.blocks.some((block) => block.id === state.selectedId) ? state.selectedId : project.blocks[0]?.id ?? null;
   currentAxis = state.currentAxis;
   lastCheck = null;
+  pendingRepair = null;
+  decompositionResult = state.decompositionResult ? JSON.parse(state.decompositionResult) : null;
   previewCache.clear();
   previewSequence += 1;
   renderAll();

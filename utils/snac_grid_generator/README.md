@@ -12,6 +12,8 @@ model. It includes:
 - geometric, tanh, and erf monotone and symmetric profiles;
 - interchangeable cell-count, ratio, and endpoint-spacing controls;
 - achieved-grid diagnostics and interface-spacing warnings;
+- previewed grid-congruence repair with per-axis authority locks;
+- exact-rank MPI decomposition balancing in automatic, 1D, 2D, or 3D mode;
 - structured-grid validation before writing case files.
 
 Run the GUI from the repository root:
@@ -44,6 +46,23 @@ extent in that axis using `Apply to aligned blocks`. For example, a Y grid can
 be propagated across a row of blocks connected through X faces. It is not
 copied through a face normal to the selected axis, because those blocks occupy
 different intervals of that axis.
+
+`Repair` checks all connected tangential grids together and previews the changes
+needed to make them congruent. By default the selected block is authoritative;
+the lock button beside an axis makes that axis authoritative regardless of the
+selection. Conflicting locked grids are reported and left untouched.
+
+The MPI panel finds a decomposition whose per-block rank counts add exactly to
+the requested total. `Auto` compares permitted dimensionalities, while `1D`,
+`2D`, and `3D` require that number of active partition axes. The X/Y/Z switches
+can exclude directions, notably an FFT-synthesis direction, which SNaC requires
+to remain undistributed. The optimizer balances cell load while favoring compact
+local domains and lower communication area. It keeps at least four cells along
+each split direction. The result shows each block's dimensions, cells-per-rank
+imbalance, minimum local edge, and worst local aspect ratio. If no exact solution
+exists, the current dimensions remain unchanged and nearby feasible totals are
+offered as buttons that can be balanced immediately. Setting the target to zero
+disables this additional export check.
 
 ## Grading Modes
 
@@ -99,8 +118,9 @@ subdomain cuts for the selected block.
 
 The select, move, and resize viewport tools edit block bounds directly. A move
 or resize invalidates the last structural check and refreshes the grid preview.
-Undo and redo retain up to 100 coalesced project edits; reset can be undone,
-while opening another project starts a fresh history.
+Undo and redo retain up to 100 coalesced project edits, including decomposition
+diagnostics; reset can be undone, while opening another project starts a fresh
+history.
 
 For an exported case, the important files are:
 

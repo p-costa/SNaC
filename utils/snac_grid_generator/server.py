@@ -11,10 +11,16 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from .decomposition import optimize_project_decomposition
 from .export import export_project
 from .grid import AXIS_NAMES, axis_grid_arrays, axis_grid_diagnostics
 from .model import Project
-from .validation import apply_axis_to_aligned_blocks, check_project, update_project_structure
+from .validation import (
+    apply_axis_to_aligned_blocks,
+    check_project,
+    repair_project_grids,
+    update_project_structure,
+)
 
 ROOT = Path(__file__).resolve().parent
 STATIC = ROOT / "static"
@@ -51,7 +57,15 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
-        if path not in {"/api/apply-axis", "/api/check", "/api/export", "/api/preview", "/api/update"}:
+        if path not in {
+            "/api/apply-axis",
+            "/api/check",
+            "/api/decompose",
+            "/api/export",
+            "/api/preview",
+            "/api/repair",
+            "/api/update",
+        }:
             self.send_error(HTTPStatus.NOT_FOUND, "unknown API route")
             return
         try:
@@ -72,6 +86,18 @@ class _Handler(BaseHTTPRequestHandler):
                 axis = str(payload.get("axis", ""))
                 project, changed = apply_axis_to_aligned_blocks(project, source_block_id, axis)
                 self._send_json({"ok": True, "project": project.to_dict(), "changedBlockIds": changed})
+                return
+            if path == "/api/repair":
+                source_block_id = payload.get("sourceBlockId")
+                project, result = repair_project_grids(
+                    project,
+                    int(source_block_id) if source_block_id else None,
+                )
+                self._send_json({**result.to_dict(), "project": project.to_dict()})
+                return
+            if path == "/api/decompose":
+                project, result = optimize_project_decomposition(project)
+                self._send_json({**result.to_dict(), "project": project.to_dict()})
                 return
             if path == "/api/preview":
                 block_id = int(payload.get("blockId", 0))

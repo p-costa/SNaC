@@ -38,7 +38,7 @@ select {
 .toolbar {
   height: 58px;
   display: grid;
-  grid-template-columns: auto minmax(150px, 220px) minmax(74px, 90px) minmax(200px, 1fr) auto auto auto auto auto auto auto minmax(120px, 260px);
+  grid-template-columns: auto minmax(150px, 220px) minmax(74px, 90px) minmax(200px, 1fr) auto auto auto auto auto auto auto auto minmax(120px, 260px);
   gap: 10px;
   align-items: center;
   padding: 8px 12px;
@@ -284,6 +284,153 @@ select {
   gap: 10px;
   padding: 10px;
   border-top: 1px solid var(--line);
+}
+
+.decomposition-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.decomposition-panel .section-title {
+  margin-bottom: 0;
+}
+
+.mode-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.mode-buttons button {
+  min-width: 0;
+  height: 30px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: #171c22;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.mode-buttons button:last-child {
+  border-right: 0;
+}
+
+.mode-buttons button.active {
+  background: #25362f;
+  color: var(--accent-strong);
+}
+
+.axis-choices {
+  display: grid;
+  grid-template-columns: 1fr repeat(3, 34px);
+  gap: 6px;
+  align-items: center;
+}
+
+.axis-choices > span,
+.decomposition-summary {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.axis-choices .check {
+  justify-content: center;
+}
+
+.decomposition-summary {
+  display: grid;
+  gap: 4px;
+  line-height: 1.3;
+}
+
+.decomposition-summary strong {
+  color: var(--text);
+}
+
+.decomposition-summary .error-text {
+  color: #ff9b9b;
+}
+
+.nearby-ranks {
+  display: grid;
+  gap: 5px;
+}
+
+.nearby-ranks > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.nearby-rank {
+  min-width: 38px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #326b55;
+  border-radius: 5px;
+  background: #1c2823;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font: inherit;
+}
+
+.nearby-rank:hover {
+  border-color: var(--accent-strong);
+  background: #25362f;
+}
+
+.axis-actions {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+}
+
+dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0;
+  background: var(--panel);
+  color: var(--text);
+}
+
+dialog::backdrop {
+  background: rgba(7, 9, 12, 0.72);
+}
+
+.dialog-body {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.dialog-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.repair-summary {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.repair-change {
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .row {
@@ -563,6 +710,21 @@ select {
 .check-line.error {
   border-color: #7a3939;
   color: #ff9b9b;
+}
+
+@media (max-width: 1450px) and (min-width: 981px) {
+  .toolbar {
+    grid-template-columns: auto minmax(130px, 180px) 70px minmax(150px, 1fr) repeat(6, 34px) auto 34px minmax(100px, 180px);
+  }
+
+  .toolbar > .button {
+    width: 34px;
+    padding: 0;
+  }
+
+  .toolbar > button.button span {
+    display: none;
+  }
 }
 
 @media (max-width: 980px) {

@@ -65,6 +65,22 @@ Typing `make run` will compile the code and copy the executable `snac`, `dns.nml
 
 Run the executable with `mpirun` with a number of tasks and shared threads complying with the decomposition set in `blocks.nml`. Data will be written by default in a folder named `data/`, which must be located where the executable is run.
 
+### Grid generator
+
+Run the optional multi-block grid editor from the repository root with:
+
+```bash
+python3 -m utils.snac_grid_generator.server
+```
+
+The editor can draw and transform blocks, configure SNaC-native or generated axis grids, infer friend and periodic boundaries, check structured-grid constraints, and write `blocks.nml` plus optional binary axis grids.
+
+`Repair` makes tangential grids congruent across connected faces. The selected block supplies an unlocked grid; locking an axis makes that block authoritative, and conflicting locks are reported instead of overwritten. Proposed changes are shown before they are applied.
+
+The MPI panel balances a prescribed total rank count exactly. `Auto`, `1D`, `2D`, and `3D` control how many partition axes may be used, while the X/Y/Z switches restrict the allowed directions. Disable an FFT-synthesis direction because SNaC requires one MPI partition along that axis. The result reports per-block dimensions, cells per rank, and imbalance; an impossible request leaves the current decomposition unchanged and suggests nearby feasible rank counts. A target of zero disables the rank-count constraint.
+
+The balancing search also favors compact subdomains with lower communication area and keeps at least four cells along every split direction. Its summary reports the minimum local edge and maximum local aspect ratio, and nearby feasible totals can be applied directly.
+
 ### Visualizing field data
 
 See [`docs/INFO_VISU.md`](docs/INFO_VISU.md).

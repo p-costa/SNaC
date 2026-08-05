@@ -116,6 +116,39 @@ class AxisSpec:
 
 
 @dataclass
+class DecompositionSpec:
+    """Project-level request for an automatic MPI decomposition."""
+
+    target_ranks: int = 0
+    mode: str = "auto"
+    axes: list[bool] = field(default_factory=lambda: [True, True, True])
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "DecompositionSpec":
+        data = data or {}
+        return cls(
+            target_ranks=max(0, int(data.get("targetRanks", data.get("target_ranks", 0)))),
+            mode=str(data.get("mode", "auto")).lower(),
+            axes=_bool_list(data.get("axes"), 3, True),
+        )
+
+    def validate(self) -> None:
+        if self.mode not in {"auto", "1d", "2d", "3d"}:
+            raise ValueError("decomposition mode must be auto, 1d, 2d, or 3d")
+        self.axes.extend([True] * (3 - len(self.axes)))
+        self.axes = self.axes[:3]
+        if self.target_ranks and not any(self.axes):
+            raise ValueError("automatic decomposition requires at least one partition axis")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "targetRanks": self.target_ranks,
+            "mode": self.mode,
+            "axes": self.axes,
+        }
+
+
+@dataclass
 class Block:
     """A rectilinear SNaC block."""
 
@@ -126,6 +159,7 @@ class Block:
     lmin: list[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     lmax: list[float] = field(default_factory=lambda: [1.0, 1.0, 0.05])
     axes: dict[str, AxisSpec] = field(default_factory=lambda: {axis: AxisSpec() for axis in AXIS_NAMES})
+    axis_locks: list[bool] = field(default_factory=lambda: [False, False, False])
     cbcvel: list[list[str]] = field(default_factory=lambda: [["D", "D", "D", "D", "D", "D"] for _ in range(3)])
     cbcpre: list[str] = field(default_factory=lambda: ["N", "N", "N", "N", "N", "N"])
     bcvel: list[list[float]] = field(default_factory=lambda: [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0] for _ in range(3)])
@@ -147,6 +181,7 @@ class Block:
             lmin=[float(v) for v in data.get("lmin", [0.0, 0.0, 0.0])],
             lmax=[float(v) for v in data.get("lmax", [1.0, 1.0, 0.05])],
             axes={axis: AxisSpec.from_dict(axes_data.get(axis)) for axis in AXIS_NAMES},
+            axis_locks=_bool_list(data.get("axisLocks", data.get("axis_locks")), 3, False),
             cbcvel=_string_rows(data.get("cbcvel"), 3, ["D"] * 6),
             cbcpre=_string_list(data.get("cbcpre"), ["N"] * 6),
             bcvel=_float_rows(data.get("bcvel"), 3, [0.0] * 6),
@@ -168,6 +203,8 @@ class Block:
             raise ValueError(f"block {self.id}: ng must contain three positive integers")
         if len(self.lmin) != 3 or len(self.lmax) != 3:
             raise ValueError(f"block {self.id}: lmin/lmax must contain three coordinates")
+        if len(self.axis_locks) != 3:
+            raise ValueError(f"block {self.id}: axis locks must contain three flags")
         if not all(isfinite(value) for value in [*self.lmin, *self.lmax]):
             raise ValueError(f"block {self.id}: lmin/lmax coordinates must be finite")
         if any(high <= low for low, high in zip(self.lmin, self.lmax)):
@@ -193,6 +230,7 @@ class Block:
             "lmin": self.lmin,
             "lmax": self.lmax,
             "axes": {axis: self.axes[axis].to_dict() for axis in AXIS_NAMES},
+            "axisLocks": self.axis_locks,
             "cbcvel": self.cbcvel,
             "cbcpre": self.cbcpre,
             "bcvel": self.bcvel,
@@ -212,6 +250,7 @@ class Project:
     nscal: int = 0
     blocks: list[Block] = field(default_factory=lambda: [Block(id=1)])
     periodic_axes: list[bool] = field(default_factory=lambda: [False, False, False])
+    decomposition: DecompositionSpec = field(default_factory=DecompositionSpec)
     infer_connectivity: bool = True
     write_external_grid: bool = True
     external_grid_source: str = "grid"
@@ -228,6 +267,7 @@ class Project:
             nscal=max(0, int(data.get("nscal", data.get("nScal", inferred_nscal)))),
             blocks=blocks,
             periodic_axes=_bool_list(data.get("periodicAxes", data.get("periodic_axes")), 3, False),
+            decomposition=DecompositionSpec.from_dict(data.get("decomposition")),
             infer_connectivity=bool(data.get("inferConnectivity", data.get("infer_connectivity", True))),
             write_external_grid=bool(data.get("writeExternalGrid", data.get("write_external_grid", True))),
             external_grid_source=str(data.get("externalGridSource", data.get("external_grid_source", "grid"))),
@@ -239,6 +279,7 @@ class Project:
         self.nscal = max(0, int(self.nscal))
         self.periodic_axes.extend([False] * (3 - len(self.periodic_axes)))
         self.periodic_axes = self.periodic_axes[:3]
+        self.decomposition.validate()
         if self.external_grid_source not in {"grid", "data", "both"}:
             raise ValueError("external grid source must be 'grid', 'data', or 'both'")
         seen: set[int] = set()
@@ -256,6 +297,7 @@ class Project:
             "name": self.name,
             "nscal": self.nscal,
             "periodicAxes": self.periodic_axes,
+            "decomposition": self.decomposition.to_dict(),
             "inferConnectivity": self.infer_connectivity,
             "writeExternalGrid": self.write_external_grid,
             "externalGridSource": self.external_grid_source,
