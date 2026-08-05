@@ -10,10 +10,13 @@ from typing import Any
 
 from .grid import AXIS_NAMES, axis_grid_arrays
 from .model import Block, Project
+from .snac_grid import binary_payload
+from .topology import infer_global_index_extents
 from .validation import check_project, infer_project_connectivity
 
 _MANIFEST_NAME = ".snac_grid_generator_manifest.json"
 _MANIFEST_VERSION = 1
+
 
 @dataclass
 class ExportResult:
@@ -86,7 +89,8 @@ def _write_project(project: Project, output_path: Path) -> tuple[list[Path], lis
         data_path.mkdir(parents=True, exist_ok=True)
 
     blocks = _renumber_blocks(project.blocks)
-    extents, warnings = _global_index_extents(blocks)
+    extents = infer_global_index_extents(blocks)
+    warnings: list[str] = []
     files: list[Path] = []
 
     blocks_file = output_path / "blocks.nml"
@@ -196,7 +200,7 @@ def _write_block_grids(block: Block, grid_dir: Path) -> list[Path]:
     for idx, axis in enumerate(AXIS_NAMES):
         arrays = axis_grid_arrays(block.axes[axis].to_dict(), block.lmin[idx], block.lmax[idx], block.ng[idx])
         base = grid_dir / f"grid_{axis}{suffix}"
-        arrays.binary_payload.tofile(base.with_suffix(".bin"))
+        binary_payload(arrays).tofile(base.with_suffix(".bin"))
         _write_grid_out(base.with_suffix(".out"), arrays)
         files.append(base.with_suffix(".bin"))
         files.append(base.with_suffix(".out"))
@@ -256,67 +260,6 @@ def _format_blocks_nml(blocks: list[Block], nscal: int = 0) -> str:
         lines.append("")
     lines.append("/")
     return "\n".join(lines) + "\n"
-
-
-def _global_index_extents(blocks: list[Block]) -> tuple[dict[int, tuple[list[int], list[int]]], list[str]]:
-    warnings: list[str] = []
-    tol = 1.0e-10
-    by_id = {block.id: block for block in blocks}
-    lo_by_id: dict[int, list[int]] = {}
-    for seed in sorted(blocks, key=lambda item: item.id):
-        if seed.id in lo_by_id:
-            continue
-        lo_by_id[seed.id] = [1, 1, 1]
-        queue = [seed]
-        while queue:
-            current = queue.pop(0)
-            current_lo = lo_by_id[current.id]
-            for other in blocks:
-                if other.id == current.id:
-                    continue
-                candidate = _neighbor_lo(current, other, current_lo, tol)
-                if candidate is None:
-                    continue
-                if other.id in lo_by_id:
-                    if lo_by_id[other.id] != candidate:
-                        warnings.append(f"block {other.id} has conflicting inferred global indices")
-                    continue
-                lo_by_id[other.id] = candidate
-                queue.append(other)
-    extents = {}
-    for block_id, block in by_id.items():
-        lo = lo_by_id[block_id]
-        hi = [lo[idx] + block.ng[idx] - 1 for idx in range(3)]
-        extents[block_id] = (lo, hi)
-    return extents, warnings
-
-
-def _neighbor_lo(current: Block, other: Block, current_lo: list[int], tol: float) -> list[int] | None:
-    for axis_index in range(3):
-        if _touches(current.lmax[axis_index], other.lmin[axis_index], tol) and _same_cross_section(current, other, axis_index, tol):
-            candidate = list(current_lo)
-            candidate[axis_index] = current_lo[axis_index] + current.ng[axis_index]
-            return candidate
-        if _touches(other.lmax[axis_index], current.lmin[axis_index], tol) and _same_cross_section(current, other, axis_index, tol):
-            candidate = list(current_lo)
-            candidate[axis_index] = current_lo[axis_index] - other.ng[axis_index]
-            return candidate
-    return None
-
-
-def _same_cross_section(a: Block, b: Block, axis_index: int, tol: float) -> bool:
-    for idx in range(3):
-        if idx == axis_index:
-            continue
-        if not _touches(a.lmin[idx], b.lmin[idx], tol):
-            return False
-        if not _touches(a.lmax[idx], b.lmax[idx], tol):
-            return False
-    return True
-
-
-def _touches(a: float, b: float, tol: float) -> bool:
-    return abs(a - b) <= tol
 
 
 def _numbers(values: list[int] | list[float], *, integer: bool = False) -> str:

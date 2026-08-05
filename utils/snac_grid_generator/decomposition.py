@@ -10,10 +10,9 @@ from typing import Any
 
 from .grid import AXIS_NAMES
 from .model import Block, Project
+from .topology import FaceConnection, build_topology
 from .validation import (
     CheckResult,
-    FaceConnection,
-    _build_topology,
     _check_connected_components,
     _project_copy,
 )
@@ -120,8 +119,10 @@ def optimize_project_decomposition(
 
     project = _project_copy(project)
     target = project.decomposition.target_ranks
+    min_local_cells = project.decomposition.min_local_cells
+    max_local_aspect = project.decomposition.max_local_aspect
     result = DecompositionResult(target_ranks=target)
-    topology = _build_topology(project.blocks, project.periodic_axes)
+    topology = build_topology(project.blocks, project.periodic_axes)
     result.errors.extend(topology.errors)
     result.warnings.extend(topology.warnings)
     result.errors.extend(_check_connected_components(project.blocks, topology.connections))
@@ -154,6 +155,8 @@ def optimize_project_decomposition(
             topology.connections,
             target,
             active_axes,
+            min_local_cells=min_local_cells,
+            max_local_aspect=max_local_aspect,
             node_limit=allowance,
             deadline=deadline,
         )
@@ -207,6 +210,8 @@ def _search_decomposition(
     target: int,
     active_axes: tuple[int, ...],
     *,
+    min_local_cells: int,
+    max_local_aspect: float,
     node_limit: int,
     deadline: float,
     first_only: bool = False,
@@ -215,14 +220,18 @@ def _search_decomposition(
     nblocks = len(blocks)
     if not active_axes:
         if target == nblocks:
-            outcome.candidates = {
-                block.id: _decomposition_candidate(block, (1, 1, 1)) for block in blocks
-            }
+            candidates = {block.id: _decomposition_candidate(block, (1, 1, 1)) for block in blocks}
+            if not all(
+                _candidate_meets_constraints(block, candidates[block.id], min_local_cells, max_local_aspect)
+                for block in blocks
+            ):
+                return outcome
+            outcome.candidates = candidates
             outcome.score = _decomposition_score(blocks, connections, outcome.candidates, target)
         return outcome
 
     capacity = sum(
-        prod(max(1, block.ng[axis] // MIN_LOCAL_CELLS) for axis in active_axes)
+        prod(max(1, block.ng[axis] // min_local_cells) for axis in active_axes)
         for block in blocks
     )
     if target > capacity:
@@ -234,7 +243,13 @@ def _search_decomposition(
     candidates: dict[int, list[_DecompositionCandidate]] = {}
     for block in blocks:
         ideal = target * prod(block.ng) / total_cells
-        block_candidates = _block_decomposition_candidates(block, active_axes, max_block_ranks)
+        block_candidates = _block_decomposition_candidates(
+            block,
+            active_axes,
+            max_block_ranks,
+            min_local_cells=min_local_cells,
+            max_local_aspect=max_local_aspect,
+        )
         block_candidates.sort(key=lambda candidate: _candidate_priority(block, candidate, ideal, mean_cells))
         candidates[block.id] = block_candidates
 
@@ -274,7 +289,7 @@ def _search_decomposition(
                 fixed[axis] = value
             minimum_ranks = prod(fixed.values())
             maximum_ranks = minimum_ranks * prod(
-                max(1, by_id[future_id].ng[axis] // MIN_LOCAL_CELLS)
+                max(1, by_id[future_id].ng[axis] // min_local_cells)
                 for axis in active_axes
                 if axis not in fixed
             )
@@ -336,16 +351,21 @@ def _block_decomposition_candidates(
     block: Block,
     active_axes: tuple[int, ...],
     max_ranks: int,
+    *,
+    min_local_cells: int,
+    max_local_aspect: float,
 ) -> list[_DecompositionCandidate]:
     dims = [1, 1, 1]
     result: list[_DecompositionCandidate] = []
 
     def visit(position: int, ranks: int) -> None:
         if position == len(active_axes):
-            result.append(_decomposition_candidate(block, tuple(dims)))
+            candidate = _decomposition_candidate(block, tuple(dims))
+            if _candidate_meets_constraints(block, candidate, min_local_cells, max_local_aspect):
+                result.append(candidate)
             return
         axis = active_axes[position]
-        partition_limit = max(1, block.ng[axis] // MIN_LOCAL_CELLS)
+        partition_limit = max(1, block.ng[axis] // min_local_cells)
         upper = min(partition_limit, max_ranks // ranks)
         for value in range(1, upper + 1):
             dims[axis] = value
@@ -354,6 +374,23 @@ def _block_decomposition_candidates(
 
     visit(0, 1)
     return result
+
+
+def _candidate_meets_constraints(
+    block: Block,
+    candidate: _DecompositionCandidate,
+    min_local_cells: int,
+    max_local_aspect: float,
+) -> bool:
+    split_extents = [
+        block.ng[index] // candidate.dims[index]
+        for index in range(3)
+        if candidate.dims[index] > 1
+    ]
+    enough_cells = not split_extents or min(split_extents) >= min_local_cells
+    return enough_cells and (
+        max_local_aspect == 0.0 or candidate.max_local_aspect <= max_local_aspect
+    )
 
 
 def _decomposition_candidate(block: Block, dims: tuple[int, int, int]) -> _DecompositionCandidate:
@@ -484,6 +521,8 @@ def _nearby_decomposition_counts(
                     connections,
                     trial,
                     active_axes,
+                    min_local_cells=project.decomposition.min_local_cells,
+                    max_local_aspect=project.decomposition.max_local_aspect,
                     node_limit=40_000,
                     deadline=deadline,
                     first_only=True,

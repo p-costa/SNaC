@@ -70,16 +70,19 @@ Run the executable with `mpirun` with a number of tasks and shared threads compl
 Run the optional multi-block grid editor from the repository root with:
 
 ```bash
+python3 -m pip install -r utils/snac_grid_generator/requirements.txt
 python3 -m utils.snac_grid_generator.server
 ```
 
-The editor can draw and transform blocks, configure SNaC-native or generated axis grids, infer friend and periodic boundaries, check structured-grid constraints, and write `blocks.nml` plus optional binary axis grids.
+The editor can draw and transform single or selected groups of blocks, configure SNaC-native or generated axis grids, apply common boundary presets, infer friend and periodic boundaries, check structured-grid constraints, and write `blocks.nml` plus optional binary axis grids. It autosaves locally and runs entirely from vendored static assets.
 
-`Repair` makes tangential grids congruent across connected faces. The selected block supplies an unlocked grid; locking an axis makes that block authoritative, and conflicting locks are reported instead of overwritten. Proposed changes are shown before they are applied.
+`Repair` makes tangential grids congruent across connected faces and matches large normal-spacing jumps. The selected block supplies an unlocked grid; locking an axis makes that block authoritative, and conflicting locks are reported instead of overwritten. Proposed changes are shown before they are applied.
 
 The MPI panel balances a prescribed total rank count exactly. `Auto`, `1D`, `2D`, and `3D` control how many partition axes may be used, while the X/Y/Z switches restrict the allowed directions. Disable an FFT-synthesis direction because SNaC requires one MPI partition along that axis. The result reports per-block dimensions, cells per rank, and imbalance; an impossible request leaves the current decomposition unchanged and suggests nearby feasible rank counts. A target of zero disables the rank-count constraint.
 
-The balancing search also favors compact subdomains with lower communication area and keeps at least four cells along every split direction. Its summary reports the minimum local edge and maximum local aspect ratio, and nearby feasible totals can be applied directly.
+The balancing search also favors compact subdomains with lower communication area. The minimum cells per split and optional maximum local aspect are configurable hard limits. Its summary reports the minimum local edge and maximum local aspect ratio, and nearby feasible totals can be applied directly.
+
+The editor can import an existing case from `blocks.nml` and recover exact external grids from `grid/` or `data/` binaries. Sparse 3D grid lines show actual face coordinates, while checked interfaces are colored by their spacing jump. Put the case directory in `Output` and use the folder-import button, or run `python3 -m utils.snac_grid_generator.cli import path/to/case -o imported-project.json`. The CLI also provides `check`, `update`, `repair`, `decompose`, and `migrate` commands with optional JSON diagnostics.
 
 ### Visualizing field data
 

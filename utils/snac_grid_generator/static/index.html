@@ -9,12 +9,12 @@
     <script type="importmap">
       {
         "imports": {
-          "three": "https://unpkg.com/three@0.164.1/build/three.module.js",
-          "three/addons/": "https://unpkg.com/three@0.164.1/examples/jsm/"
+          "three": "/vendor/three/three.module.js",
+          "three/addons/": "/vendor/three/addons/"
         }
       }
     </script>
-    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+    <script src="/vendor/lucide/lucide.min.js"></script>
   </head>
   <body>
     <header class="toolbar">
@@ -36,6 +36,7 @@
       <button id="repair-grids" class="button" title="Repair grid congruence"><i data-lucide="wand-sparkles"></i><span>Repair</span></button>
       <button id="export-case" class="button primary" title="Write case files"><i data-lucide="hard-drive-download"></i><span>Write</span></button>
       <button id="download-json" class="button icon" title="Download project JSON"><i data-lucide="file-json"></i></button>
+      <button id="import-case" class="button icon" title="Import SNaC case from Output"><i data-lucide="folder-input"></i></button>
       <label class="button icon file-button" title="Open project JSON">
         <i data-lucide="folder-open"></i>
         <input id="open-json" type="file" accept="application/json,.json" />
@@ -75,6 +76,27 @@
           </div>
           <button id="add-adjacent" class="button"><i data-lucide="panel-top-open"></i><span>Add Adjacent</span></button>
         </div>
+        <div class="geometry-tools">
+          <div class="section-title">Selection tools</div>
+          <div class="tool-row three">
+            <label class="field"><span>Axis</span><select id="geometry-axis"><option>x</option><option>y</option><option>z</option></select></label>
+            <label class="field"><span>Copies</span><input id="array-count" type="number" value="1" min="1" step="1" /></label>
+            <label class="field"><span>Gap</span><input id="array-gap" type="number" value="0" step="any" /></label>
+          </div>
+          <button id="duplicate-array" class="button"><i data-lucide="copy-plus"></i><span>Duplicate array</span></button>
+          <div class="tool-row two">
+            <label class="field"><span>Mirror plane</span><input id="mirror-plane" type="number" value="0" step="any" /></label>
+            <button id="mirror-blocks" class="button compact"><i data-lucide="flip-horizontal-2"></i><span>Mirror</span></button>
+          </div>
+          <div class="tool-row two">
+            <label class="field"><span>Align</span><select id="align-mode"><option value="lower">Lower</option><option value="center">Center</option><option value="upper">Upper</option></select></label>
+            <button id="align-blocks" class="button compact"><i data-lucide="align-center-horizontal"></i><span>Align</span></button>
+          </div>
+          <div class="tool-row two">
+            <label class="field"><span>Snap face</span><select id="snap-face"><option>x+</option><option>x-</option><option>y+</option><option>y-</option><option>z+</option><option>z-</option></select></label>
+            <button id="snap-block" class="button compact"><i data-lucide="magnet"></i><span>Snap</span></button>
+          </div>
+        </div>
         <div class="decomposition-panel">
           <div class="section-title">MPI decomposition</div>
           <label class="field"><span>Total ranks</span><input id="target-ranks" type="number" value="0" min="0" step="1" /></label>
@@ -90,6 +112,10 @@
             <label class="check"><input type="checkbox" data-axis="1" checked /><span>Y</span></label>
             <label class="check"><input type="checkbox" data-axis="2" checked /><span>Z</span></label>
           </div>
+          <div class="tool-row two">
+            <label class="field"><span>Min cells/split</span><input id="min-local-cells" type="number" value="4" min="1" step="1" /></label>
+            <label class="field"><span>Max local aspect</span><input id="max-local-aspect" type="number" value="0" min="0" step="any" /></label>
+          </div>
           <button id="balance-decomposition" class="button"><i data-lucide="network"></i><span>Balance</span></button>
           <div id="decomposition-summary" class="decomposition-summary"></div>
         </div>
@@ -103,6 +129,8 @@
           <button id="tool-scale" class="button icon" title="Resize selected block"><i data-lucide="scaling"></i></button>
           <button id="toggle-boundaries" class="button icon active" title="Toggle boundary colors: D red, N blue, F green, mixed velocity amber"><i data-lucide="palette"></i></button>
           <button id="toggle-partitions" class="button icon active" title="Toggle MPI partition planes"><i data-lucide="panels-top-left"></i></button>
+          <button id="toggle-grid-lines" class="button icon active" title="Toggle selected-block grid lines"><i data-lucide="grid-2x2"></i></button>
+          <button id="toggle-spacing-jumps" class="button icon active" title="Toggle interface spacing quality"><i data-lucide="activity"></i></button>
           <button id="fit-view" class="button icon" title="Fit view"><i data-lucide="scan"></i></button>
           <button id="toggle-grid" class="button icon active" title="Toggle ground grid"><i data-lucide="grid-3x3"></i></button>
         </div>
@@ -150,6 +178,15 @@
               </select>
             </label>
           </div>
+          <div class="bc-presets">
+            <label class="field"><span>Preset</span><select id="bc-preset"><option value="no_slip">No slip</option><option value="free_slip">Free slip</option><option value="moving_wall">Moving wall</option><option value="inlet">Inlet</option><option value="outlet">Outlet</option></select></label>
+            <label class="field"><span>Face</span><select id="bc-preset-face"><option>x-</option><option>x+</option><option>y-</option><option>y+</option><option>z-</option><option selected>z+</option></select></label>
+            <label class="field"><span>u</span><input id="bc-preset-u" type="number" value="1" step="any" /></label>
+            <label class="field"><span>v</span><input id="bc-preset-v" type="number" value="0" step="any" /></label>
+            <label class="field"><span>w</span><input id="bc-preset-w" type="number" value="0" step="any" /></label>
+            <label class="field"><span>p</span><input id="bc-preset-p" type="number" value="0" step="any" /></label>
+            <button id="apply-bc-preset" class="button"><i data-lucide="paint-bucket"></i><span>Apply preset</span></button>
+          </div>
           <div id="boundary-table" class="boundary-table"></div>
           <div id="check-results" class="check-results"></div>
         </section>
@@ -163,6 +200,17 @@
         <div class="dialog-actions">
           <button id="cancel-repair" class="button" type="button">Cancel</button>
           <button id="confirm-repair" class="button primary" type="button">Apply</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="recovery-dialog">
+      <div class="dialog-body">
+        <div class="dialog-title">Recover project</div>
+        <div id="recovery-summary" class="repair-summary"></div>
+        <div class="dialog-actions">
+          <button id="discard-recovery" class="button" type="button">Discard</button>
+          <button id="restore-recovery" class="button primary" type="button">Restore</button>
         </div>
       </div>
     </dialog>

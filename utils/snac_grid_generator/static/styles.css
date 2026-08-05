@@ -38,7 +38,7 @@ select {
 .toolbar {
   height: 58px;
   display: grid;
-  grid-template-columns: auto minmax(150px, 220px) minmax(74px, 90px) minmax(200px, 1fr) auto auto auto auto auto auto auto auto minmax(120px, 260px);
+  grid-template-columns: auto minmax(150px, 220px) minmax(74px, 90px) minmax(200px, 1fr) auto auto auto auto auto auto auto auto auto minmax(120px, 260px);
   gap: 10px;
   align-items: center;
   padding: 8px 12px;
@@ -224,7 +224,7 @@ select {
 .block-item {
   width: 100%;
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
+  grid-template-columns: 18px 18px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   border: 1px solid transparent;
@@ -232,6 +232,19 @@ select {
   padding: 9px;
   background: #171c22;
   color: var(--text);
+}
+
+.block-item input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.block-main {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
   text-align: left;
   cursor: pointer;
 }
@@ -249,7 +262,7 @@ select {
 }
 
 .block-item strong,
-.block-item span {
+.block-main span {
   display: block;
   min-width: 0;
   overflow: hidden;
@@ -273,7 +286,7 @@ select {
   pointer-events: none;
 }
 
-.block-item span {
+.block-main span {
   color: var(--muted);
   font-size: 12px;
   margin-top: 2px;
@@ -284,6 +297,35 @@ select {
   gap: 10px;
   padding: 10px;
   border-top: 1px solid var(--line);
+}
+
+.geometry-tools {
+  display: grid;
+  gap: 8px;
+  padding: 12px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.geometry-tools .section-title {
+  margin-bottom: 0;
+}
+
+.tool-row {
+  display: grid;
+  gap: 7px;
+  align-items: end;
+}
+
+.tool-row.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tool-row.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.button.compact {
+  align-self: end;
 }
 
 .decomposition-panel {
@@ -389,6 +431,19 @@ select {
   gap: 8px;
 }
 
+.bc-presets {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 7px;
+  align-items: end;
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.bc-presets .button {
+  grid-column: span 2;
+}
+
 dialog {
   width: min(520px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
@@ -420,6 +475,24 @@ dialog::backdrop {
   gap: 7px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.repair-warning {
+  color: #e4bd78;
+  font-size: 12px;
+}
+
+.explicit-grid-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.explicit-grid-summary strong {
+  display: block;
+  color: var(--text);
 }
 
 .repair-change {
@@ -714,7 +787,7 @@ dialog::backdrop {
 
 @media (max-width: 1450px) and (min-width: 981px) {
   .toolbar {
-    grid-template-columns: auto minmax(130px, 180px) 70px minmax(150px, 1fr) repeat(6, 34px) auto 34px minmax(100px, 180px);
+    grid-template-columns: auto minmax(130px, 180px) 70px minmax(150px, 1fr) repeat(7, 34px) auto 34px minmax(100px, 180px);
   }
 
   .toolbar > .button {
@@ -758,5 +831,28 @@ dialog::backdrop {
 
   .viewport-shell {
     min-height: 56vh;
+  }
+}
+
+@media (max-width: 520px) {
+  .toolbar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .brand {
+    grid-column: 1 / -1;
+  }
+
+  .toolbar > .button:not(.icon):not(.file-button) {
+    grid-column: span 2;
+  }
+
+  .toolbar > .button.icon,
+  .toolbar > .file-button {
+    width: 100%;
+  }
+
+  .bc-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

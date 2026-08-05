@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from contextlib import redirect_stdout
+from io import StringIO
 import tempfile
 import unittest
 import warnings
@@ -11,17 +13,26 @@ import numpy as np
 from utils.snac_grid_generator import (
     MIN_LOCAL_CELLS,
     Project,
+    align_blocks,
+    apply_bc_preset,
     apply_axis_to_aligned_blocks,
     axis_grid_arrays,
     axis_grid_diagnostics,
     check_project,
+    duplicate_blocks,
     export_project,
     fit_monotone_spacing,
+    import_case,
     optimize_project_decomposition,
+    mirror_blocks,
     repair_project_grids,
     solve_spacing,
+    snap_block_to_face,
     update_project_structure,
 )
+from utils.snac_grid_generator.snac_grid import binary_payload
+from utils.snac_grid_generator.cli import main as grid_cli_main
+from utils.snac_grid_generator.topology import FaceConnection, infer_global_index_extents
 
 
 class GridGeneratorTests(unittest.TestCase):
@@ -173,7 +184,7 @@ class GridGeneratorTests(unittest.TestCase):
             10.0,
             30,
         )
-        self.assertEqual(arrays.binary_payload.shape, (120,))
+        self.assertEqual(binary_payload(arrays).shape, (120,))
         self.assertAlmostEqual(arrays.faces[0], 0.0)
         self.assertAlmostEqual(arrays.faces[-2], 10.0)
         self.assertTrue(np.all(np.diff(arrays.faces[:-1]) > 0.0))
@@ -355,6 +366,81 @@ class GridGeneratorTests(unittest.TestCase):
             self.assertEqual(saved["name"], "unit")
             self.assertGreaterEqual(len(result.files), 8)
 
+    def test_imports_an_existing_blocks_namelist(self) -> None:
+        result = import_case(Path("examples/__MULTI_BLOCK_GEOMETRY/L_channel"))
+        project = result.project
+        self.assertEqual(result.source, "blocks.nml")
+        self.assertEqual(len(project.blocks), 3)
+        self.assertEqual(project.blocks[2].dims, [2, 1, 1])
+        self.assertEqual(project.blocks[0].cbcvel[1], ["D", "D", "D", "F", "D", "D"])
+        self.assertEqual(project.blocks[1].bcpre[1], 3.0)
+        self.assertFalse(project.write_external_grid)
+        self.assertTrue(check_project(project).ok)
+
+        periodic = import_case(Path("tests/differentially_heated_cavity")).project
+        self.assertEqual(periodic.nscal, 1)
+        self.assertEqual(periodic.periodic_axes, [False, True, False])
+        self.assertTrue(check_project(periodic).ok)
+
+    def test_imports_same_line_namelist_assignments(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            case_dir = Path(tmp)
+            (case_dir / "blocks.nml").write_text(
+                "&blocks\n"
+                "nblocks=1, block_dims(1)=2,3,4, block_ng(1)=8,9,10, "
+                "block_inivel(1)='zer'\n"
+                "/\n",
+                encoding="utf-8",
+            )
+            project = import_case(case_dir).project
+
+        self.assertEqual(project.blocks[0].dims, [2, 3, 4])
+        self.assertEqual(project.blocks[0].ng, [8, 9, 10])
+        self.assertEqual(project.blocks[0].inivel, "zer")
+
+    def test_imports_external_binary_grids_exactly(self) -> None:
+        project = Project.from_dict(
+            {
+                "name": "external-round-trip",
+                "writeExternalGrid": True,
+                "blocks": [
+                    {
+                        "id": 1,
+                        "ng": [12, 8, 4],
+                        "lmin": [0, 0, 0],
+                        "lmax": [1, 1, 1],
+                        "axes": {"x": {"kind": "simple_ratio", "ratio": 7, "profile": "erf"}},
+                    }
+                ],
+            }
+        )
+        expected = axis_grid_arrays(project.blocks[0].axes["x"].to_dict(), 0.0, 1.0, 12).faces[:-1]
+        with tempfile.TemporaryDirectory() as tmp:
+            export_project(project, tmp)
+            (Path(tmp) / "snac_grid_project.json").unlink()
+            imported = import_case(tmp).project
+        axis = imported.blocks[0].axes["x"]
+        self.assertEqual(axis.kind, "explicit")
+        np.testing.assert_allclose(axis.faces, expected, rtol=0.0, atol=1.0e-14)
+        self.assertTrue(imported.write_external_grid)
+
+    def test_explicit_grids_require_external_grid_writing(self) -> None:
+        project = Project.from_dict(
+            {
+                "writeExternalGrid": False,
+                "blocks": [
+                    {
+                        "id": 1,
+                        "ng": [2, 2, 2],
+                        "axes": {"x": {"kind": "explicit", "faces": [0.0, 0.25, 1.0]}},
+                    }
+                ],
+            }
+        )
+        result = check_project(project)
+        self.assertFalse(result.ok)
+        self.assertIn("non-native grids require external grid writing", result.errors)
+
     def test_export_preserves_per_component_velocity_bcs(self) -> None:
         project = Project.from_dict(
             {
@@ -450,6 +536,46 @@ class GridGeneratorTests(unittest.TestCase):
             self.assertEqual(lines[0].split(), ["5", "1", "1"])
             self.assertEqual(lines[1].split(), ["10", "5", "2"])
 
+    def test_export_geometry_indices_do_not_depend_on_block_ids(self) -> None:
+        project = Project.from_dict(
+            {
+                "name": "reverse-indices",
+                "blocks": [
+                    {"id": 1, "ng": [6, 5, 2], "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+                    {"id": 2, "ng": [4, 5, 2], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                ],
+            }
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            export_project(project, tmp)
+            right = (Path(tmp) / "data" / "geometry_b_001.out").read_text().splitlines()
+            left = (Path(tmp) / "data" / "geometry_b_002.out").read_text().splitlines()
+
+        self.assertEqual(right[0].split(), ["5", "1", "1"])
+        self.assertEqual(right[1].split(), ["10", "5", "2"])
+        self.assertEqual(left[0].split(), ["1", "1", "1"])
+        self.assertEqual(left[1].split(), ["4", "5", "2"])
+
+    def test_global_index_inference_rejects_disconnected_and_conflicting_graphs(self) -> None:
+        blocks = Project.from_dict(
+            {
+                "blocks": [
+                    {"id": 1, "ng": [4, 5, 2]},
+                    {"id": 2, "ng": [6, 5, 2], "lmin": [1, 0, 0], "lmax": [2, 1, 0.05]},
+                ]
+            }
+        ).blocks
+        with self.assertRaisesRegex(ValueError, "disconnected blocks"):
+            infer_global_index_extents(blocks, [])
+
+        conflicting = [
+            FaceConnection(1, 1, 2, 0, 0),
+            FaceConnection(1, 0, 2, 1, 0),
+        ]
+        with self.assertRaisesRegex(ValueError, "inconsistent global-index loop"):
+            infer_global_index_extents(blocks, conflicting)
+
     def test_empty_project_can_exist_but_cannot_be_exported(self) -> None:
         project = Project.from_dict({"name": "empty", "blocks": []})
         check = check_project(project)
@@ -483,14 +609,21 @@ class GridGeneratorTests(unittest.TestCase):
 
     def test_project_json_has_an_explicit_schema_version(self) -> None:
         project = Project.from_dict({"blocks": []})
-        self.assertEqual(project.to_dict()["schemaVersion"], 1)
+        self.assertEqual(project.to_dict()["schemaVersion"], 2)
+        self.assertEqual(project.decomposition.min_local_cells, 4)
         with self.assertRaisesRegex(ValueError, "schema version"):
-            Project.from_dict({"schemaVersion": 2, "blocks": []})
+            Project.from_dict({"schemaVersion": 3, "blocks": []})
 
     def test_project_json_preserves_decomposition_and_axis_locks(self) -> None:
         project = Project.from_dict(
             {
-                "decomposition": {"targetRanks": 64, "mode": "2d", "axes": [True, True, False]},
+                "decomposition": {
+                    "targetRanks": 64,
+                    "mode": "2d",
+                    "axes": [True, True, False],
+                    "minLocalCells": 6,
+                    "maxLocalAspect": 8.0,
+                },
                 "blocks": [{"id": 1, "axisLocks": [False, True, False]}],
             }
         )
@@ -498,6 +631,8 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertEqual(saved["decomposition"]["targetRanks"], 64)
         self.assertEqual(saved["decomposition"]["mode"], "2d")
         self.assertEqual(saved["decomposition"]["axes"], [True, True, False])
+        self.assertEqual(saved["decomposition"]["minLocalCells"], 6)
+        self.assertEqual(saved["decomposition"]["maxLocalAspect"], 8.0)
         self.assertEqual(saved["blocks"][0]["axisLocks"], [False, True, False])
         self.assertEqual(Project.from_dict(saved).to_dict(), saved)
 
@@ -571,6 +706,79 @@ class GridGeneratorTests(unittest.TestCase):
         result = check_project(project)
         self.assertFalse(result.ok)
         self.assertTrue(any("partial" in error for error in result.errors))
+
+    def test_tiny_blocks_have_only_their_true_face_connection(self) -> None:
+        size = 1.0e-12
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {"id": 1, "lmin": [0.0, 0.0, 0.0], "lmax": [size, size, size]},
+                    {"id": 2, "lmin": [size, 0.0, 0.0], "lmax": [2.0 * size, size, size]},
+                ]
+            }
+        )
+
+        updated, result = update_project_structure(project, source_block_id=1)
+
+        self.assertTrue(result.ok, result.errors)
+        self.assertEqual(len(result.interfaces), 1)
+        self.assertEqual(result.interfaces[0]["face"], "x+")
+        self.assertEqual(result.interfaces[0]["neighborFace"], "x-")
+        self.assertEqual(updated.blocks[0].cbcpre, ["N", "F", "N", "N", "N", "N"])
+        self.assertEqual(updated.blocks[1].cbcpre, ["F", "N", "N", "N", "N", "N"])
+
+    def test_tiny_explicit_grid_must_span_its_actual_extent(self) -> None:
+        size = 1.0e-12
+        with self.assertRaisesRegex(ValueError, "must span the block extent"):
+            Project.from_dict(
+                {
+                    "blocks": [
+                        {
+                            "id": 1,
+                            "lmin": [0.0, 0.0, 0.0],
+                            "lmax": [size, 1.0, 1.0],
+                            "axes": {
+                                "x": {
+                                    "kind": "explicit",
+                                    "faces": [0.0, 0.5 * size, 1.5 * size],
+                                }
+                            },
+                        }
+                    ]
+                }
+            )
+
+    def test_check_mirrors_snac_grid_and_initialization_contracts(self) -> None:
+        bad_growth = Project.from_dict(
+            {"blocks": [{"id": 1, "axes": {"x": {"kind": "snac", "gt": 1, "gr": -2.0}}}]}
+        )
+        self.assertTrue(any("non-negative" in error for error in check_project(bad_growth).errors))
+
+        bad_mapping = Project.from_dict(
+            {"blocks": [{"id": 1, "axes": {"x": {"kind": "snac", "gt": 99, "gr": 1.0}}}]}
+        )
+        self.assertTrue(any("mapping function 99" in error for error in check_project(bad_mapping).errors))
+
+        bad_initialization = Project.from_dict({"blocks": [{"id": 1, "inivel": "unknown"}]})
+        self.assertTrue(
+            any("initial velocity field" in error for error in check_project(bad_initialization).errors)
+        )
+        for field in ("kov", "pdc"):
+            with self.subTest(field=field):
+                self.assertTrue(check_project(Project.from_dict({"blocks": [{"id": 1, "inivel": field}]})).ok)
+
+    def test_check_rejects_inflow_on_a_periodic_axis(self) -> None:
+        project = Project.from_dict(
+            {
+                "periodicAxes": [True, False, False],
+                "blocks": [{"id": 1, "inflow": [1, 0, 0, 0, 0, 0]}],
+            }
+        )
+
+        _, result = update_project_structure(project)
+
+        self.assertFalse(result.ok)
+        self.assertTrue(any("inflow type on periodic face x-" in error for error in result.errors))
 
     def test_update_structure_infers_friends_and_propagates_mpi(self) -> None:
         project = Project.from_dict(
@@ -669,6 +877,83 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertTrue(any("locked y grids conflict" in error for error in result.errors))
         self.assertEqual(failed.blocks[1].ng[2], 10)
         self.assertEqual(result.changes, [])
+
+    def test_repair_matches_normal_interface_spacing(self) -> None:
+        project = Project.from_dict(
+            {
+                "writeExternalGrid": False,
+                "blocks": [
+                    {"id": 1, "ng": [8, 8, 8], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {
+                        "id": 2,
+                        "ng": [16, 8, 8],
+                        "lmin": [1, 0, 0],
+                        "lmax": [2, 1, 1],
+                        "axes": {"x": {"kind": "simple_ratio", "ratio": 100}},
+                    },
+                ],
+            }
+        )
+        repaired, result = repair_project_grids(project, source_block_id=1)
+        self.assertTrue(result.ok, result.errors)
+        changes = [change for change in result.changes if change.kind == "spacing"]
+        self.assertEqual(len(changes), 1)
+        self.assertEqual((changes[0].block_id, changes[0].face, changes[0].source_block_id), (2, "x-", 1))
+        self.assertAlmostEqual(changes[0].new_spacing, 0.125)
+        self.assertEqual(repaired.blocks[1].axes["x"].kind, "simple_ratio")
+        self.assertEqual(repaired.blocks[1].axes["x"].controls, ["n", "width_start"])
+        self.assertTrue(repaired.write_external_grid)
+        self.assertFalse(any("interface spacing jumps" in warning for warning in check_project(repaired).warnings))
+
+    def test_repair_uses_a_locked_normal_grid_as_authority(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {"id": 1, "ng": [8, 8, 8], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {
+                        "id": 2,
+                        "ng": [16, 8, 8],
+                        "lmin": [1, 0, 0],
+                        "lmax": [2, 1, 1],
+                        "axes": {"x": {"kind": "simple_ratio", "ratio": 100}},
+                        "axisLocks": [True, False, False],
+                    },
+                ],
+            }
+        )
+        repaired, result = repair_project_grids(project, source_block_id=1)
+        self.assertTrue(result.ok, result.errors)
+        change = next(change for change in result.changes if change.kind == "spacing")
+        self.assertEqual((change.block_id, change.face, change.source_block_id), (1, "x+", 2))
+        self.assertEqual(repaired.blocks[0].axes["x"].kind, "explicit")
+        self.assertEqual(repaired.blocks[1].axes["x"].kind, "simple_ratio")
+
+    def test_repair_rejects_a_normal_jump_between_locked_grids(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "ng": [8, 8, 8],
+                        "lmin": [0, 0, 0],
+                        "lmax": [1, 1, 1],
+                        "axisLocks": [True, False, False],
+                    },
+                    {
+                        "id": 2,
+                        "ng": [16, 8, 8],
+                        "lmin": [1, 0, 0],
+                        "lmax": [2, 1, 1],
+                        "axes": {"x": {"kind": "simple_ratio", "ratio": 100}},
+                        "axisLocks": [True, False, False],
+                    },
+                ],
+            }
+        )
+        unchanged, result = repair_project_grids(project, source_block_id=1)
+        self.assertFalse(result.ok)
+        self.assertTrue(any("locked x grids have an interface spacing jump" in error for error in result.errors))
+        self.assertEqual(unchanged.to_dict(), project.to_dict())
 
     def test_decomposition_balances_unequal_blocks_exactly(self) -> None:
         project = Project.from_dict(
@@ -943,6 +1228,133 @@ class GridGeneratorTests(unittest.TestCase):
         updated, result = update_project_structure(project)
         self.assertTrue(result.ok)
         self.assertTrue(any("interface spacing jumps" in warning for warning in result.warnings))
+        self.assertEqual(len(result.interfaces), 1)
+        self.assertGreater(result.interfaces[0]["ratio"], 3.0)
+
+    def test_geometry_operations_preserve_explicit_grids(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "lmin": [0, 0, 0],
+                        "lmax": [1, 1, 1],
+                        "axes": {"x": {"kind": "explicit", "faces": [0.0, 0.2, 1.0]}},
+                    }
+                ]
+            }
+        )
+        duplicated, new_ids = duplicate_blocks(project, [1], "x", count=2, gap=0.5)
+        self.assertEqual(new_ids, [2, 3])
+        self.assertEqual(duplicated.blocks[1].axes["x"].faces, [1.5, 1.7, 2.5])
+        mirrored, mirror_ids = mirror_blocks(project, [1], "x", 0.0)
+        self.assertEqual(mirror_ids, [2])
+        self.assertEqual(mirrored.blocks[1].axes["x"].faces, [-1.0, -0.2, 0.0])
+
+        aligned, changed = align_blocks(duplicated, [1, 2], 1, "y", "upper")
+        self.assertEqual(changed, [2])
+        snapped, changed = snap_block_to_face(aligned, 2, 1, "x+")
+        self.assertEqual(changed, [2])
+        self.assertEqual(snapped.blocks[1].lmin, [1.0, 0.0, 0.0])
+
+    def test_mirror_reverses_native_and_monotone_grading(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "lmin": [0, 0, 0],
+                        "lmax": [1, 1, 1],
+                        "axes": {"x": {"kind": "snac", "gt": 1, "gr": 2.0}},
+                    },
+                    {
+                        "id": 2,
+                        "lmin": [2, 0, 0],
+                        "lmax": [3, 1, 1],
+                        "axes": {
+                            "x": {
+                                "kind": "simple_ratio",
+                                "controls": ["n", "ratio"],
+                                "ratio": 4.0,
+                            }
+                        },
+                    },
+                ]
+            }
+        )
+        mirrored, _ = mirror_blocks(project, [1, 2], "x", 0.0)
+        self.assertEqual(mirrored.blocks[2].axes["x"].gt, 3)
+        self.assertAlmostEqual(mirrored.blocks[3].axes["x"].ratio, 0.25)
+
+    def test_snac_boundary_presets_keep_friend_faces(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "cbcvel": [["D", "F", "D", "D", "D", "D"]] * 3,
+                        "cbcpre": ["N", "F", "N", "N", "N", "N"],
+                        "bcvel": [[0, 2, 0, 0, 0, 0]] * 3,
+                        "bcpre": [0, 2, 0, 0, 0, 0],
+                    },
+                    {"id": 2},
+                ]
+            }
+        )
+        updated, changed = apply_bc_preset(project, [1], "moving_wall", face="z+", velocity=[1, 0, 0])
+        block = updated.blocks[0]
+        self.assertEqual(changed, [1])
+        self.assertEqual([block.cbcvel[index][5] for index in range(3)], ["D", "D", "D"])
+        self.assertEqual([block.bcvel[index][5] for index in range(3)], [1.0, 0.0, 0.0])
+        self.assertEqual(block.cbcpre[1], "F")
+        self.assertEqual(block.bcpre[1], 2.0)
+
+    def test_decomposition_respects_minimum_local_cells(self) -> None:
+        project = Project.from_dict(
+            {
+                "decomposition": {
+                    "targetRanks": 8,
+                    "mode": "1d",
+                    "axes": [True, False, False],
+                    "minLocalCells": 10,
+                },
+                "blocks": [{"id": 1, "ng": [64, 8, 8]}],
+            }
+        )
+        _, result = optimize_project_decomposition(project)
+        self.assertFalse(result.ok)
+        self.assertTrue(any("no exact" in error for error in result.errors))
+
+        aspect_limited = Project.from_dict(
+            {
+                "decomposition": {
+                    "targetRanks": 8,
+                    "mode": "1d",
+                    "axes": [True, False, False],
+                    "maxLocalAspect": 4.0,
+                },
+                "blocks": [{"id": 1, "ng": [64, 64, 4]}],
+            }
+        )
+        _, result = optimize_project_decomposition(aspect_limited)
+        self.assertFalse(result.ok)
+        self.assertTrue(any("no exact" in error for error in result.errors))
+
+    def test_headless_cli_checks_and_migrates_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project_path = Path(tmp) / "old.json"
+            migrated_path = Path(tmp) / "migrated.json"
+            project_path.write_text(json.dumps({"schemaVersion": 1, "blocks": [{"id": 1}]}), encoding="utf-8")
+            with redirect_stdout(StringIO()) as output:
+                self.assertEqual(grid_cli_main(["check", str(project_path), "--json"]), 0)
+                self.assertTrue(json.loads(output.getvalue())["ok"])
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    grid_cli_main(["migrate", str(project_path), "-o", str(migrated_path), "--json"]),
+                    0,
+                )
+            migrated = json.loads(migrated_path.read_text(encoding="utf-8"))
+            self.assertEqual(migrated["schemaVersion"], 2)
 
 
 if __name__ == "__main__":

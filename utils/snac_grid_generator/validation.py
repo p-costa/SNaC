@@ -1,66 +1,28 @@
-"""Structured-grid checks and repair helpers for the grid generator."""
+"""Structured-grid checks for the grid generator."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import isclose, prod
+from math import prod
 from typing import Any
 
 import numpy as np
 
 from .grid import AXIS_NAMES, axis_grid_arrays
 from .model import AxisSpec, Block, Project
+from .numeric import coordinates_close, geometry_tolerance
+from .snac_bc import clear_friend_boundaries, connect_friend_boundaries
+from .snac_validation import validate_snac_project
+from .topology import (
+    FACE_INFO,
+    FACE_ORDER,
+    FaceConnection,
+    axis_extent,
+    build_topology,
+)
 
-FACE_ORDER = ("x-", "x+", "y-", "y+", "z-", "z+")
-FACE_INDEX = {
-    (0, 0): 0,
-    (0, 1): 1,
-    (1, 0): 2,
-    (1, 1): 3,
-    (2, 0): 4,
-    (2, 1): 5,
-}
-FACE_INFO = {
-    0: (0, 0),
-    1: (0, 1),
-    2: (1, 0),
-    3: (1, 1),
-    4: (2, 0),
-    5: (2, 1),
-}
-
-GEOM_TOL = 1.0e-10
 GRID_TOL = 1.0e-9
 SPACING_JUMP_WARNING_RATIO = 3.0
-
-_BC_PAIRS = {"ND", "DN", "NN", "DD", "FD", "DF", "FF", "FN", "NF"}
-_NORMAL_BC_PAIRS = {
-    ("FF", "FF"),
-    ("ND", "DN"),
-    ("DN", "ND"),
-    ("DD", "NN"),
-    ("FD", "FN"),
-    ("DF", "NF"),
-    ("FN", "FD"),
-    ("NF", "DF"),
-    ("FN", "FN"),
-    ("NF", "NF"),
-    ("NN", "NN"),
-    ("DN", "NN"),
-    ("ND", "NN"),
-    ("NN", "DD"),
-}
-
-
-@dataclass(frozen=True)
-class FaceConnection:
-    """Full-face connection between two blocks."""
-
-    a_id: int
-    a_face: int
-    b_id: int
-    b_face: int
-    axis_index: int
 
 
 @dataclass
@@ -69,6 +31,7 @@ class CheckResult:
 
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    interfaces: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -77,46 +40,15 @@ class CheckResult:
     def extend(self, other: "CheckResult") -> None:
         self.errors.extend(other.errors)
         self.warnings.extend(other.warnings)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {"ok": self.ok, "errors": self.errors, "warnings": self.warnings}
-
-
-@dataclass(frozen=True)
-class GridRepair:
-    """One proposed axis-grid replacement."""
-
-    block_id: int
-    axis: str
-    source_block_id: int
-    old_n: int
-    new_n: int
+        self.interfaces.extend(other.interfaces)
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "blockId": self.block_id,
-            "axis": self.axis,
-            "sourceBlockId": self.source_block_id,
-            "oldN": self.old_n,
-            "newN": self.new_n,
+            "ok": self.ok,
+            "errors": self.errors,
+            "warnings": self.warnings,
+            "interfaces": self.interfaces,
         }
-
-
-@dataclass
-class RepairResult(CheckResult):
-    """Validation messages and replacements proposed by grid repair."""
-
-    changes: list[GridRepair] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {**super().to_dict(), "changes": [change.to_dict() for change in self.changes]}
-
-
-@dataclass
-class _Topology:
-    connections: list[FaceConnection] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
 
 
 def check_project(project: Project | dict[str, Any]) -> CheckResult:
@@ -124,7 +56,7 @@ def check_project(project: Project | dict[str, Any]) -> CheckResult:
 
     project = _project_copy(project)
     result = CheckResult()
-    topology = _build_topology(project.blocks, project.periodic_axes)
+    topology = build_topology(project.blocks, project.periodic_axes)
     result.errors.extend(topology.errors)
     result.warnings.extend(topology.warnings)
     if not project.blocks:
@@ -133,11 +65,11 @@ def check_project(project: Project | dict[str, Any]) -> CheckResult:
     by_id = {block.id: block for block in project.blocks}
 
     result.errors.extend(_check_block_basics(project.blocks))
-    result.errors.extend(_check_boundary_pairs(project.blocks))
-    result.errors.extend(_check_friend_boundaries(project.blocks, topology.connections))
+    result.errors.extend(validate_snac_project(project, topology.connections))
     result.errors.extend(_check_connected_block_grids(by_id, topology.connections))
     result.errors.extend(_check_decomposition_request(project))
-    result.warnings.extend(_check_spacing_jumps(by_id, topology.connections))
+    result.interfaces, spacing_warnings = _interface_spacing_metrics(by_id, topology.connections)
+    result.warnings.extend(spacing_warnings)
     return result
 
 
@@ -146,16 +78,21 @@ def infer_project_connectivity(project: Project | dict[str, Any]) -> tuple[Proje
 
     project = _project_copy(project)
     result = CheckResult()
-    topology = _build_topology(project.blocks, project.periodic_axes)
+    topology = build_topology(project.blocks, project.periodic_axes)
     result.errors.extend(topology.errors)
     result.warnings.extend(topology.warnings)
     if result.errors:
         return project, result
 
-    _clear_friend_boundaries(project.blocks)
+    clear_friend_boundaries(project.blocks)
     by_id = {block.id: block for block in project.blocks}
     for connection in topology.connections:
-        _connect(by_id[connection.a_id], connection.a_face, by_id[connection.b_id], connection.b_face)
+        connect_friend_boundaries(
+            by_id[connection.a_id],
+            connection.a_face,
+            by_id[connection.b_id],
+            connection.b_face,
+        )
     return project, result
 
 
@@ -169,7 +106,7 @@ def update_project_structure(
     if result.errors:
         return project, result
 
-    topology = _build_topology(project.blocks, project.periodic_axes)
+    topology = build_topology(project.blocks, project.periodic_axes)
     result.warnings.extend(_propagate_mpi_partitions(project.blocks, topology.connections, source_block_id))
     result.extend(check_project(project))
     return project, result
@@ -190,7 +127,7 @@ def apply_axis_to_aligned_blocks(
         raise ValueError(f"block {source_block_id} does not exist")
 
     axis_index = AXIS_NAMES.index(axis)
-    topology = _build_topology(project.blocks, project.periodic_axes)
+    topology = build_topology(project.blocks, project.periodic_axes)
     if topology.errors:
         raise ValueError(topology.errors[0])
     by_id = {block.id: block for block in project.blocks}
@@ -208,8 +145,16 @@ def apply_axis_to_aligned_blocks(
             if normal_axis == axis_index or neighbor_id in aligned:
                 continue
             if not (
-                _touches(neighbor.lmin[axis_index], source.lmin[axis_index])
-                and _touches(neighbor.lmax[axis_index], source.lmax[axis_index])
+                coordinates_close(
+                    neighbor.lmin[axis_index],
+                    source.lmin[axis_index],
+                    scale=max(axis_extent(neighbor, axis_index), axis_extent(source, axis_index)),
+                )
+                and coordinates_close(
+                    neighbor.lmax[axis_index],
+                    source.lmax[axis_index],
+                    scale=max(axis_extent(neighbor, axis_index), axis_extent(source, axis_index)),
+                )
             ):
                 continue
             aligned.add(neighbor_id)
@@ -225,227 +170,10 @@ def apply_axis_to_aligned_blocks(
     return project, changed
 
 
-def repair_project_grids(
-    project: Project | dict[str, Any],
-    source_block_id: int | None = None,
-) -> tuple[Project, RepairResult]:
-    """Propose congruent tangential grids using locks and selected-block authority."""
-
-    original = _project_copy(project)
-    project = _project_copy(original)
-    result = RepairResult()
-    topology = _build_topology(project.blocks, project.periodic_axes)
-    result.errors.extend(topology.errors)
-    result.warnings.extend(topology.warnings)
-    if result.errors:
-        return original, result
-
-    by_id = {block.id: block for block in project.blocks}
-    selected = source_block_id if source_block_id in by_id else None
-    for axis_index, axis in enumerate(AXIS_NAMES):
-        for component in _axis_components(project.blocks, topology.connections, axis_index):
-            if len(component) < 2:
-                continue
-            locked = sorted(block_id for block_id in component if by_id[block_id].axis_locks[axis_index])
-            if len(locked) > 1:
-                reference = by_id[locked[0]]
-                conflicts = [
-                    block_id
-                    for block_id in locked[1:]
-                    if not _same_axis_grid(reference, by_id[block_id], axis_index)
-                ]
-                if conflicts:
-                    result.errors.append(
-                        f"locked {axis} grids conflict between blocks {locked[0]} and {conflicts}"
-                    )
-                    continue
-            owner_id = locked[0] if locked else selected if selected in component else min(component)
-            owner = by_id[owner_id]
-            for block_id in sorted(component):
-                if block_id == owner_id:
-                    continue
-                block = by_id[block_id]
-                if block.axis_locks[axis_index] and not _same_axis_grid(owner, block, axis_index):
-                    result.errors.append(
-                        f"block {block_id}: locked {axis} grid conflicts with authoritative block {owner_id}"
-                    )
-                    continue
-                if _same_axis_grid(owner, block, axis_index):
-                    continue
-                old_n = block.ng[axis_index]
-                block.axes[axis] = AxisSpec.from_dict(owner.axes[axis].to_dict())
-                block.ng[axis_index] = owner.ng[axis_index]
-                result.changes.append(GridRepair(block_id, axis, owner_id, old_n, block.ng[axis_index]))
-
-    if result.errors:
-        result.changes.clear()
-        return original, result
-    project.validate()
-    return project, result
-
-
 def _project_copy(project: Project | dict[str, Any]) -> Project:
     if isinstance(project, Project):
         return Project.from_dict(project.to_dict())
     return Project.from_dict(project)
-
-
-def _build_topology(blocks: list[Block], periodic_axes: list[bool] | None = None) -> _Topology:
-    topology = _Topology()
-    face_owner: dict[tuple[int, int], FaceConnection] = {}
-    periodic_axes = periodic_axes or [False, False, False]
-
-    for i, left in enumerate(blocks):
-        for right in blocks[i + 1 :]:
-            if _volume_overlap(left, right):
-                topology.errors.append(f"blocks {left.id} and {right.id} overlap")
-                continue
-            for axis_index in range(3):
-                if _touches(left.lmax[axis_index], right.lmin[axis_index]):
-                    _add_face_contact(topology, face_owner, left, 1, right, 0, axis_index)
-                if _touches(right.lmax[axis_index], left.lmin[axis_index]):
-                    _add_face_contact(topology, face_owner, right, 1, left, 0, axis_index)
-
-    for axis_index, is_periodic in enumerate(periodic_axes[:3]):
-        if is_periodic:
-            _add_periodic_contacts(topology, face_owner, blocks, axis_index)
-
-    return topology
-
-
-def _add_periodic_contacts(
-    topology: _Topology,
-    face_owner: dict[tuple[int, int], FaceConnection],
-    blocks: list[Block],
-    axis_index: int,
-) -> None:
-    if not blocks:
-        return
-
-    axis = AXIS_NAMES[axis_index]
-    global_min = min(block.lmin[axis_index] for block in blocks)
-    global_max = max(block.lmax[axis_index] for block in blocks)
-    low_blocks = [block for block in blocks if _touches(block.lmin[axis_index], global_min)]
-    high_blocks = [block for block in blocks if _touches(block.lmax[axis_index], global_max)]
-    matched_high: set[int] = set()
-
-    for low_block in low_blocks:
-        matches = [block for block in high_blocks if _same_cross_section(low_block, block, axis_index)]
-        if len(matches) != 1:
-            topology.errors.append(
-                f"periodic {axis}- face of block {low_block.id} has {len(matches)} matching "
-                "full faces on the opposite boundary"
-            )
-            continue
-        high_block = matches[0]
-        matched_high.add(high_block.id)
-        _add_connection(
-            topology,
-            face_owner,
-            low_block,
-            FACE_INDEX[(axis_index, 0)],
-            high_block,
-            FACE_INDEX[(axis_index, 1)],
-            axis_index,
-        )
-
-    for high_block in high_blocks:
-        if high_block.id not in matched_high:
-            topology.errors.append(
-                f"periodic {axis}+ face of block {high_block.id} has no matching full face on the opposite boundary"
-            )
-
-
-def _add_face_contact(
-    topology: _Topology,
-    face_owner: dict[tuple[int, int], FaceConnection],
-    lower_block: Block,
-    lower_side: int,
-    upper_block: Block,
-    upper_side: int,
-    axis_index: int,
-) -> None:
-    if _same_cross_section(lower_block, upper_block, axis_index):
-        lower_face = FACE_INDEX[(axis_index, lower_side)]
-        upper_face = FACE_INDEX[(axis_index, upper_side)]
-        _add_connection(
-            topology,
-            face_owner,
-            lower_block,
-            lower_face,
-            upper_block,
-            upper_face,
-            axis_index,
-        )
-    elif _cross_section_overlap(lower_block, upper_block, axis_index):
-        topology.errors.append(
-            f"blocks {lower_block.id} and {upper_block.id} touch on a partial {AXIS_NAMES[axis_index]} face"
-        )
-
-
-def _add_connection(
-    topology: _Topology,
-    face_owner: dict[tuple[int, int], FaceConnection],
-    a: Block,
-    a_face: int,
-    b: Block,
-    b_face: int,
-    axis_index: int,
-) -> None:
-    connection = FaceConnection(a.id, a_face, b.id, b_face, axis_index)
-    for block_id, face in ((connection.a_id, connection.a_face), (connection.b_id, connection.b_face)):
-        old = face_owner.get((block_id, face))
-        if old is not None:
-            topology.errors.append(f"block {block_id} face {FACE_ORDER[face]} has multiple full-face neighbors")
-        face_owner[(block_id, face)] = connection
-    topology.connections.append(connection)
-
-
-def _axis_components(
-    blocks: list[Block],
-    connections: list[FaceConnection],
-    axis_index: int,
-) -> list[set[int]]:
-    graph: dict[int, set[int]] = {block.id: set() for block in blocks}
-    for connection in connections:
-        if connection.axis_index == axis_index:
-            continue
-        graph[connection.a_id].add(connection.b_id)
-        graph[connection.b_id].add(connection.a_id)
-
-    result: list[set[int]] = []
-    unseen = set(graph)
-    while unseen:
-        seed = min(unseen)
-        component = {seed}
-        queue = [seed]
-        unseen.remove(seed)
-        while queue:
-            current = queue.pop(0)
-            for neighbor in graph[current]:
-                if neighbor in unseen:
-                    unseen.remove(neighbor)
-                    component.add(neighbor)
-                    queue.append(neighbor)
-        result.append(component)
-    return result
-
-
-def _same_axis_grid(a: Block, b: Block, axis_index: int) -> bool:
-    if not (
-        _touches(a.lmin[axis_index], b.lmin[axis_index])
-        and _touches(a.lmax[axis_index], b.lmax[axis_index])
-    ):
-        return False
-    try:
-        a_faces = _interior_faces(a, axis_index)
-        b_faces = _interior_faces(b, axis_index)
-    except Exception:
-        return False
-    if a_faces.shape != b_faces.shape:
-        return False
-    scale = max(1.0, abs(a.lmax[axis_index] - a.lmin[axis_index]))
-    return float(np.max(np.abs(a_faces - b_faces))) <= GRID_TOL * scale
 
 
 def _check_block_basics(blocks: list[Block]) -> list[str]:
@@ -473,6 +201,24 @@ def _check_decomposition_request(project: Project) -> list[str]:
         errors.append(f"MPI decomposition uses {total} ranks, expected {target}")
 
     active = set()
+    min_local_cells = project.decomposition.min_local_cells
+    max_local_aspect = project.decomposition.max_local_aspect
+    for block in project.blocks:
+        local_extents = [block.ng[index] / block.dims[index] for index in range(3)]
+        split_extents = [
+            block.ng[index] // block.dims[index]
+            for index in range(3)
+            if block.dims[index] > 1
+        ]
+        if split_extents and min(split_extents) < min_local_cells:
+            errors.append(
+                f"block {block.id}: decomposition leaves fewer than {min_local_cells} cells on a rank"
+            )
+        aspect = max(local_extents) / min(local_extents)
+        if max_local_aspect and aspect > max_local_aspect:
+            errors.append(
+                f"block {block.id}: local partition aspect {aspect:.3g} exceeds {max_local_aspect:.3g}"
+            )
     for axis_index, axis in enumerate(AXIS_NAMES):
         if any(block.dims[axis_index] > 1 for block in project.blocks):
             active.add(axis_index)
@@ -513,79 +259,6 @@ def _check_connected_components(blocks: list[Block], connections: list[FaceConne
     return []
 
 
-def _check_boundary_pairs(blocks: list[Block]) -> list[str]:
-    errors: list[str] = []
-    for block in blocks:
-        for axis_index, axis in enumerate(AXIS_NAMES):
-            lo = FACE_INDEX[(axis_index, 0)]
-            hi = FACE_INDEX[(axis_index, 1)]
-            pressure_pair = f"{block.cbcpre[lo]}{block.cbcpre[hi]}"
-            if pressure_pair not in _BC_PAIRS:
-                errors.append(f"block {block.id}: pressure BC pair {pressure_pair} along {axis} is invalid")
-            for component in range(3):
-                velocity_pair = f"{block.cbcvel[component][lo]}{block.cbcvel[component][hi]}"
-                if velocity_pair not in _BC_PAIRS:
-                    errors.append(
-                        f"block {block.id}: velocity component {component + 1} BC pair "
-                        f"{velocity_pair} along {axis} is invalid"
-                    )
-            for iscal, cbcscal in enumerate(block.cbcscal, start=1):
-                scalar_pair = f"{cbcscal[lo]}{cbcscal[hi]}"
-                if scalar_pair not in _BC_PAIRS:
-                    errors.append(f"block {block.id}: scalar {iscal} BC pair {scalar_pair} along {axis} is invalid")
-            normal_velocity_pair = f"{block.cbcvel[axis_index][lo]}{block.cbcvel[axis_index][hi]}"
-            if (normal_velocity_pair, pressure_pair) not in _NORMAL_BC_PAIRS:
-                errors.append(
-                    f"block {block.id}: normal velocity BC pair {normal_velocity_pair} is incompatible with "
-                    f"pressure pair {pressure_pair} along {axis}"
-                )
-    return errors
-
-
-def _check_friend_boundaries(blocks: list[Block], connections: list[FaceConnection]) -> list[str]:
-    errors: list[str] = []
-    expected: dict[tuple[int, int], int] = {}
-    existing_ids = {block.id for block in blocks}
-    for connection in connections:
-        expected[(connection.a_id, connection.a_face)] = connection.b_id
-        expected[(connection.b_id, connection.b_face)] = connection.a_id
-
-    for block in blocks:
-        for face, label in enumerate(FACE_ORDER):
-            expected_friend = expected.get((block.id, face))
-            friend_codes = [
-                block.cbcpre[face],
-                *(block.cbcvel[component][face] for component in range(3)),
-                *(cbcscal[face] for cbcscal in block.cbcscal),
-            ]
-            friend_values = [
-                block.bcpre[face],
-                *(block.bcvel[component][face] for component in range(3)),
-                *(bcscal[face] for bcscal in block.bcscal),
-            ]
-            actual_friends = [int(round(value)) for code, value in zip(friend_codes, friend_values) if code == "F"]
-
-            if expected_friend is None:
-                if actual_friends:
-                    errors.append(f"block {block.id} face {label} is marked F but has no full-face neighbor")
-                continue
-
-            if any(code != "F" for code in friend_codes):
-                errors.append(
-                    f"block {block.id} face {label} touches block {expected_friend} but is not fully marked F"
-                )
-                continue
-
-            for friend in actual_friends:
-                if friend not in existing_ids:
-                    errors.append(f"block {block.id} face {label} references missing block {friend}")
-                elif friend != expected_friend:
-                    errors.append(
-                        f"block {block.id} face {label} references block {friend}, expected {expected_friend}"
-                    )
-    return errors
-
-
 def _check_connected_block_grids(by_id: dict[int, Block], connections: list[FaceConnection]) -> list[str]:
     errors: list[str] = []
     for connection in connections:
@@ -607,13 +280,39 @@ def _check_connected_block_grids(by_id: dict[int, Block], connections: list[Face
                 continue
             if a_faces.shape != b_faces.shape:
                 continue
-            scale = max(1.0, abs(a.lmax[axis_index] - a.lmin[axis_index]))
-            if float(np.max(np.abs(a_faces - b_faces))) > GRID_TOL * scale:
+            scale = max(axis_extent(a, axis_index), axis_extent(b, axis_index))
+            tolerance = max(
+                GRID_TOL * scale,
+                geometry_tolerance(
+                    float(a_faces[0]),
+                    float(a_faces[-1]),
+                    float(b_faces[0]),
+                    float(b_faces[-1]),
+                    scale=scale,
+                ),
+            )
+            if float(np.max(np.abs(a_faces - b_faces))) > tolerance:
                 errors.append(f"blocks {a.id} and {b.id}: touching grid lines do not match along {axis}")
     return errors
 
 
-def _check_spacing_jumps(by_id: dict[int, Block], connections: list[FaceConnection]) -> list[str]:
+def interface_spacing_metrics(project: Project | dict[str, Any]) -> list[dict[str, Any]]:
+    """Return normal-spacing ratios for every valid full-face connection."""
+
+    project = _project_copy(project)
+    topology = build_topology(project.blocks, project.periodic_axes)
+    metrics, _ = _interface_spacing_metrics(
+        {block.id: block for block in project.blocks},
+        topology.connections,
+    )
+    return metrics
+
+
+def _interface_spacing_metrics(
+    by_id: dict[int, Block],
+    connections: list[FaceConnection],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    metrics: list[dict[str, Any]] = []
     warnings: list[str] = []
     for connection in connections:
         a = by_id[connection.a_id]
@@ -626,11 +325,23 @@ def _check_spacing_jumps(by_id: dict[int, Block], connections: list[FaceConnecti
             warnings.append(f"blocks {a.id} and {b.id}: could not compare interface spacing ({exc})")
             continue
         ratio = max(a_width, b_width) / min(a_width, b_width)
+        metrics.append(
+            {
+                "blockId": a.id,
+                "face": FACE_ORDER[connection.a_face],
+                "neighborId": b.id,
+                "neighborFace": FACE_ORDER[connection.b_face],
+                "axis": AXIS_NAMES[axis],
+                "ratio": ratio,
+                "spacing": a_width,
+                "neighborSpacing": b_width,
+            }
+        )
         if ratio > SPACING_JUMP_WARNING_RATIO:
             warnings.append(
                 f"blocks {a.id} and {b.id}: {AXIS_NAMES[axis]} interface spacing jumps by {ratio:.3g}"
             )
-    return warnings
+    return metrics, warnings
 
 
 def _propagate_mpi_partitions(
@@ -682,68 +393,6 @@ def _propagate_mpi_partitions(
                     )
                     block.dims[axis_index] = target
     return warnings
-
-
-def _clear_friend_boundaries(blocks: list[Block]) -> None:
-    for block in blocks:
-        for face in range(6):
-            if block.cbcpre[face] == "F":
-                block.cbcpre[face] = "N"
-                block.bcpre[face] = 0.0
-            for component in range(3):
-                if block.cbcvel[component][face] == "F":
-                    block.cbcvel[component][face] = "D"
-                    block.bcvel[component][face] = 0.0
-            for iscal in range(len(block.cbcscal)):
-                if block.cbcscal[iscal][face] == "F":
-                    block.cbcscal[iscal][face] = "N"
-                    block.bcscal[iscal][face] = 0.0
-
-
-def _connect(a: Block, a_face: int, b: Block, b_face: int) -> None:
-    for component in range(3):
-        a.cbcvel[component][a_face] = "F"
-        b.cbcvel[component][b_face] = "F"
-        a.bcvel[component][a_face] = float(b.id)
-        b.bcvel[component][b_face] = float(a.id)
-    for iscal in range(len(a.cbcscal)):
-        a.cbcscal[iscal][a_face] = "F"
-        b.cbcscal[iscal][b_face] = "F"
-        a.bcscal[iscal][a_face] = float(b.id)
-        b.bcscal[iscal][b_face] = float(a.id)
-    a.cbcpre[a_face] = "F"
-    b.cbcpre[b_face] = "F"
-    a.bcpre[a_face] = float(b.id)
-    b.bcpre[b_face] = float(a.id)
-
-
-def _same_cross_section(a: Block, b: Block, axis_index: int) -> bool:
-    for idx in range(3):
-        if idx == axis_index:
-            continue
-        if not (_touches(a.lmin[idx], b.lmin[idx]) and _touches(a.lmax[idx], b.lmax[idx])):
-            return False
-    return True
-
-
-def _cross_section_overlap(a: Block, b: Block, axis_index: int) -> bool:
-    return all(
-        _interval_overlap(a.lmin[idx], a.lmax[idx], b.lmin[idx], b.lmax[idx])
-        for idx in range(3)
-        if idx != axis_index
-    )
-
-
-def _volume_overlap(a: Block, b: Block) -> bool:
-    return all(_interval_overlap(a.lmin[idx], a.lmax[idx], b.lmin[idx], b.lmax[idx]) for idx in range(3))
-
-
-def _interval_overlap(a0: float, a1: float, b0: float, b1: float) -> bool:
-    return min(a1, b1) - max(a0, b0) > GEOM_TOL
-
-
-def _touches(a: float, b: float) -> bool:
-    return isclose(a, b, rel_tol=0.0, abs_tol=GEOM_TOL)
 
 
 def _interior_faces(block: Block, axis_index: int) -> np.ndarray:

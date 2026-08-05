@@ -1,6 +1,8 @@
 """Interactive multi-block grid generation helpers for SNaC."""
 
+from .case_import import ImportResult, import_case
 from .export import export_project
+from .geometry import align_blocks, duplicate_blocks, mirror_blocks, snap_block_to_face
 from .grid import (
     AXIS_NAMES,
     GRID_FUNCTIONS,
@@ -21,14 +23,14 @@ from .decomposition import (
     DecompositionResult,
     optimize_project_decomposition,
 )
+from .repair import GridRepair, RepairResult, repair_project_grids
+from .snac_bc import apply_bc_preset
 from .validation import (
     CheckResult,
-    GridRepair,
-    RepairResult,
     apply_axis_to_aligned_blocks,
     check_project,
     infer_project_connectivity,
-    repair_project_grids,
+    interface_spacing_metrics,
     update_project_structure,
 )
 
@@ -43,6 +45,7 @@ __all__ = [
     "GradingSegment",
     "GridArrays",
     "GridRepair",
+    "ImportResult",
     "MIN_LOCAL_CELLS",
     "MinMaxFit",
     "MonotoneFit",
@@ -54,13 +57,20 @@ __all__ = [
     "axis_grid_arrays",
     "axis_grid_diagnostics",
     "apply_axis_to_aligned_blocks",
+    "apply_bc_preset",
+    "align_blocks",
     "check_project",
     "export_project",
+    "duplicate_blocks",
     "fit_min_max_cell_count",
     "fit_monotone_spacing",
     "infer_project_connectivity",
+    "interface_spacing_metrics",
+    "import_case",
     "optimize_project_decomposition",
+    "mirror_blocks",
     "repair_project_grids",
     "solve_spacing",
+    "snap_block_to_face",
     "update_project_structure",
 ]

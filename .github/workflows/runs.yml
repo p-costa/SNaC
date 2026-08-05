@@ -20,7 +20,7 @@ jobs:
     - name: install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install numpy flake8 pytest
+        pip install -r utils/snac_grid_generator/requirements-test.txt
     - name: run all tests
       run: |
         export LD_LIBRARY_PATH="${HOME}/hypre/lib:${LD_LIBRARY_PATH}"
@@ -28,4 +28,6 @@ jobs:
         cd tests/differentially_heated_cavity && sh testit.sh && cd -
         cd tests/periodic_hole && sh testit.sh && cd -
         cd tests/hypre_solver_options && sh testit.sh && cd -
-        python -m unittest tests.snac_grid_generator.test_core
+        python -m unittest tests.snac_grid_generator.test_core tests.snac_grid_generator.test_gui_smoke
+      env:
+        SNAC_REQUIRE_BROWSER_TEST: "1"
