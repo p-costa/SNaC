@@ -9,20 +9,26 @@ from typing import Any
 
 from .model import PROJECT_SCHEMA_VERSION, Project
 from .quality import GridQualityReport, analyze_grid_quality
-from .validation import check_project, copy_project
+from .topology import build_topology
+from .validation import CheckResult, check_project, copy_project
 
 REPORT_SCHEMA_VERSION = 1
 
 
-def build_case_report(project: Project | dict[str, Any]) -> dict[str, Any]:
+def build_case_report(
+    project: Project | dict[str, Any],
+    *,
+    validation: CheckResult | None = None,
+) -> dict[str, Any]:
     """Return deterministic validation, quality, and SNaC storage data."""
 
     project = copy_project(project)
-    validation = check_project(project)
+    topology = build_topology(project.blocks, project.periodic_axes)
+    validation = validation or check_project(project, topology=topology)
     quality: GridQualityReport | None = None
     quality_error: str | None = None
     try:
-        quality = analyze_grid_quality(project)
+        quality = analyze_grid_quality(project, topology=topology)
     except (ValueError, ArithmeticError) as exc:
         quality_error = str(exc)
 

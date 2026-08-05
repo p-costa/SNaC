@@ -10,7 +10,7 @@ import numpy as np
 
 from .grid import AXIS_NAMES, axis_grid_arrays
 from .model import Block, Project
-from .topology import FACE_INFO, FACE_ORDER, axis_extent, build_topology
+from .topology import FACE_INFO, FACE_ORDER, Topology, axis_extent, build_topology
 
 
 @dataclass(frozen=True)
@@ -155,7 +155,11 @@ class GridQualityReport:
         }
 
 
-def analyze_grid_quality(project: Project | dict[str, Any]) -> GridQualityReport:
+def analyze_grid_quality(
+    project: Project | dict[str, Any],
+    *,
+    topology: Topology | None = None,
+) -> GridQualityReport:
     """Compute deterministic grid and partition quality metrics."""
 
     project = (
@@ -164,7 +168,8 @@ def analyze_grid_quality(project: Project | dict[str, Any]) -> GridQualityReport
         else Project.from_dict(project)
     )
     blocks = tuple(_block_quality(block) for block in sorted(project.blocks, key=lambda item: item.id))
-    interfaces = _interface_quality(project)
+    topology = topology or build_topology(project.blocks, project.periodic_axes)
+    interfaces = _interface_quality(project, topology)
     total_cells = sum(block.cells for block in blocks)
     total_ranks = sum(block.ranks for block in blocks)
     cells_per_rank_min = min((block.cells_per_rank_min for block in blocks), default=0)
@@ -241,8 +246,10 @@ def _axis_quality(block: Block, axis_index: int, axis: str) -> AxisQuality:
     )
 
 
-def _interface_quality(project: Project) -> tuple[InterfaceQuality, ...]:
-    topology = build_topology(project.blocks, project.periodic_axes)
+def _interface_quality(
+    project: Project,
+    topology: Topology,
+) -> tuple[InterfaceQuality, ...]:
     by_id = {block.id: block for block in project.blocks}
     result = []
     for connection in topology.connections:

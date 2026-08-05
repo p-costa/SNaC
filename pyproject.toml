@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snac-grid-generator"
+version = "0.1.0"
+description = "Interactive multi-block grid generation for SNaC"
+readme = "utils/snac_grid_generator/README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+dependencies = [
+  "numpy==1.24.4; python_version < '3.9'",
+  "numpy>=1.26,<3; python_version >= '3.9'",
+]
+
+[project.scripts]
+snac-grid-generator = "utils.snac_grid_generator.server:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["utils.snac_grid_generator*"]
+namespaces = true
+
+[tool.setuptools.package-data]
+"utils.snac_grid_generator" = [
+  "static/*.css",
+  "static/*.html",
+  "static/*.js",
+  "static/vendor/lucide/*",
+  "static/vendor/three/*",
+  "static/vendor/three/addons/controls/*",
+]

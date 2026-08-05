@@ -37,7 +37,11 @@ from utils.snac_grid_generator import (
 )
 from utils.snac_grid_generator.snac_grid import binary_payload, read_grid_binary
 from utils.snac_grid_generator.cli import main as grid_cli_main
-from utils.snac_grid_generator.topology import FaceConnection, infer_global_index_extents
+from utils.snac_grid_generator.topology import (
+    FaceConnection,
+    build_topology,
+    infer_global_index_extents,
+)
 
 
 class GridGeneratorTests(unittest.TestCase):
@@ -977,6 +981,34 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertTrue(any("partial" in error for error in result.errors))
 
+    def test_topology_candidate_sweep_preserves_contacts_and_overlaps(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {"id": 1, "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+                    {"id": 3, "lmin": [0, 1, 0], "lmax": [1, 2, 1]},
+                    {"id": 4, "lmin": [0, 0, 1], "lmax": [1, 1, 2]},
+                    {"id": 5, "lmin": [1, 0.5, 0], "lmax": [2, 1.5, 1]},
+                    {"id": 6, "lmin": [0.25, 0.25, 0.25], "lmax": [0.75, 0.75, 0.75]},
+                    {"id": 7, "lmin": [3, 3, 3], "lmax": [4, 4, 4]},
+                ]
+            }
+        )
+
+        topology = build_topology(project.blocks)
+
+        connected = {
+            (connection.a_id, connection.b_id, connection.axis_index)
+            for connection in topology.connections
+        }
+        self.assertIn((1, 2, 0), connected)
+        self.assertIn((1, 3, 1), connected)
+        self.assertIn((1, 4, 2), connected)
+        self.assertTrue(any("blocks 1 and 5 touch on a partial x face" == error for error in topology.errors))
+        self.assertTrue(any("blocks 1 and 6 overlap" == error for error in topology.errors))
+        self.assertFalse(any("block 7" in error for error in topology.errors))
+
     def test_tiny_blocks_have_only_their_true_face_connection(self) -> None:
         size = 1.0e-12
         project = Project.from_dict(
@@ -1310,7 +1342,11 @@ class GridGeneratorTests(unittest.TestCase):
         for target in (512, 1024, 2048):
             project = Project.from_dict(
                 {
-                    "decomposition": {"targetRanks": target, "mode": "3d"},
+                    "decomposition": {
+                        "targetRanks": target,
+                        "mode": "3d",
+                        "maxLocalAspect": 2.0,
+                    },
                     "blocks": [
                         {
                             "id": block_id,

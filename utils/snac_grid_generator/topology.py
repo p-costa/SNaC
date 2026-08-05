@@ -71,17 +71,18 @@ def build_topology(
     face_owner: dict[tuple[int, int], FaceConnection] = {}
     periodic_axes = periodic_axes or [False, False, False]
 
-    for i, left in enumerate(blocks):
-        for right in blocks[i + 1 :]:
-            if volume_overlap(left, right):
-                topology.errors.append(f"blocks {left.id} and {right.id} overlap")
-                continue
-            for axis_index in range(3):
-                scale = max(axis_extent(left, axis_index), axis_extent(right, axis_index))
-                if coordinates_close(left.lmax[axis_index], right.lmin[axis_index], scale=scale):
-                    _add_face_contact(topology, face_owner, left, 1, right, 0, axis_index)
-                if coordinates_close(right.lmax[axis_index], left.lmin[axis_index], scale=scale):
-                    _add_face_contact(topology, face_owner, right, 1, left, 0, axis_index)
+    for left_index, right_index in _candidate_block_pairs(blocks):
+        left = blocks[left_index]
+        right = blocks[right_index]
+        if volume_overlap(left, right):
+            topology.errors.append(f"blocks {left.id} and {right.id} overlap")
+            continue
+        for axis_index in range(3):
+            scale = max(axis_extent(left, axis_index), axis_extent(right, axis_index))
+            if coordinates_close(left.lmax[axis_index], right.lmin[axis_index], scale=scale):
+                _add_face_contact(topology, face_owner, left, 1, right, 0, axis_index)
+            if coordinates_close(right.lmax[axis_index], left.lmin[axis_index], scale=scale):
+                _add_face_contact(topology, face_owner, right, 1, left, 0, axis_index)
 
     for axis_index, is_periodic in enumerate(periodic_axes[:3]):
         if is_periodic:
@@ -228,6 +229,66 @@ def axis_extent(block: RectilinearBlock, axis_index: int) -> float:
     """Return one positive block extent."""
 
     return float(block.lmax[axis_index] - block.lmin[axis_index])
+
+
+def _candidate_block_pairs(
+    blocks: Sequence[RectilinearBlock],
+) -> list[tuple[int, int]]:
+    """Return pairs whose closed bounding boxes overlap within tolerance."""
+
+    if len(blocks) < 2:
+        return []
+    sweep_tolerance = max(
+        geometry_tolerance(
+            block.lmin[0],
+            block.lmax[0],
+            scale=axis_extent(block, 0),
+        )
+        for block in blocks
+    )
+    order = sorted(
+        range(len(blocks)),
+        key=lambda index: (blocks[index].lmin[0], index),
+    )
+    active: list[int] = []
+    candidates: list[tuple[int, int]] = []
+    for current_index in order:
+        current = blocks[current_index]
+        active = [
+            index
+            for index in active
+            if blocks[index].lmax[0]
+            >= current.lmin[0] - sweep_tolerance
+        ]
+        for other_index in active:
+            other = blocks[other_index]
+            if all(
+                _closed_intervals_overlap(other, current, axis_index)
+                for axis_index in range(3)
+            ):
+                candidates.append(
+                    (min(other_index, current_index), max(other_index, current_index))
+                )
+        active.append(current_index)
+    return sorted(candidates)
+
+
+def _closed_intervals_overlap(
+    a: RectilinearBlock,
+    b: RectilinearBlock,
+    axis_index: int,
+) -> bool:
+    scale = max(axis_extent(a, axis_index), axis_extent(b, axis_index))
+    tolerance = geometry_tolerance(
+        a.lmin[axis_index],
+        a.lmax[axis_index],
+        b.lmin[axis_index],
+        b.lmax[axis_index],
+        scale=scale,
+    )
+    return min(a.lmax[axis_index], b.lmax[axis_index]) >= (
+        max(a.lmin[axis_index], b.lmin[axis_index]) - tolerance
+    )
 
 
 def _check_index_extent_overlaps(

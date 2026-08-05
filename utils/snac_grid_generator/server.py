@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     server = ThreadingHTTPServer((args.host, args.port), _Handler)
     server.allow_remote = args.allow_remote
     url = f"http://{args.host}:{server.server_port}/"
-    print(f"SNaC grid generator listening on {url}")
+    print(f"SNaC grid generator listening on {url}", flush=True)
     if not args.no_open:
         webbrowser.open(url)
     try:
@@ -165,7 +165,7 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/api/update":
                 source_block_id = payload.get("sourceBlockId")
                 project, result = update_project_structure(project, int(source_block_id) if source_block_id else None)
-                report = build_case_report(project)
+                report = build_case_report(project, validation=result)
                 self._send_json(
                     {
                         **result.to_dict(),

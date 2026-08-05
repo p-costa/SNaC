@@ -23,12 +23,17 @@ model. It includes:
 - headless check, update, repair, and decomposition workflows;
 - structured-grid validation and transactional case writing.
 
-Python 3.8 or newer is supported. Install the runtime dependency from the
-repository root with:
+Python 3.8 or newer is supported. Install the tool from the repository root
+with:
 
 ```sh
-python3 -m pip install -r utils/snac_grid_generator/requirements.txt
+python3 -m pip install .
+snac-grid-generator
 ```
+
+The installed launcher includes the vendored browser assets and accepts
+`--host`, `--port`, `--no-open`, and `--allow-remote`. For development without
+installing the package, install `requirements.txt` and run the module directly.
 
 Browser and lint tests use the separate test manifest:
 

@@ -18,6 +18,7 @@ from .topology import (
     FACE_INFO,
     FACE_ORDER,
     FaceConnection,
+    Topology,
     axis_extent,
     build_topology,
 )
@@ -57,12 +58,20 @@ class CheckResult:
         }
 
 
-def check_project(project: Project | dict[str, Any]) -> CheckResult:
+def check_project(
+    project: Project | dict[str, Any],
+    *,
+    topology: Topology | None = None,
+) -> CheckResult:
     """Check that a project can be exported as a structured SNaC grid."""
 
     project = copy_project(project)
+    topology = topology or build_topology(project.blocks, project.periodic_axes)
+    return _check_project(project, topology)
+
+
+def _check_project(project: Project, topology: Topology) -> CheckResult:
     result = CheckResult()
-    topology = build_topology(project.blocks, project.periodic_axes)
     result.errors.extend(topology.errors)
     result.warnings.extend(topology.warnings)
     if not project.blocks:
@@ -108,13 +117,26 @@ def update_project_structure(
 ) -> tuple[Project, CheckResult]:
     """Infer friend BCs and propagate MPI partitions across structured faces."""
 
-    project, result = infer_project_connectivity(project)
+    project = copy_project(project)
+    topology = build_topology(project.blocks, project.periodic_axes)
+    result = CheckResult(
+        errors=list(topology.errors),
+        warnings=list(topology.warnings),
+    )
     if result.errors:
         return project, result
 
-    topology = build_topology(project.blocks, project.periodic_axes)
+    clear_friend_boundaries(project.blocks)
+    by_id = {block.id: block for block in project.blocks}
+    for connection in topology.connections:
+        connect_friend_boundaries(
+            by_id[connection.a_id],
+            connection.a_face,
+            by_id[connection.b_id],
+            connection.b_face,
+        )
     result.warnings.extend(_propagate_mpi_partitions(project.blocks, topology.connections, source_block_id))
-    result.extend(check_project(project))
+    result.extend(_check_project(project, topology))
     return project, result
 
 
