@@ -58,32 +58,46 @@ def import_case(case_dir: str | Path) -> ImportResult:
         project = Project.from_dict(json.loads(project_path.read_text(encoding="utf-8")))
         source = project_path.name
     elif blocks_path.is_file():
-        project = _project_from_blocks_nml(blocks_path)
+        project = _project_from_blocks_nml(
+            blocks_path,
+            nscal=_dns_scalar_count(case_path / "dns.nml"),
+        )
         source = blocks_path.name
     else:
         raise ValueError(f"no snac_grid_project.json or blocks.nml found in {case_path}")
 
     warnings: list[str] = []
-    imported_sources = _load_external_grids(project, case_path, warnings)
+    imported_sources, imported_precisions = _load_external_grids(project, case_path, warnings)
     if imported_sources:
         project.write_external_grid = True
-        project.external_grid_source = (
-            "both" if imported_sources == {"grid", "data"} else next(iter(imported_sources))
+        project.external_grid_source = "both" if imported_sources == {"grid", "data"} else "grid"
+    if len(imported_precisions) == 1:
+        project.external_grid_precision = next(iter(imported_precisions))
+    elif len(imported_precisions) > 1:
+        warnings.append(
+            "external grids use mixed precision; future exports use "
+            f"{project.external_grid_precision} precision"
         )
     project.name = project.name or case_path.name
     project.validate()
     return ImportResult(project=project, case_dir=case_path, source=source, warnings=warnings)
 
 
-def _project_from_blocks_nml(path: Path) -> Project:
-    assignments = _parse_namelist(path.read_text(encoding="utf-8"))
+def _project_from_blocks_nml(path: Path, *, nscal: int | None = None) -> Project:
+    assignments = _parse_namelist(path.read_text(encoding="utf-8"), "blocks")
     nblocks = int(_values(assignments, "nblocks", (), required=True)[0])
     scalar_indices = [
         indices[-2]
         for (name, indices) in assignments
         if name in {"block_cbcscal", "block_bcscal"} and len(indices) >= 2
     ]
-    nscal = max(scalar_indices, default=0)
+    inferred_nscal = max(scalar_indices, default=0)
+    if nscal is None:
+        nscal = inferred_nscal
+    elif inferred_nscal > nscal:
+        raise ValueError(
+            f"blocks.nml defines scalar {inferred_nscal}, but dns.nml sets nscal = {nscal}"
+        )
     blocks: list[dict[str, Any]] = []
     for block_id in range(1, nblocks + 1):
         dims = _vector(assignments, "block_dims", block_id, [1, 1, 1], int)
@@ -145,11 +159,23 @@ def _project_from_blocks_nml(path: Path) -> Project:
     return project
 
 
-def _parse_namelist(text: str) -> dict[tuple[str, tuple[int, ...]], list[Any]]:
+def _dns_scalar_count(path: Path) -> int | None:
+    if not path.is_file():
+        return None
+    assignments = _parse_namelist(path.read_text(encoding="utf-8"), "dns")
+    values = _values(assignments, "nscal", (), default=[0])
+    return max(0, int(values[0]))
+
+
+def _parse_namelist(
+    text: str,
+    group_name: str,
+) -> dict[tuple[str, tuple[int, ...]], list[Any]]:
     clean = _strip_comments(text)
-    group = re.search(r"(?is)&blocks\b(.*?)(?:^\s*/\s*$)", clean, re.MULTILINE)
+    group_pattern = rf"(?is)&{re.escape(group_name)}\b(.*?)(?:^\s*/\s*$)"
+    group = re.search(group_pattern, clean, re.MULTILINE)
     if group is None:
-        raise ValueError("blocks.nml does not contain a complete &blocks namelist")
+        raise ValueError(f"namelist does not contain a complete &{group_name} group")
     body = group.group(1)
     masked = _mask_quoted_text(body)
     matches = list(_ASSIGNMENT_START_RE.finditer(masked))
@@ -165,9 +191,9 @@ def _parse_namelist(text: str) -> dict[tuple[str, tuple[int, ...]], list[Any]]:
         value_text = body[match.end() : end].strip().rstrip(",").rstrip()
         values = _parse_values(value_text)
         if not values:
-            raise ValueError(f"blocks.nml assignment {name} has no value")
+            raise ValueError(f"&{group_name} assignment {name} has no value")
         assignments[(name, indices)] = values
-    if ("nblocks", ()) not in assignments:
+    if group_name == "blocks" and ("nblocks", ()) not in assignments:
         raise ValueError("blocks.nml does not define nblocks")
     return assignments
 
@@ -280,8 +306,13 @@ def _indexed_vector(
     return result
 
 
-def _load_external_grids(project: Project, case_dir: Path, warnings: list[str]) -> set[str]:
+def _load_external_grids(
+    project: Project,
+    case_dir: Path,
+    warnings: list[str],
+) -> tuple[set[str], set[str]]:
     sources: set[str] = set()
+    precisions: set[str] = set()
     for block in project.blocks:
         for axis_index, axis in enumerate(AXIS_NAMES):
             candidates = [
@@ -306,10 +337,10 @@ def _load_external_grids(project: Project, case_dir: Path, warnings: list[str]) 
                     continue
                 decoded.append((source, path, grid))
                 sources.add(source)
-                if grid.dtype != "<f8":
+                if grid.dtype.startswith(">"):
                     warnings.append(
-                        f"block {block.id} {axis}: imported {source}/ {grid.dtype} grid; "
-                        "export uses little-endian float64"
+                        f"block {block.id} {axis}: imported big-endian {source}/ grid; "
+                        "export uses little-endian byte order"
                     )
 
             if not decoded:
@@ -321,6 +352,7 @@ def _load_external_grids(project: Project, case_dir: Path, warnings: list[str]) 
                 )
 
             source, _, selected = decoded[0]
+            precisions.add("single" if selected.dtype.endswith("f4") else "double")
             block.axes[axis] = AxisSpec(kind="explicit", faces=selected.faces.tolist())
             for other_source, _, other in decoded[1:]:
                 tolerance = geometry_tolerance(
@@ -333,7 +365,7 @@ def _load_external_grids(project: Project, case_dir: Path, warnings: list[str]) 
                         f"block {block.id} {axis}: {source}/ and {other_source}/ grids differ; "
                         f"imported {source}/"
                     )
-    return sources
+    return sources, precisions
 
 
 def _infer_periodic_axes(project: Project) -> list[bool]:

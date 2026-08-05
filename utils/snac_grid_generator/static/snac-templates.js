@@ -74,6 +74,7 @@ function projectDefaults(name, blocks) {
     inferConnectivity: true,
     writeExternalGrid: true,
     externalGridSource: "grid",
+    externalGridPrecision: "double",
     blocks,
   };
 }

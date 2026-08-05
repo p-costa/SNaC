@@ -32,7 +32,10 @@ def build_case_report(
     except (ValueError, ArithmeticError) as exc:
         quality_error = str(exc)
 
-    binary_bytes_per_copy = 32 * sum(sum(block.ng) for block in project.blocks)
+    bytes_per_value = 4 if project.external_grid_precision == "single" else 8
+    binary_bytes_per_copy = 4 * bytes_per_value * sum(
+        sum(block.ng) for block in project.blocks
+    )
     copies = (
         0
         if not project.write_external_grid
@@ -45,10 +48,12 @@ def build_case_report(
             "projectSchemaVersion": PROJECT_SCHEMA_VERSION,
             "blocks": len(project.blocks),
             "scalars": project.nscal,
+            "gridPrecision": project.external_grid_precision,
         },
         "validation": validation.to_dict(),
         "quality": quality.to_dict() if quality is not None else None,
         "storage": {
+            "snacBinaryPrecision": project.external_grid_precision,
             "snacBinaryBytesPerCopy": binary_bytes_per_copy,
             "snacBinaryCopies": copies,
             "snacBinaryBytesTotal": binary_bytes_per_copy * copies,
@@ -163,6 +168,7 @@ def render_case_report_markdown(report: dict[str, Any]) -> str:
             "",
             "| Metric | Value |",
             "| --- | ---: |",
+            f"| Binary grid precision | {storage['snacBinaryPrecision']} |",
             f"| Binary grid bytes per copy | {storage['snacBinaryBytesPerCopy']} |",
             f"| Binary grid copies | {storage['snacBinaryCopies']} |",
             f"| Total binary grid bytes | {storage['snacBinaryBytesTotal']} |",

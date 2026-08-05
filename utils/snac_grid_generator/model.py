@@ -285,12 +285,18 @@ class Project:
     infer_connectivity: bool = True
     write_external_grid: bool = True
     external_grid_source: str = "grid"
+    external_grid_precision: str = "double"
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Project":
         data = migrate_project_dict(data)
         blocks = [Block.from_dict(item) for item in data.get("blocks", [Block(id=1).to_dict()])]
         inferred_nscal = max((len(block.cbcscal) for block in blocks), default=0)
+        external_grid_source = str(
+            data.get("externalGridSource", data.get("external_grid_source", "grid"))
+        )
+        if external_grid_source == "data":
+            external_grid_source = "grid"
         project = cls(
             name=str(data.get("name", "snac-grid")),
             nscal=max(0, int(data.get("nscal", data.get("nScal", inferred_nscal)))),
@@ -299,7 +305,10 @@ class Project:
             decomposition=DecompositionSpec.from_dict(data.get("decomposition")),
             infer_connectivity=bool(data.get("inferConnectivity", data.get("infer_connectivity", True))),
             write_external_grid=bool(data.get("writeExternalGrid", data.get("write_external_grid", True))),
-            external_grid_source=str(data.get("externalGridSource", data.get("external_grid_source", "grid"))),
+            external_grid_source=external_grid_source,
+            external_grid_precision=str(
+                data.get("externalGridPrecision", data.get("external_grid_precision", "double"))
+            ).lower(),
         )
         project.validate()
         return project
@@ -309,8 +318,10 @@ class Project:
         self.periodic_axes.extend([False] * (3 - len(self.periodic_axes)))
         self.periodic_axes = self.periodic_axes[:3]
         self.decomposition.validate()
-        if self.external_grid_source not in {"grid", "data", "both"}:
-            raise ValueError("external grid source must be 'grid', 'data', or 'both'")
+        if self.external_grid_source not in {"grid", "both"}:
+            raise ValueError("external grid source must be 'grid' or 'both'")
+        if self.external_grid_precision not in {"single", "double"}:
+            raise ValueError("external grid precision must be 'single' or 'double'")
         seen: set[int] = set()
         for block in self.blocks:
             block.cbcscal = _resize_string_rows(block.cbcscal, self.nscal, ["N"] * 6)
@@ -330,6 +341,7 @@ class Project:
             "inferConnectivity": self.infer_connectivity,
             "writeExternalGrid": self.write_external_grid,
             "externalGridSource": self.external_grid_source,
+            "externalGridPrecision": self.external_grid_precision,
             "blocks": [block.to_dict() for block in self.blocks],
         }
 

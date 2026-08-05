@@ -88,6 +88,32 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
             page.wait_for_selector(".block-item")
             self.assertEqual(page.locator(".block-item").count(), 2)
             self._assert_canvas_is_nonblank(page)
+            self.assertEqual(page.locator("#grid-precision").input_value(), "double")
+            page.locator("#grid-precision").select_option("single")
+            page.locator("#grid-precision").select_option("double")
+
+            page.evaluate(
+                """() => {
+                  const nativeFetch = window.fetch.bind(window);
+                  let delayUpdate = true;
+                  window.fetch = (input, options) => {
+                    const url = typeof input === 'string' ? input : input.url;
+                    if (delayUpdate && url.endsWith('/api/update')) {
+                      delayUpdate = false;
+                      return new Promise((resolve, reject) => {
+                        setTimeout(() => nativeFetch(input, options).then(resolve, reject), 300);
+                      });
+                    }
+                    return nativeFetch(input, options);
+                  };
+                }"""
+            )
+            page.locator("#update-structure").click()
+            page.locator("#project-name").fill("edited-during-update")
+            self.expect(page.locator("#status")).to_contain_text(
+                "discarded because the project changed"
+            )
+            self.assertEqual(page.locator("#project-name").input_value(), "edited-during-update")
 
             self.assertEqual(page.locator("[data-axis-view]").count(), 6)
             for view in ("+x", "-x", "+y", "-y", "+z", "-z"):

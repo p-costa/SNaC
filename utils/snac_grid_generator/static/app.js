@@ -226,6 +226,7 @@ function bindElements() {
     "infer-connectivity",
     "write-external-grid",
     "grid-source",
+    "grid-precision",
     "boundary-table",
     "bc-preset",
     "bc-preset-face",
@@ -278,10 +279,15 @@ function bindStaticEvents() {
   els.writeExternalGrid.addEventListener("change", () => {
     project.writeExternalGrid = els.writeExternalGrid.checked;
     els.gridSource.disabled = !project.writeExternalGrid;
+    els.gridPrecision.disabled = !project.writeExternalGrid;
     markProjectDirty();
   });
   els.gridSource.addEventListener("change", () => {
     project.externalGridSource = els.gridSource.value;
+    markProjectDirty();
+  });
+  els.gridPrecision.addEventListener("change", () => {
+    project.externalGridPrecision = els.gridPrecision.value;
     markProjectDirty();
   });
   els.addBlock.addEventListener("click", addFreeBlock);
@@ -496,6 +502,9 @@ function renderAll() {
   if (!["grid", "both"].includes(project.externalGridSource)) project.externalGridSource = "grid";
   els.gridSource.value = project.externalGridSource;
   els.gridSource.disabled = !project.writeExternalGrid;
+  if (!["single", "double"].includes(project.externalGridPrecision)) project.externalGridPrecision = "double";
+  els.gridPrecision.value = project.externalGridPrecision;
+  els.gridPrecision.disabled = !project.writeExternalGrid;
   els.addAdjacent.disabled = !selectedBlock();
   for (const button of [els.duplicateArray, els.mirrorBlocks, els.alignBlocks, els.snapBlock]) {
     button.disabled = !selectedBlock();
@@ -933,12 +942,14 @@ async function applyAxisToAlignedBlocks() {
   const block = selectedBlock();
   if (!block) return;
   setStatus(`Applying ${currentAxis.toUpperCase()} grid...`);
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/apply-axis", {
       project,
       sourceBlockId: block.id,
       axis: currentAxis,
     });
+    if (!projectResponseIsCurrent(requestProject, "Grid propagation")) return;
     project = payload.project;
     previewCache.clear();
     previewSequence += 1;
@@ -1039,12 +1050,14 @@ async function previewGridRepair() {
     return;
   }
   setStatus("Checking grid congruence...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson(
       "/api/repair",
       { project, sourceBlockId: selectedId },
       { allowInvalid: true }
     );
+    if (!projectResponseIsCurrent(requestProject, "Grid repair")) return;
     if (!payload.ok) {
       pendingRepair = null;
       lastCheck = payload;
@@ -1100,8 +1113,10 @@ async function applyGridRepair() {
 
 async function balanceDecomposition() {
   setStatus("Balancing MPI decomposition...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/decompose", { project }, { allowInvalid: true });
+    if (!projectResponseIsCurrent(requestProject, "Decomposition")) return;
     decompositionResult = payload;
     if (!payload.ok) {
       renderDecompositionSummary();
@@ -1128,6 +1143,7 @@ async function applyBoundaryPreset() {
   const blockIds = selectedBlockIds();
   if (!blockIds.length) return;
   setStatus("Applying boundary preset...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/bc-preset", {
       project,
@@ -1137,6 +1153,7 @@ async function applyBoundaryPreset() {
       velocity: [els.bcPresetU.value, els.bcPresetV.value, els.bcPresetW.value].map(Number),
       pressure: Number(els.bcPresetP.value) || 0,
     });
+    if (!projectResponseIsCurrent(requestProject, "Boundary preset")) return;
     project = payload.project;
     markProjectDirty();
     renderAll();
@@ -1843,8 +1860,10 @@ async function applyGeometryOperation(operation) {
     payload.face = els.snapFace.value;
   }
   setStatus(`${operation[0].toUpperCase()}${operation.slice(1)} blocks...`);
+  const requestProject = projectRequestSnapshot();
   try {
     const result = await postJson("/api/geometry", payload);
+    if (!projectResponseIsCurrent(requestProject, "Geometry operation")) return;
     project = result.project;
     const changed = result.changedBlockIds ?? [];
     if (["duplicate", "mirror"].includes(operation) && changed.length) {
@@ -1888,8 +1907,10 @@ function resetProject() {
 
 async function checkProject(options = {}) {
   if (!options.silent) setStatus("Checking grid...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/check", { project }, { allowInvalid: true });
+    if (!projectResponseIsCurrent(requestProject, "Grid check")) return false;
     lastCheck = payload;
     renderCheckResults();
     renderQualitySummary();
@@ -1913,8 +1934,10 @@ async function checkProject(options = {}) {
 
 async function updateStructure(options = {}) {
   if (!options.silent) setStatus("Updating structure...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/update", { project, sourceBlockId: selectedId }, { allowInvalid: true });
+    if (!projectResponseIsCurrent(requestProject, "Structure update")) return false;
     if (payload.project) {
       const oldSelectedId = selectedId;
       project = payload.project;
@@ -1944,8 +1967,13 @@ async function exportCase() {
     return;
   }
   setStatus("Writing files...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/export", { outputDir: els.outputDir.value, project });
+    if (!projectResponseIsCurrent(requestProject, "Export")) {
+      setStatus(`Wrote an earlier project state to ${payload.outputDir}; export again`);
+      return;
+    }
     commitHistory();
     clearAutosave();
     const warningText = payload.warnings?.length ? `, ${payload.warnings.length} warnings` : "";
@@ -2212,8 +2240,10 @@ function downloadProjectJson() {
 
 async function downloadCaseReport(format) {
   setStatus(`Building ${format === "json" ? "JSON" : "Markdown"} report...`);
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/report", { project });
+    if (!projectResponseIsCurrent(requestProject, "Report")) return;
     const extension = format === "json" ? "json" : "md";
     const type = format === "json" ? "application/json" : "text/markdown";
     const content = format === "json"
@@ -2476,11 +2506,21 @@ function formatBytes(value) {
 }
 
 function formatInputNumber(value) {
-  return Number(value.toPrecision(12)).toString();
+  return Number.isFinite(value) ? value.toString() : "";
 }
 
 function setStatus(message) {
   els.status.textContent = message;
+}
+
+function projectRequestSnapshot() {
+  return JSON.stringify(project);
+}
+
+function projectResponseIsCurrent(snapshot, operation) {
+  if (JSON.stringify(project) === snapshot) return true;
+  setStatus(`${operation} result discarded because the project changed`);
+  return false;
 }
 
 function clearCheckState() {

@@ -50,17 +50,28 @@ def native_faces(n: int, lmin: float, lmax: float, gt: int, gr: float) -> np.nda
     return faces
 
 
-def binary_payload(arrays: GridArraysLike) -> np.ndarray:
+def binary_payload(arrays: GridArraysLike, precision: str = "double") -> np.ndarray:
     """Return the four-array payload expected by SNaC's ``load_grid``."""
 
-    return np.concatenate(
+    dtype = {"single": "<f4", "double": "<f8"}.get(precision)
+    if dtype is None:
+        raise ValueError("grid binary precision must be 'single' or 'double'")
+    physical_faces = np.asarray(arrays.faces[:-1], dtype=dtype)
+    if not np.all(np.isfinite(physical_faces)) or np.any(np.diff(physical_faces) <= 0.0):
+        raise ValueError(
+            f"{precision}-precision grid files cannot represent all face coordinates distinctly"
+        )
+    payload = np.concatenate(
         (
             arrays.faces[1:-1],
             arrays.centers[1:-1],
             arrays.face_spacing[1:-1],
             arrays.center_spacing[1:-1],
         )
-    ).astype("<f8", copy=False)
+    ).astype(dtype, copy=False)
+    if not np.all(np.isfinite(payload)):
+        raise ValueError(f"{precision}-precision grid files contain non-finite values")
+    return payload
 
 
 def read_grid_binary(

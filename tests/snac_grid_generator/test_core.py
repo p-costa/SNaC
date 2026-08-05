@@ -380,6 +380,90 @@ class GridGeneratorTests(unittest.TestCase):
             self.assertEqual(saved["name"], "unit")
             self.assertGreaterEqual(len(result.files), 8)
 
+    def test_export_matches_selected_snac_precision(self) -> None:
+        for precision, dtype in (("single", "<f4"), ("double", "<f8")):
+            with self.subTest(precision=precision), tempfile.TemporaryDirectory() as tmp:
+                project = Project.from_dict(
+                    {
+                        "externalGridPrecision": precision,
+                        "blocks": [{"id": 1, "ng": [4, 3, 2]}],
+                    }
+                )
+                export_project(project, tmp)
+                path = Path(tmp) / "grid" / "grid_x_b_001.bin"
+                payload = np.fromfile(path, dtype=dtype)
+                decoded = read_grid_binary(path, 4, 0.0, 1.0)
+
+                self.assertEqual(payload.shape, (16,))
+                self.assertEqual(path.stat().st_size, 16 * np.dtype(dtype).itemsize)
+                self.assertEqual(decoded.dtype, dtype)
+                self.assertEqual(
+                    json.loads((Path(tmp) / "snac_grid_project.json").read_text())["externalGridPrecision"],
+                    precision,
+                )
+
+    def test_single_precision_export_rejects_collapsed_coordinates(self) -> None:
+        project = Project.from_dict(
+            {
+                "externalGridPrecision": "single",
+                "blocks": [
+                    {
+                        "id": 1,
+                        "ng": [4, 3, 2],
+                        "lmin": [1.0e9, 0.0, 0.0],
+                        "lmax": [1.0e9 + 1.0e-3, 1.0, 1.0],
+                    }
+                ],
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "case"
+            with self.assertRaisesRegex(ValueError, "cannot represent all face coordinates"):
+                export_project(project, output)
+            self.assertTrue(output.is_dir())
+            self.assertFalse(any(output.iterdir()))
+
+    def test_legacy_data_only_destination_exports_startup_grids(self) -> None:
+        project = Project.from_dict(
+            {
+                "externalGridSource": "data",
+                "blocks": [{"id": 1, "ng": [4, 3, 2]}],
+            }
+        )
+        self.assertEqual(project.external_grid_source, "grid")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            export_project(project, tmp)
+            self.assertTrue((Path(tmp) / "grid" / "grid_x_b_001.bin").is_file())
+            self.assertFalse((Path(tmp) / "data" / "grid_x_b_001.bin").exists())
+
+    def test_data_only_case_import_exports_startup_grids(self) -> None:
+        project = Project.from_dict(
+            {
+                "externalGridSource": "both",
+                "externalGridPrecision": "single",
+                "blocks": [{"id": 1, "ng": [4, 3, 2]}],
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            destination = root / "destination"
+            export_project(project, source)
+            (source / "snac_grid_project.json").unlink()
+            for path in (source / "grid").iterdir():
+                path.unlink()
+            (source / "grid").rmdir()
+
+            imported = import_case(source).project
+            export_project(imported, destination)
+
+            self.assertEqual(imported.external_grid_source, "grid")
+            self.assertEqual(imported.external_grid_precision, "single")
+            startup_grid = destination / "grid" / "grid_x_b_001.bin"
+            self.assertTrue(startup_grid.is_file())
+            self.assertEqual(startup_grid.stat().st_size, 16 * np.dtype("<f4").itemsize)
+
     def test_imports_an_existing_blocks_namelist(self) -> None:
         result = import_case(Path("examples/__MULTI_BLOCK_GEOMETRY/L_channel"))
         project = result.project
@@ -411,6 +495,25 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertEqual(project.blocks[0].dims, [2, 3, 4])
         self.assertEqual(project.blocks[0].ng, [8, 9, 10])
         self.assertEqual(project.blocks[0].inivel, "zer")
+
+    def test_import_reads_scalar_count_from_dns_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            case_dir = Path(tmp)
+            (case_dir / "dns.nml").write_text("&dns\nnscal = 2\n/\n", encoding="utf-8")
+            (case_dir / "blocks.nml").write_text(
+                "&blocks\n"
+                "nblocks = 1\n"
+                "block_ng(1:3,1) = 4, 4, 4\n"
+                "block_lmin(1:3,1) = 0., 0., 0.\n"
+                "block_lmax(1:3,1) = 1., 1., 1.\n"
+                "/\n",
+                encoding="utf-8",
+            )
+            project = import_case(case_dir).project
+
+        self.assertEqual(project.nscal, 2)
+        self.assertEqual(project.blocks[0].cbcscal, [["N"] * 6, ["N"] * 6])
+        self.assertEqual(project.blocks[0].bcscal, [[0.0] * 6, [0.0] * 6])
 
     def test_imports_external_binary_grids_exactly(self) -> None:
         project = Project.from_dict(
@@ -753,10 +856,18 @@ class GridGeneratorTests(unittest.TestCase):
             32,
         )
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "offset-grid.bin"
+            root = Path(tmp)
+            path = root / "offset-grid.bin"
             binary_payload(arrays).tofile(path)
             decoded = read_grid_binary(path, 32, origin, origin + length)
+            export_project(project, root / "case")
+            (root / "case" / "snac_grid_project.json").unlink()
+            imported = import_case(root / "case").project
         np.testing.assert_array_equal(decoded.faces, arrays.faces[:-1])
+        self.assertEqual(
+            sorted((block.lmin, block.lmax) for block in imported.blocks),
+            sorted((block.lmin, block.lmax) for block in project.blocks),
+        )
 
     def test_malformed_namelists_fail_with_clear_errors(self) -> None:
         cases = {
@@ -1707,9 +1818,15 @@ class GridGeneratorTests(unittest.TestCase):
 
         self.assertTrue(report["validation"]["ok"])
         self.assertEqual(report["storage"]["snacBinaryBytesPerCopy"], 288)
+        self.assertEqual(report["storage"]["snacBinaryPrecision"], "double")
         self.assertEqual(markdown, render_case_report_markdown(build_case_report(project)))
         self.assertIn("# SNaC grid report: report-case", markdown)
         self.assertIn("## Axis Quality", markdown)
+
+        single = Project.from_dict(
+            {"externalGridPrecision": "single", "blocks": [{"id": 1, "ng": [4, 3, 2]}]}
+        )
+        self.assertEqual(build_case_report(single)["storage"]["snacBinaryBytesPerCopy"], 144)
 
         with tempfile.TemporaryDirectory() as tmp:
             json_path = write_case_report(project, Path(tmp) / "quality.json")
