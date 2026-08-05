@@ -676,15 +676,17 @@ function finishBlockReorder(block, index) {
 }
 
 function resetBlockNames() {
-  const changed = project.blocks.filter((block) => block.name !== `block-${block.id}`);
+  const changed = project.blocks.filter((block, index) => block.name !== `block-${index + 1}`);
   if (!changed.length) {
-    setStatus("Block names already use their defaults");
+    setStatus("Block names already follow the list order");
     return;
   }
-  for (const block of changed) block.name = `block-${block.id}`;
+  project.blocks.forEach((block, index) => {
+    block.name = `block-${index + 1}`;
+  });
   markProjectDirty();
   renderAll();
-  setStatus(`Reset ${changed.length} block name${changed.length === 1 ? "" : "s"}`);
+  setStatus("Reset block names from the current list order");
 }
 
 function renderInspector() {

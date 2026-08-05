@@ -221,7 +221,8 @@ the primary block.
 One checked target can also be snapped to a face of the primary block. Mirroring
 reverses the corresponding grading as well as the block geometry. Blocks can be
 reordered with their drag handles without changing IDs or friend references,
-and the reset-names action restores names in the form `block-<ID>`.
+and the reset-names action assigns `block-1`, `block-2`, and so on from the
+current list order.
 
 The select, move, and resize viewport tools edit block bounds directly. A move
 or resize invalidates the last structural check and refreshes the grid preview;
