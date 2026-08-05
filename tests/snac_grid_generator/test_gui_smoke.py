@@ -89,6 +89,17 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
             self.assertEqual(page.locator(".block-item").count(), 2)
             self._assert_canvas_is_nonblank(page)
 
+            self.assertEqual(page.locator("[data-axis-view]").count(), 6)
+            for view in ("+x", "-x", "+y", "-y", "+z", "-z"):
+                button = page.locator(f'[data-axis-view="{view}"]')
+                button.click()
+                self.expect(page.locator("#scene")).to_have_attribute("data-projection", "orthographic")
+                self.expect(page.locator("#scene")).to_have_attribute("data-view", view)
+                self.expect(button).to_have_attribute("aria-pressed", "true")
+            page.locator("#fit-view").click()
+            self.expect(page.locator("#scene")).to_have_attribute("data-projection", "perspective")
+            self.expect(page.locator("#scene")).to_have_attribute("data-view", "3d")
+
             page.get_by_label("Select 2: right", exact=True).check()
             page.get_by_role("button", name="Duplicate array", exact=True).click()
             self.expect(page.locator(".block-item")).to_have_count(4)

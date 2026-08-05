@@ -198,6 +198,8 @@ red, velocity `N` is blue, friend boundaries are green, and faces with mixed
 velocity-component codes are amber. MPI partition planes use the same
 base-plus-remainder decomposition as `initmpi`, so they show the actual local
 subdomain cuts for the selected block.
+The `+X/-X`, `+Y/-Y`, and `+Z/-Z` buttons provide fitted orthographic views
+with pan and zoom; `Fit` returns to the free-orbit perspective view.
 The grid-line button toggles a sparse 3D view of the selected block's actual
 face coordinates, including imported and repaired explicit grids.
 After `Check` or `Update`, connected faces are outlined by their normal-spacing
