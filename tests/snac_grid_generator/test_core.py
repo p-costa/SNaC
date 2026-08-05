@@ -768,7 +768,11 @@ class GridGeneratorTests(unittest.TestCase):
                 }
             )
             with self.subTest(target=target):
-                decomposed, result = optimize_project_decomposition(project, time_limit=0.5)
+                decomposed, result = optimize_project_decomposition(
+                    project,
+                    node_limit=4_000,
+                    time_limit=10.0,
+                )
                 self.assertTrue(result.ok, result.errors)
                 self.assertEqual(sum(np.prod(block.dims) for block in decomposed.blocks), target)
                 self.assertLessEqual(result.imbalance, 1.1)
