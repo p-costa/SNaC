@@ -122,6 +122,24 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
                 self.expect(page.locator("#scene")).to_have_attribute("data-projection", "orthographic")
                 self.expect(page.locator("#scene")).to_have_attribute("data-view", view)
                 self.expect(button).to_have_attribute("aria-pressed", "true")
+            axis_button = page.locator('[data-axis-view="+x"]')
+            axis_button.click()
+            canvas = page.locator("#scene").bounding_box()
+            self.assertIsNotNone(canvas)
+            page.mouse.move(canvas["x"] + canvas["width"] * 0.5, canvas["y"] + canvas["height"] * 0.5)
+            page.mouse.down()
+            page.mouse.move(
+                canvas["x"] + canvas["width"] * 0.65,
+                canvas["y"] + canvas["height"] * 0.6,
+                steps=6,
+            )
+            page.mouse.up()
+            self.expect(page.locator("#scene")).to_have_attribute("data-projection", "orthographic")
+            self.expect(page.locator("#scene")).to_have_attribute("data-view", "free-orthographic")
+            self.expect(page.locator("#scene")).to_have_attribute("data-selected-blocks", "1")
+            self.expect(axis_button).to_have_attribute("aria-pressed", "false")
+            page.locator("#focus-selection").click()
+            self.expect(page.locator("#scene")).to_have_attribute("data-view", "free-orthographic")
             page.locator("#fit-view").click()
             self.expect(page.locator("#scene")).to_have_attribute("data-projection", "perspective")
             self.expect(page.locator("#scene")).to_have_attribute("data-view", "3d")
@@ -235,6 +253,136 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
         self.assertEqual(np_faces[0], [0.0, 0.25, 1.0])
         self.assertEqual(np_faces[1], [1.0, 1.25, 2.0])
         self.assertEqual(np_faces[2], [2.0, 2.5, 4.0])
+        context.close()
+        self.assertEqual(errors, [])
+
+    def test_multiblock_selection_grid_scope_tools_and_ordering(self) -> None:
+        context = self.browser.new_context(viewport={"width": 1280, "height": 800})
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(self.url, wait_until="load")
+        page.wait_for_selector(".block-item")
+
+        friend_remap = page.evaluate(
+            """async () => {
+              const {defaultBlock, renumberBlocksByOrder} = await import('/block-model.js');
+              const lower = defaultBlock(4);
+              const upper = defaultBlock(9);
+              for (const [block, face, friend] of [[lower, 1, 9], [upper, 0, 4]]) {
+                block.cbcvel[0][face] = 'F';
+                block.bcvel[0][face] = friend;
+                block.cbcpre[face] = 'F';
+                block.bcpre[face] = friend;
+                block.cbcscal = [['N', 'N', 'N', 'N', 'N', 'N']];
+                block.bcscal = [[0, 0, 0, 0, 0, 0]];
+                block.cbcscal[0][face] = 'F';
+                block.bcscal[0][face] = friend;
+              }
+              const blocks = [upper, lower];
+              renumberBlocksByOrder(blocks);
+              return blocks.map((block, index) => ({
+                id: block.id,
+                name: block.name,
+                refs: [block.bcvel[0][index], block.bcpre[index], block.bcscal[0][index]],
+              }));
+            }"""
+        )
+        self.assertEqual(friend_remap[0], {"id": 1, "name": "block-1", "refs": [2, 2, 2]})
+        self.assertEqual(friend_remap[1], {"id": 2, "name": "block-2", "refs": [1, 1, 1]})
+
+        scene = page.locator("#scene")
+        first = page.locator('.block-item[data-block-id="1"]')
+        second = page.locator('.block-item[data-block-id="2"]')
+        self.expect(scene).to_have_attribute("data-selected-blocks", "1")
+        self.expect(scene).to_have_attribute("data-primary-block", "1")
+
+        second.locator(".block-main").click(modifiers=["Shift"])
+        self.expect(scene).to_have_attribute("data-selected-blocks", "1,2")
+        self.expect(scene).to_have_attribute("data-primary-block", "2")
+        self.expect(scene).to_have_attribute("data-grid-blocks", "1,2")
+        self.expect(scene).to_have_attribute("data-boundary-blocks", "1,2")
+        self.expect(scene).to_have_attribute("data-partition-blocks", "1,2")
+        self.assertTrue(first.locator('input[type="checkbox"]').is_checked())
+        self.assertTrue(second.locator('input[type="checkbox"]').is_checked())
+
+        second.locator(".block-main").click(modifiers=["Shift"])
+        self.expect(scene).to_have_attribute("data-selected-blocks", "1")
+        self.expect(scene).to_have_attribute("data-primary-block", "1")
+        second.locator(".block-main").click()
+        self.expect(scene).to_have_attribute("data-selected-blocks", "2")
+        self.expect(scene).to_have_attribute("data-primary-block", "2")
+
+        page.locator("#grid-lines-mode").select_option("all")
+        self.expect(scene).to_have_attribute("data-grid-mode", "all")
+        self.expect(scene).to_have_attribute("data-grid-blocks", "1,2")
+        page.locator("#grid-lines-mode").select_option("off")
+        self.expect(scene).to_have_attribute("data-grid-blocks", "")
+        page.locator("#grid-lines-mode").select_option("selected")
+        self.expect(scene).to_have_attribute("data-grid-blocks", "2")
+
+        move = page.locator("#tool-move")
+        move.click()
+        self.expect(move).to_have_attribute("aria-pressed", "true")
+        move.click()
+        self.expect(move).to_have_attribute("aria-pressed", "false")
+        self.expect(page.locator("#tool-select")).to_have_attribute("aria-pressed", "true")
+        scale = page.locator("#tool-scale")
+        scale.click()
+        self.expect(scale).to_have_attribute("aria-pressed", "true")
+        scale.click()
+        self.expect(scale).to_have_attribute("aria-pressed", "false")
+
+        second_box = second.bounding_box()
+        self.assertIsNotNone(second_box)
+        first.locator(".block-drag-handle").drag_to(
+            second,
+            target_position={"x": second_box["width"] / 2, "y": second_box["height"] - 2},
+        )
+        self.expect(page.locator(".block-item").first).to_have_attribute("data-block-id", "2")
+        self.expect(page.locator(".block-item").nth(1)).to_have_attribute("data-block-id", "1")
+        page.wait_for_timeout(300)
+        self.assertTrue(page.locator("#undo-project").is_enabled())
+        page.locator(".block-drag-handle").nth(1).press("ArrowUp")
+        self.expect(page.locator(".block-item").first).to_have_attribute("data-block-id", "1")
+        page.wait_for_timeout(300)
+        page.locator("#undo-project").click()
+        self.expect(page.locator(".block-item").first).to_have_attribute("data-block-id", "2")
+        page.locator("#redo-project").click()
+        self.expect(page.locator(".block-item").first).to_have_attribute("data-block-id", "1")
+        page.locator('.block-item[data-block-id="1"] .block-drag-handle').press("ArrowDown")
+        self.expect(page.locator(".block-item").first).to_have_attribute("data-block-id", "2")
+
+        page.locator('.block-item[data-block-id="2"] .block-main').click()
+        page.locator("#block-name").fill("custom-right")
+        page.locator("#renumber-blocks").click()
+        self.expect(page.locator(".block-item").first).to_have_attribute("data-block-id", "1")
+        self.expect(page.locator(".block-item").first.locator("strong")).to_have_text("1: block-1")
+        self.expect(page.locator(".block-item").nth(1)).to_have_attribute("data-block-id", "2")
+        self.expect(page.locator(".block-item").nth(1).locator("strong")).to_have_text("2: block-2")
+        self.expect(scene).to_have_attribute("data-primary-block", "1")
+        self.assertEqual(page.locator('[data-field="lmin"][data-index="0"]').input_value(), "1")
+        with page.expect_download() as download_info:
+            page.locator("#download-json").click()
+        renumbered = json.loads(Path(download_info.value.path()).read_text(encoding="utf-8"))
+        self.assertEqual([block["id"] for block in renumbered["blocks"]], [1, 2])
+        self.assertEqual([block["name"] for block in renumbered["blocks"]], ["block-1", "block-2"])
+        self.assertEqual([block["lmin"][0] for block in renumbered["blocks"]], [1.0, 0.0])
+        self.assertEqual(renumbered["blocks"][0]["bcpre"][0], 2)
+        self.assertEqual(renumbered["blocks"][1]["bcpre"][1], 1)
+        page.wait_for_timeout(300)
+        page.locator("#add-block").click()
+        self.expect(page.locator(".block-item")).to_have_count(3)
+        page.wait_for_timeout(300)
+        page.locator("#undo-project").click()
+        self.expect(page.locator(".block-item")).to_have_count(2)
+        page.reload(wait_until="load")
+        self.expect(page.locator("#recovery-dialog")).to_be_visible()
+        page.locator("#restore-recovery").click()
+        self.expect(page.locator(".block-item")).to_have_count(2)
+        self._assert_canvas_is_nonblank(page)
+
         context.close()
         self.assertEqual(errors, [])
 

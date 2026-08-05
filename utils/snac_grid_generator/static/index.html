@@ -54,7 +54,10 @@
       <aside class="block-panel">
         <div class="panel-head">
           <span>Blocks</span>
-          <button id="add-block" class="button icon" title="Add block"><i data-lucide="plus"></i></button>
+          <span class="panel-actions">
+            <button id="renumber-blocks" class="button icon" title="Renumber IDs and names from list order"><i data-lucide="list-restart"></i></button>
+            <button id="add-block" class="button icon" title="Add block"><i data-lucide="plus"></i></button>
+          </span>
         </div>
         <div id="block-list" class="block-list"></div>
         <div class="add-adjacent">
@@ -148,15 +151,22 @@
           <button id="isolate-selected" class="button icon" title="Isolate selected blocks"><i data-lucide="panel-top"></i></button>
           <button id="show-all-blocks" class="button icon" title="Show all blocks"><i data-lucide="eye"></i></button>
           <button id="toggle-clipping" class="button icon" title="Toggle clipping plane"><i data-lucide="slice"></i></button>
-          <button id="tool-select" class="button icon active" title="Select blocks"><i data-lucide="mouse-pointer-2"></i></button>
-          <button id="tool-move" class="button icon" title="Move selected block"><i data-lucide="move-3d"></i></button>
-          <button id="tool-scale" class="button icon" title="Resize selected block"><i data-lucide="scaling"></i></button>
-          <button id="toggle-boundaries" class="button icon active" title="Toggle boundary colors: D red, N blue, F green, mixed velocity amber"><i data-lucide="palette"></i></button>
-          <button id="toggle-partitions" class="button icon active" title="Toggle MPI partition planes"><i data-lucide="panels-top-left"></i></button>
-          <button id="toggle-grid-lines" class="button icon active" title="Toggle selected-block grid lines"><i data-lucide="grid-2x2"></i></button>
-          <button id="toggle-spacing-jumps" class="button icon active" title="Toggle interface spacing quality"><i data-lucide="activity"></i></button>
+          <button id="tool-select" class="button icon active" aria-pressed="true" title="Select blocks"><i data-lucide="mouse-pointer-2"></i></button>
+          <button id="tool-move" class="button icon" aria-pressed="false" title="Move primary block; click again to exit"><i data-lucide="move-3d"></i></button>
+          <button id="tool-scale" class="button icon" aria-pressed="false" title="Resize primary block; click again to exit"><i data-lucide="scaling"></i></button>
+          <button id="toggle-boundaries" class="button icon active" aria-pressed="true" title="Toggle boundary colors: D red, N blue, F green, mixed velocity amber"><i data-lucide="palette"></i></button>
+          <button id="toggle-partitions" class="button icon active" aria-pressed="true" title="Toggle MPI partition planes"><i data-lucide="panels-top-left"></i></button>
+          <label class="view-select" title="Grid line display">
+            <i data-lucide="grid-2x2"></i>
+            <select id="grid-lines-mode" aria-label="Grid line display">
+              <option value="off">Off</option>
+              <option value="selected" selected>Selected</option>
+              <option value="all">All</option>
+            </select>
+          </label>
+          <button id="toggle-spacing-jumps" class="button icon active" aria-pressed="true" title="Toggle interface spacing quality"><i data-lucide="activity"></i></button>
           <button id="fit-view" class="button icon" title="Fit view"><i data-lucide="scan"></i></button>
-          <button id="toggle-grid" class="button icon active" title="Toggle ground grid"><i data-lucide="grid-3x3"></i></button>
+          <button id="toggle-grid" class="button icon active" aria-pressed="true" title="Toggle ground grid"><i data-lucide="grid-3x3"></i></button>
         </div>
         <div id="clip-tools" class="clip-tools" hidden>
           <div id="clip-axis" class="clip-axis" role="group" aria-label="Clipping axis">

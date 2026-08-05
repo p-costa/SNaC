@@ -84,6 +84,11 @@ select {
   font-weight: 650;
 }
 
+.panel-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .viewport-shell {
   position: relative;
   min-width: 0;
@@ -112,6 +117,38 @@ select {
   display: grid;
   grid-template-columns: repeat(6, 30px);
   gap: 2px;
+}
+
+.view-select {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 7px;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+
+.view-select:hover {
+  border-color: #4d5864;
+  background: #2b323a;
+}
+
+.view-select svg {
+  width: 15px;
+  height: 15px;
+}
+
+.view-select select {
+  max-width: 78px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  outline: 0;
+  cursor: pointer;
 }
 
 .button.axis-view {
@@ -295,14 +332,47 @@ select {
 .block-item {
   width: 100%;
   display: grid;
-  grid-template-columns: 18px 18px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 22px 18px 18px minmax(0, 1fr);
+  gap: 7px;
   align-items: center;
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 9px;
   background: #171c22;
   color: var(--text);
+}
+
+.block-drag-handle {
+  width: 22px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+}
+
+.block-drag-handle:active {
+  cursor: grabbing;
+}
+
+.block-drag-handle svg {
+  width: 17px;
+  height: 17px;
+}
+
+.block-item.dragging {
+  opacity: 0.45;
+}
+
+.block-item.drop-before {
+  box-shadow: inset 0 2px 0 var(--accent-strong);
+}
+
+.block-item.drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent-strong);
 }
 
 .block-item input {
@@ -321,8 +391,11 @@ select {
 }
 
 .block-item.selected {
-  border-color: var(--accent);
   background: #1f2d29;
+}
+
+.block-item.primary {
+  border-color: var(--accent);
 }
 
 .block-item.hidden-block {
