@@ -135,6 +135,14 @@
       <section class="viewport-shell">
         <canvas id="scene"></canvas>
         <div class="view-tools">
+          <div class="axis-view-tools" role="group" aria-label="Orthographic views">
+            <button class="button axis-view" data-axis-view="+x" aria-label="View from +X" aria-pressed="false" title="View from +X">+X</button>
+            <button class="button axis-view" data-axis-view="-x" aria-label="View from -X" aria-pressed="false" title="View from -X">-X</button>
+            <button class="button axis-view" data-axis-view="+y" aria-label="View from +Y" aria-pressed="false" title="View from +Y">+Y</button>
+            <button class="button axis-view" data-axis-view="-y" aria-label="View from -Y" aria-pressed="false" title="View from -Y">-Y</button>
+            <button class="button axis-view" data-axis-view="+z" aria-label="View from +Z" aria-pressed="false" title="View from +Z">+Z</button>
+            <button class="button axis-view" data-axis-view="-z" aria-label="View from -Z" aria-pressed="false" title="View from -Z">-Z</button>
+          </div>
           <button id="tool-select" class="button icon active" title="Select blocks"><i data-lucide="mouse-pointer-2"></i></button>
           <button id="tool-move" class="button icon" title="Move selected block"><i data-lucide="move-3d"></i></button>
           <button id="tool-scale" class="button icon" title="Resize selected block"><i data-lucide="scaling"></i></button>

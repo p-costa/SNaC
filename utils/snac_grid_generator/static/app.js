@@ -107,6 +107,9 @@ const AUTOSAVE_KEY = "snac-grid-generator-autosave-v1";
 const els = {};
 let scene;
 let camera;
+let perspectiveCamera;
+let orthographicCamera;
+let orthographicViewSize = null;
 let renderer;
 let controls;
 let raycaster;
@@ -274,6 +277,9 @@ function bindStaticEvents() {
   els.snapBlock.addEventListener("click", () => applyGeometryOperation("snap"));
   els.removeBlock.addEventListener("click", removeSelectedBlock);
   els.fitView.addEventListener("click", fitView);
+  for (const button of document.querySelectorAll("[data-axis-view]")) {
+    button.addEventListener("click", () => setAxisView(button.dataset.axisView));
+  }
   els.toggleGrid.addEventListener("click", () => {
     groundGridVisible = !groundGridVisible;
     gridHelper.visible = groundGridVisible;
@@ -386,8 +392,12 @@ function bindStaticEvents() {
 function initScene() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x101216);
-  camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10000);
-  camera.position.set(3.0, -4.5, 3.0);
+  perspectiveCamera = new THREE.PerspectiveCamera(45, 1, 0.01, 10000);
+  perspectiveCamera.position.set(3.0, -4.5, 3.0);
+  orthographicCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 10000);
+  camera = perspectiveCamera;
+  els.scene.dataset.projection = "perspective";
+  els.scene.dataset.view = "3d";
   renderer = new THREE.WebGLRenderer({ canvas: els.scene, antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   controls = new OrbitControls(camera, renderer.domElement);
@@ -2112,12 +2122,18 @@ function resizeRenderer() {
   const width = Math.max(1, Math.floor(rect.width));
   const height = Math.max(1, Math.floor(rect.height));
   renderer.setSize(width, height, false);
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
+  if (camera.isOrthographicCamera) {
+    updateOrthographicProjection(width / height);
+  } else {
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  }
 }
 
 function fitView() {
   const box = projectBox(project.blocks);
+  activateCamera(perspectiveCamera, "3d");
+  controls.enableRotate = true;
   if (box.isEmpty()) {
     controls.target.set(0, 0, 0);
     camera.position.set(3.0, -4.5, 3.0);
@@ -2132,6 +2148,73 @@ function fitView() {
   controls.update();
   gridHelper.position.copy(center);
   gridHelper.scale.setScalar(Math.max(1, radius / 5));
+}
+
+function setAxisView(view) {
+  const axisIndex = AXES.indexOf(view?.slice(1));
+  const sign = view?.startsWith("-") ? -1 : 1;
+  if (axisIndex < 0) return;
+
+  const box = projectBox(project.blocks);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const direction = new THREE.Vector3().setComponent(axisIndex, sign);
+  const up = axisIndex === 2
+    ? new THREE.Vector3(0, 1, 0)
+    : new THREE.Vector3(0, 0, 1);
+  const projectedWidth = axisIndex === 0 ? size.y : size.x;
+  const projectedHeight = axisIndex === 2 ? size.y : size.z;
+  const radius = Math.max(size.x, size.y, size.z, 1);
+  const distance = radius * 2.5;
+
+  orthographicViewSize = {
+    width: Math.max(projectedWidth, 1e-9),
+    height: Math.max(projectedHeight, 1e-9),
+  };
+  orthographicCamera.position.copy(center).addScaledVector(direction, distance);
+  orthographicCamera.up.copy(up);
+  orthographicCamera.near = 0.01;
+  orthographicCamera.far = Math.max(10000, distance * 4);
+  orthographicCamera.zoom = 1;
+  activateCamera(orthographicCamera, view);
+  controls.enableRotate = false;
+  controls.target.copy(center);
+  updateOrthographicProjection(renderer.domElement.clientWidth / renderer.domElement.clientHeight);
+  controls.update();
+  gridHelper.position.copy(center);
+  gridHelper.scale.setScalar(Math.max(1, radius / 5));
+}
+
+function activateCamera(nextCamera, view) {
+  camera = nextCamera;
+  controls.object = camera;
+  transformControls.camera = camera;
+  if (camera.isPerspectiveCamera) {
+    camera.aspect = renderer.domElement.clientWidth / renderer.domElement.clientHeight;
+    camera.updateProjectionMatrix();
+  }
+  els.scene.dataset.projection = camera.isOrthographicCamera ? "orthographic" : "perspective";
+  els.scene.dataset.view = view;
+  for (const button of document.querySelectorAll("[data-axis-view]")) {
+    const active = button.dataset.axisView === view;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
+}
+
+function updateOrthographicProjection(aspect) {
+  if (!orthographicViewSize) return;
+  const safeAspect = Math.max(aspect, 1e-9);
+  const halfHeight = 0.56 * Math.max(
+    orthographicViewSize.height,
+    orthographicViewSize.width / safeAspect,
+  );
+  const halfWidth = halfHeight * safeAspect;
+  orthographicCamera.left = -halfWidth;
+  orthographicCamera.right = halfWidth;
+  orthographicCamera.top = halfHeight;
+  orthographicCamera.bottom = -halfHeight;
+  orthographicCamera.updateProjectionMatrix();
 }
 
 function selectedBlock() {
