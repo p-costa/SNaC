@@ -27,6 +27,19 @@ import {
   saveStoredProject,
 } from "./project-state.js";
 import {
+  LIBRARY_SCHEMA_VERSION,
+  applyAxisPreset,
+  captureAxisPreset,
+  captureProjectTemplate,
+  loadLibrary,
+  mergeLibraries,
+  normalizeLibrary,
+  removeLibraryItem,
+  renameLibraryItem,
+  replaceLibraryItem,
+  saveLibrary,
+} from "./library.js";
+import {
   axisLabel,
   clearDisposableGroup,
   partitionFaceIndices,
@@ -37,6 +50,7 @@ import {
   SNAC_GRID_FUNCTIONS as GRID_FUNCTIONS,
   SNAC_INITIAL_VELOCITY_FIELDS as INIT_FIELDS,
 } from "./snac.js";
+import { builtInAxisPresets, builtInProjectTemplates } from "./snac-templates.js";
 
 const PROFILE_OPTIONS = [
   ["geometric", "Geometric"],
@@ -85,6 +99,9 @@ const previewCache = new Map();
 let historyTimer = null;
 const projectHistory = new SnapshotHistory(100);
 let pendingRecovery = null;
+let userLibrary = loadLibrary();
+let currentLibraryTab = "axisPresets";
+let selectedLibraryItem = "builtin:builtin-uniform-32";
 const AUTOSAVE_KEY = "snac-grid-generator-autosave-v1";
 
 const els = {};
@@ -137,6 +154,7 @@ function bindElements() {
     "download-json",
     "import-case",
     "open-json",
+    "open-library",
     "undo-project",
     "redo-project",
     "reset-project",
@@ -207,6 +225,18 @@ function bindElements() {
     "recovery-summary",
     "discard-recovery",
     "restore-recovery",
+    "library-dialog",
+    "close-library",
+    "library-tabs",
+    "library-name",
+    "library-items",
+    "library-summary",
+    "apply-library-item",
+    "save-library-item",
+    "rename-library-item",
+    "delete-library-item",
+    "import-library",
+    "export-library",
   ]) {
     els[toCamel(id)] = document.getElementById(id);
   }
@@ -325,6 +355,25 @@ function bindStaticEvents() {
   els.downloadReportMarkdown.addEventListener("click", () => downloadCaseReport("markdown"));
   els.importCase.addEventListener("click", importCase);
   els.openJson.addEventListener("change", openProjectJson);
+  els.openLibrary.addEventListener("click", showLibraryDialog);
+  els.closeLibrary.addEventListener("click", () => els.libraryDialog.close());
+  for (const button of els.libraryTabs.querySelectorAll("button")) {
+    button.addEventListener("click", () => {
+      currentLibraryTab = button.dataset.libraryTab;
+      selectedLibraryItem = null;
+      renderLibraryDialog();
+    });
+  }
+  els.libraryItems.addEventListener("change", () => {
+    selectedLibraryItem = els.libraryItems.value;
+    renderLibrarySelection();
+  });
+  els.applyLibraryItem.addEventListener("click", applySelectedLibraryItem);
+  els.saveLibraryItem.addEventListener("click", saveCurrentLibraryItem);
+  els.renameLibraryItem.addEventListener("click", renameSelectedLibraryItem);
+  els.deleteLibraryItem.addEventListener("click", deleteSelectedLibraryItem);
+  els.importLibrary.addEventListener("change", importLibraryJson);
+  els.exportLibrary.addEventListener("click", exportLibraryJson);
   els.undoProject.addEventListener("click", undoProject);
   els.redoProject.addEventListener("click", redoProject);
   els.resetProject.addEventListener("click", resetProject);
@@ -1764,6 +1813,217 @@ async function importCase() {
   } catch (error) {
     setStatus(error.message);
   }
+}
+
+function showLibraryDialog() {
+  renderLibraryDialog();
+  els.libraryDialog.showModal();
+}
+
+function renderLibraryDialog() {
+  for (const button of els.libraryTabs.querySelectorAll("button")) {
+    button.classList.toggle("active", button.dataset.libraryTab === currentLibraryTab);
+  }
+  const entries = libraryEntries();
+  if (!entries.some((entry) => entry.key === selectedLibraryItem)) selectedLibraryItem = entries[0]?.key ?? null;
+  els.libraryItems.innerHTML = entries
+    .map((entry) => `<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.item.name)}${entry.builtIn ? " (built-in)" : ""}</option>`)
+    .join("");
+  els.libraryItems.value = selectedLibraryItem ?? "";
+  renderLibrarySelection();
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function renderLibrarySelection() {
+  const entry = selectedLibraryEntry();
+  const axisMode = currentLibraryTab === "axisPresets";
+  if (!entry) {
+    els.libraryName.value = "";
+    els.librarySummary.textContent = "Empty library";
+  } else {
+    els.libraryName.value = entry.builtIn ? `${entry.item.name} copy` : entry.item.name;
+    els.librarySummary.innerHTML = libraryItemSummary(entry);
+  }
+  els.applyLibraryItem.disabled = !entry || (axisMode && !selectedBlock());
+  els.saveLibraryItem.disabled = axisMode && !selectedBlock();
+  els.saveLibraryItem.title = axisMode ? "Save current axis to library" : "Save current project to library";
+  els.renameLibraryItem.disabled = !entry || entry.builtIn;
+  els.deleteLibraryItem.disabled = !entry || entry.builtIn;
+}
+
+function libraryEntries() {
+  const builtIns = currentLibraryTab === "axisPresets" ? builtInAxisPresets() : builtInProjectTemplates();
+  return [
+    ...builtIns.map((item) => ({ key: `builtin:${item.id}`, item, builtIn: true })),
+    ...userLibrary[currentLibraryTab].map((item) => ({ key: `user:${item.id}`, item, builtIn: false })),
+  ];
+}
+
+function selectedLibraryEntry() {
+  return libraryEntries().find((entry) => entry.key === selectedLibraryItem) ?? null;
+}
+
+function libraryItemSummary(entry) {
+  const source = entry.builtIn ? "Built-in" : "User";
+  if (currentLibraryTab === "axisPresets") {
+    const axis = entry.item.axis;
+    const rows = [
+      `<strong>${escapeHtml(source)} axis preset</strong>`,
+      `${formatInteger(entry.item.ng)} cells`,
+      escapeHtml(axisKindLabel(axis.kind)),
+    ];
+    if (axis.profile) rows.push(escapeHtml(axis.profile));
+    if (axis.kind === "multi") rows.push(`${axis.segments?.length ?? 0} regions`);
+    if (entry.item.coordinateSpace === "relative") rows.push("Relative coordinates");
+    return rows.map((row) => `<div>${row}</div>`).join("");
+  }
+  const candidate = entry.item.project;
+  const periodic = AXES.filter((_, index) => candidate.periodicAxes?.[index]).map((axis) => axis.toUpperCase());
+  return [
+    `<strong>${escapeHtml(source)} case template</strong>`,
+    `${formatInteger(candidate.blocks.length)} block${candidate.blocks.length === 1 ? "" : "s"}`,
+    `${formatInteger(candidate.nscal ?? candidate.nScal ?? 0)} scalars`,
+    `Periodic: ${periodic.length ? periodic.join(", ") : "none"}`,
+  ].map((row) => `<div>${row}</div>`).join("");
+}
+
+function axisKindLabel(kind) {
+  return {
+    snac: "Native SNaC",
+    simple_ratio: "Monotone grading",
+    max_min: "Symmetric grading",
+    multi: "Multi-region grading",
+    explicit: "Explicit coordinates",
+  }[kind] ?? String(kind ?? "Axis grid");
+}
+
+async function applySelectedLibraryItem() {
+  const entry = selectedLibraryEntry();
+  if (!entry) return;
+  if (currentLibraryTab === "axisPresets") {
+    const block = selectedBlock();
+    if (!block) return;
+    try {
+      const axisIndex = AXES.indexOf(currentAxis);
+      const applied = applyAxisPreset(entry.item, block.lmin[axisIndex], block.lmax[axisIndex]);
+      block.axes[currentAxis] = applied.axis;
+      block.ng[axisIndex] = applied.ng;
+      markProjectDirty(block.id);
+      renderAll();
+      schedulePreview(block.id, 0);
+      setStatus(`Applied ${entry.item.name} to ${currentAxis.toUpperCase()}`);
+    } catch (error) {
+      setStatus(error.message);
+    }
+    return;
+  }
+  setStatus(`Applying ${entry.item.name}...`);
+  try {
+    commitHistory();
+    const payload = await postJson("/api/migrate", { project: entry.item.project });
+    project = payload.project;
+    selectedId = project.blocks[0]?.id ?? null;
+    selectedIds = new Set(selectedId == null ? [] : [selectedId]);
+    lastCheck = null;
+    pendingRepair = null;
+    decompositionResult = null;
+    previewCache.clear();
+    previewSequence += 1;
+    renderAll();
+    commitHistory();
+    fitView();
+    els.libraryDialog.close();
+    const structured = project.inferConnectivity ? await updateStructure({ silent: true }) : true;
+    if (structured) setStatus(`Applied ${entry.item.name}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function saveCurrentLibraryItem() {
+  const selected = selectedLibraryEntry();
+  const existingId = selected && !selected.builtIn ? selected.item.id : undefined;
+  try {
+    assertLibraryNameAvailable(els.libraryName.value, existingId);
+    let item;
+    if (currentLibraryTab === "axisPresets") {
+      const block = selectedBlock();
+      if (!block) throw new Error("Select a block before saving an axis preset");
+      const axisIndex = AXES.indexOf(currentAxis);
+      item = captureAxisPreset(
+        els.libraryName.value,
+        ensureAxis(block, currentAxis),
+        block.ng[axisIndex],
+        block.lmin[axisIndex],
+        block.lmax[axisIndex],
+        existingId
+      );
+    } else {
+      item = captureProjectTemplate(els.libraryName.value, project, existingId);
+    }
+    userLibrary = saveLibrary(replaceLibraryItem(userLibrary, currentLibraryTab, item));
+    selectedLibraryItem = `user:${item.id}`;
+    renderLibraryDialog();
+    setStatus(`${existingId ? "Updated" : "Saved"} ${item.name}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function renameSelectedLibraryItem() {
+  const entry = selectedLibraryEntry();
+  if (!entry || entry.builtIn) return;
+  try {
+    assertLibraryNameAvailable(els.libraryName.value, entry.item.id);
+    userLibrary = saveLibrary(renameLibraryItem(userLibrary, currentLibraryTab, entry.item.id, els.libraryName.value));
+    renderLibraryDialog();
+    setStatus(`Renamed library item to ${els.libraryName.value}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function deleteSelectedLibraryItem() {
+  const entry = selectedLibraryEntry();
+  if (!entry || entry.builtIn) return;
+  const name = entry.item.name;
+  try {
+    userLibrary = saveLibrary(removeLibraryItem(userLibrary, currentLibraryTab, entry.item.id));
+    selectedLibraryItem = null;
+    renderLibraryDialog();
+    setStatus(`Deleted ${name}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+async function importLibraryJson(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = "";
+  try {
+    const incoming = normalizeLibrary(JSON.parse(await file.text()));
+    const merged = mergeLibraries(userLibrary, incoming);
+    userLibrary = saveLibrary(merged.library);
+    selectedLibraryItem = null;
+    renderLibraryDialog();
+    const count = merged.counts.axisPresets + merged.counts.projectTemplates;
+    setStatus(`Imported ${count} library item${count === 1 ? "" : "s"}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function exportLibraryJson() {
+  const content = `${JSON.stringify({ ...userLibrary, schemaVersion: LIBRARY_SCHEMA_VERSION }, null, 2)}\n`;
+  downloadText(content, "snac-grid-library.json", "application/json");
+  setStatus("Downloaded grid library");
+}
+
+function assertLibraryNameAvailable(name, exceptId) {
+  const target = String(name ?? "").trim().toLocaleLowerCase();
+  const duplicate = libraryEntries().some((entry) => entry.item.id !== exceptId && entry.item.name.toLocaleLowerCase() === target);
+  if (duplicate) throw new Error("Library item names must be unique");
 }
 
 function downloadProjectJson() {

@@ -259,6 +259,104 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
         context.close()
         self.assertEqual(errors, [])
 
+    def test_grid_library_presets_templates_and_import_export(self) -> None:
+        context = self.browser.new_context(viewport={"width": 1280, "height": 800})
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(self.url, wait_until="load")
+
+        explicit = page.evaluate(
+            """async () => {
+              const library = await import('/library.js');
+              const preset = library.captureAxisPreset(
+                'Imported faces',
+                {kind: 'explicit', faces: [2, 2.5, 4]},
+                2,
+                2,
+                4,
+                'axis-test'
+              );
+              return {
+                stored: preset.axis.faces,
+                applied: library.applyAxisPreset(preset, 10, 14).axis.faces,
+              };
+            }"""
+        )
+        self.assertEqual(explicit["stored"], [0, 0.25, 1])
+        self.assertEqual(explicit["applied"], [10, 11, 14])
+        schema_error = page.evaluate(
+            """async () => {
+              const library = await import('/library.js');
+              try {
+                library.normalizeLibrary({schemaVersion: 99});
+                return '';
+              } catch (error) {
+                return error.message;
+              }
+            }"""
+        )
+        self.assertIn("Unsupported library schema version", schema_error)
+
+        page.locator("#open-library").click()
+        self.expect(page.locator("#library-dialog")).to_be_visible()
+        page.locator("#library-items").select_option("builtin:builtin-uniform-32")
+        page.locator("#apply-library-item").click()
+        self.expect(page.locator("#status")).to_contain_text("Applied Uniform 32")
+        self.assertEqual(page.locator("#grid-kind").input_value(), "simple_ratio")
+        page.locator("#library-name").fill("My uniform")
+        page.locator("#save-library-item").click()
+        self.expect(page.locator("#status")).to_contain_text("Saved My uniform")
+        page.locator("#library-name").fill("My grading")
+        page.locator("#rename-library-item").click()
+        self.expect(page.locator("#status")).to_contain_text("Renamed")
+        page.locator("#apply-library-item").click()
+        self.expect(page.locator("#status")).to_contain_text("Applied My grading")
+        self.assertEqual(page.locator("#grid-kind").input_value(), "simple_ratio")
+        self.assertEqual(page.locator('[data-field="ng"][data-index="0"]').input_value(), "32")
+
+        page.get_by_role("button", name="Case templates", exact=True).click()
+        page.locator("#library-items").select_option("builtin:builtin-periodic-channel")
+        page.locator("#apply-library-item").click()
+        self.expect(page.locator("#library-dialog")).not_to_be_visible()
+        self.expect(page.locator("#status")).to_contain_text("Applied Periodic channel")
+        self.expect(page.locator(".block-item")).to_have_count(1)
+        self.assertTrue(page.locator('#periodic-grid input[data-axis-index="0"]').is_checked())
+        self.assertEqual(page.locator('#boundary-table select[data-face="0"]').first.input_value(), "F")
+        self.assertEqual(page.locator('#boundary-table input[data-face="0"]').first.input_value(), "1")
+        self.assertEqual(page.locator('#boundary-table select[data-face="1"]').first.input_value(), "F")
+
+        page.locator("#open-library").click()
+        page.locator("#library-name").fill("Periodic working case")
+        page.locator("#save-library-item").click()
+        self.expect(page.locator("#status")).to_contain_text("Saved Periodic working case")
+        with page.expect_download() as download_info:
+            page.locator("#export-library").click()
+        download = download_info.value
+        exported = json.loads(Path(download.path()).read_text(encoding="utf-8"))
+        self.assertEqual(exported["schemaVersion"], 1)
+        self.assertEqual([item["name"] for item in exported["axisPresets"]], ["My grading"])
+        self.assertEqual([item["name"] for item in exported["projectTemplates"]], ["Periodic working case"])
+
+        page.locator("#delete-library-item").click()
+        self.expect(page.locator("#status")).to_contain_text("Deleted Periodic working case")
+        page.locator("#import-library").set_input_files(download.path())
+        self.expect(page.locator("#status")).to_contain_text("Imported 2 library items")
+        self.expect(page.locator("#library-items")).to_contain_text("Periodic working case")
+
+        page.reload(wait_until="load")
+        page.locator("#recovery-dialog").wait_for(state="visible")
+        page.locator("#restore-recovery").click()
+        page.locator("#open-library").click()
+        page.get_by_role("button", name="Axis presets", exact=True).click()
+        self.expect(page.locator("#library-items")).to_contain_text("My grading")
+        page.get_by_role("button", name="Case templates", exact=True).click()
+        self.expect(page.locator("#library-items")).to_contain_text("Periodic working case")
+
+        context.close()
+        self.assertEqual(errors, [])
+
     def _post_api(self, payload: str, headers: dict[str, str]) -> tuple[int, str]:
         connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
         try:

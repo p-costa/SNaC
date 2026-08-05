@@ -74,7 +74,7 @@ python3 -m pip install -r utils/snac_grid_generator/requirements.txt
 python3 -m utils.snac_grid_generator.server
 ```
 
-The editor can draw and transform single or selected groups of blocks, configure SNaC-native or generated axis grids, apply common boundary presets, infer friend and periodic boundaries, check structured-grid constraints, and write `blocks.nml` plus optional binary axis grids. It autosaves locally and runs entirely from vendored static assets.
+The editor can draw and transform single or selected groups of blocks, configure SNaC-native or generated axis grids, apply common boundary presets, infer friend and periodic boundaries, check structured-grid constraints, and write `blocks.nml` plus optional binary axis grids. Its local grid library saves reusable axis gradings and complete case templates, including rescaling explicit coordinates to a new block extent. It autosaves locally and runs entirely from vendored static assets.
 
 `Repair` makes tangential grids congruent across connected faces and matches large normal-spacing jumps. The selected block supplies an unlocked grid; locking an axis makes that block authoritative, and conflicting locks are reported instead of overwritten. Proposed changes are shown before they are applied.
 

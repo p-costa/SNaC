@@ -42,6 +42,7 @@
         <input id="open-json" type="file" accept="application/json,.json" />
       </label>
       <div class="toolbar-group">
+        <button id="open-library" class="button icon" title="Grid library"><i data-lucide="library-big"></i></button>
         <button id="undo-project" class="button icon" title="Undo" disabled><i data-lucide="undo-2"></i></button>
         <button id="redo-project" class="button icon" title="Redo" disabled><i data-lucide="redo-2"></i></button>
       </div>
@@ -221,6 +222,40 @@
         <div class="dialog-actions">
           <button id="discard-recovery" class="button" type="button">Discard</button>
           <button id="restore-recovery" class="button primary" type="button">Restore</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="library-dialog" class="library-dialog">
+      <div class="dialog-body">
+        <div class="dialog-heading">
+          <div class="dialog-title">Grid library</div>
+          <button id="close-library" class="button icon" type="button" title="Close library"><i data-lucide="x"></i></button>
+        </div>
+        <div id="library-tabs" class="tabs library-tabs" role="tablist">
+          <button type="button" data-library-tab="axisPresets" class="active">Axis presets</button>
+          <button type="button" data-library-tab="projectTemplates">Case templates</button>
+        </div>
+        <div class="library-content">
+          <label class="field">
+            <span>Name</span>
+            <input id="library-name" type="text" maxlength="80" autocomplete="off" />
+          </label>
+          <select id="library-items" class="library-items" size="7" aria-label="Library items"></select>
+          <div id="library-summary" class="library-summary"></div>
+          <div class="library-actions">
+            <button id="apply-library-item" class="button primary" type="button"><i data-lucide="check"></i><span>Apply</span></button>
+            <button id="save-library-item" class="button" type="button"><i data-lucide="save"></i><span>Save</span></button>
+            <button id="rename-library-item" class="button" type="button"><i data-lucide="pencil"></i><span>Rename</span></button>
+            <button id="delete-library-item" class="button danger" type="button"><i data-lucide="trash-2"></i><span>Delete</span></button>
+          </div>
+        </div>
+        <div class="dialog-actions library-file-actions">
+          <label class="button file-button" title="Import library JSON">
+            <i data-lucide="upload"></i><span>Import</span>
+            <input id="import-library" type="file" accept="application/json,.json" />
+          </label>
+          <button id="export-library" class="button" type="button"><i data-lucide="download"></i><span>Export</span></button>
         </div>
       </div>
     </dialog>

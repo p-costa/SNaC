@@ -13,6 +13,7 @@ model. It includes:
 - interchangeable cell-count, ratio, and endpoint-spacing controls;
 - achieved-grid diagnostics with clickable block/face navigation;
 - project-wide grid-quality summaries and deterministic JSON/Markdown reports;
+- reusable axis-grading presets and complete case templates;
 - previewed grid-congruence repair with per-axis authority locks;
 - existing-case import from `blocks.nml`, project JSON, and binary grids;
 - exact-rank MPI decomposition balancing in automatic, 1D, 2D, or 3D mode;
@@ -154,6 +155,26 @@ The preview always reports achieved cell count, lower and upper spacing,
 minimum and maximum spacing, upper/lower expansion, maximum adjacent-cell
 growth, ideal cell count, and fit error. These achieved values are authoritative
 for the binary grid that will be written.
+
+## Grid Library
+
+The toolbar library stores reusable axis presets and complete case templates in
+the browser. The supplied uniform, wall-normal, channel, single-block,
+two-block, and periodic starters are immutable; applying one never changes the
+built-in definition. `Save` creates a user copy from the current selected axis
+or current project, or updates the selected user item. User items can be
+renamed and deleted.
+
+An explicit-coordinate axis is stored relative to its source block extent and
+is rescaled when applied elsewhere. Other grading controls and the axis cell
+count are preserved directly. Applying a case template runs project-schema
+migration and, when friend inference is enabled, updates connectivity before
+the case is used.
+
+User library data persist in local browser storage independently of project
+autosaves. Import and export use a versioned `snac-grid-library.json` file that
+contains both user axis presets and user case templates. Import merges items by
+their stable ids; built-in items are never overwritten or included in exports.
 
 Periodicity is controlled in the geometry panel. `Update` matches congruent
 block faces on the global minimum and maximum boundaries and marks each pair as
