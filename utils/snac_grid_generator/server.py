@@ -20,9 +20,9 @@ from .grid import AXIS_NAMES, axis_grid_arrays, axis_grid_diagnostics
 from .model import Project
 from .repair import repair_project_grids
 from .snac_bc import apply_bc_preset
+from .snac_reporting import build_case_report, render_case_report_markdown
 from .validation import (
     apply_axis_to_aligned_blocks,
-    check_project,
     update_project_structure,
 )
 
@@ -96,6 +96,7 @@ class _Handler(BaseHTTPRequestHandler):
             "/api/migrate",
             "/api/preview",
             "/api/repair",
+            "/api/report",
             "/api/update",
         }:
             self.send_error(HTTPStatus.NOT_FOUND, "unknown API route")
@@ -141,13 +142,39 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "project": project.to_dict(), "changedBlockIds": changed})
                 return
             if path == "/api/check":
-                result = check_project(project)
-                self._send_json(result.to_dict())
+                report = build_case_report(project)
+                self._send_json(
+                    {
+                        **report["validation"],
+                        "quality": report["quality"],
+                        "qualityError": report.get("qualityError"),
+                        "storage": report["storage"],
+                    }
+                )
+                return
+            if path == "/api/report":
+                report = build_case_report(project)
+                self._send_json(
+                    {
+                        "ok": True,
+                        "report": report,
+                        "markdown": render_case_report_markdown(report),
+                    }
+                )
                 return
             if path == "/api/update":
                 source_block_id = payload.get("sourceBlockId")
                 project, result = update_project_structure(project, int(source_block_id) if source_block_id else None)
-                self._send_json({**result.to_dict(), "project": project.to_dict()})
+                report = build_case_report(project)
+                self._send_json(
+                    {
+                        **result.to_dict(),
+                        "project": project.to_dict(),
+                        "quality": report["quality"],
+                        "qualityError": report.get("qualityError"),
+                        "storage": report["storage"],
+                    }
+                )
                 return
             if path == "/api/apply-axis":
                 source_block_id = int(payload.get("sourceBlockId", 0))

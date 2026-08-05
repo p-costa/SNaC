@@ -163,6 +163,9 @@ function bindElements() {
     "decomposition-axes",
     "balance-decomposition",
     "decomposition-summary",
+    "download-report-json",
+    "download-report-markdown",
+    "quality-summary",
     "scene",
     "fit-view",
     "toggle-grid",
@@ -318,6 +321,8 @@ function bindStaticEvents() {
   els.confirmRepair.addEventListener("click", applyGridRepair);
   els.applyBcPreset.addEventListener("click", applyBoundaryPreset);
   els.downloadJson.addEventListener("click", downloadProjectJson);
+  els.downloadReportJson.addEventListener("click", () => downloadCaseReport("json"));
+  els.downloadReportMarkdown.addEventListener("click", () => downloadCaseReport("markdown"));
   els.importCase.addEventListener("click", importCase);
   els.openJson.addEventListener("change", openProjectJson);
   els.undoProject.addEventListener("click", undoProject);
@@ -402,6 +407,7 @@ function renderAll() {
   }
   renderBlockList();
   renderDecompositionControls();
+  renderQualitySummary();
   renderInspector();
   renderScene();
   renderSpacingPreview();
@@ -897,6 +903,34 @@ function renderDecompositionSummary() {
       .map((block) => `<div>B${block.blockId}: ${block.dims.join(" × ")} · ${block.ranks} ranks</div>`)
       .join("")}
   `;
+}
+
+function renderQualitySummary() {
+  const quality = lastCheck?.quality;
+  const storage = lastCheck?.storage;
+  const disabled = !project.blocks.length;
+  els.downloadReportJson.disabled = disabled;
+  els.downloadReportMarkdown.disabled = disabled;
+  if (!quality) {
+    els.qualitySummary.innerHTML = `<div class="quality-empty">${escapeHtml(lastCheck?.qualityError ?? "Not evaluated")}</div>`;
+    return;
+  }
+  const summary = quality.summary;
+  const rows = [
+    ["Cells", formatInteger(summary.totalCells)],
+    ["MPI ranks", formatInteger(summary.totalRanks)],
+    ["Cells/rank", `${formatInteger(summary.cellsPerRankMin)} to ${formatInteger(summary.cellsPerRankMax)}`],
+    ["Load ratio", formatNumber(summary.loadImbalance)],
+    ["Spacing", `${formatNumber(summary.spacingMin)} to ${formatNumber(summary.spacingMax)}`],
+    ["Adjacent ratio", formatNumber(summary.maxAdjacentRatio)],
+    ["Cell aspect", formatNumber(summary.worstCellAspect)],
+    ["Interface ratio", formatNumber(summary.maxInterfaceRatio)],
+    ["Coordinates", formatBytes(summary.coordinateBytes)],
+    ["SNaC grids", formatBytes(storage?.snacBinaryBytesTotal ?? 0)],
+  ];
+  els.qualitySummary.innerHTML = rows
+    .map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`)
+    .join("");
 }
 
 async function previewGridRepair() {
@@ -1638,6 +1672,7 @@ async function checkProject(options = {}) {
     const payload = await postJson("/api/check", { project }, { allowInvalid: true });
     lastCheck = payload;
     renderCheckResults();
+    renderQualitySummary();
     renderScene();
     if (!payload.ok) {
       setStatus(`${payload.errors.length} check issue${payload.errors.length === 1 ? "" : "s"}`);
@@ -1649,6 +1684,7 @@ async function checkProject(options = {}) {
   } catch (error) {
     lastCheck = { ok: false, errors: [error.message], warnings: [] };
     renderCheckResults();
+    renderQualitySummary();
     renderScene();
     setStatus(error.message);
     return false;
@@ -1739,6 +1775,32 @@ function downloadProjectJson() {
   URL.revokeObjectURL(link.href);
   commitHistory();
   clearAutosave();
+}
+
+async function downloadCaseReport(format) {
+  setStatus(`Building ${format === "json" ? "JSON" : "Markdown"} report...`);
+  try {
+    const payload = await postJson("/api/report", { project });
+    const extension = format === "json" ? "json" : "md";
+    const type = format === "json" ? "application/json" : "text/markdown";
+    const content = format === "json"
+      ? `${JSON.stringify(payload.report, null, 2)}\n`
+      : payload.markdown;
+    const base = (project.name || "snac-grid").replace(/[^A-Za-z0-9._-]+/g, "-");
+    downloadText(content, `${base}-quality.${extension}`, type);
+    setStatus(`Downloaded ${extension.toUpperCase()} quality report`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function downloadText(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 async function openProjectJson(event) {
@@ -1875,6 +1937,17 @@ function formatPercent(value) {
   return `${(100 * value).toPrecision(value < 0.001 ? 2 : 3)}%`;
 }
 
+function formatBytes(value) {
+  let size = Number(value) || 0;
+  const units = ["B", "KiB", "MiB", "GiB"];
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${formatNumber(size)} ${units[index]}`;
+}
+
 function formatInputNumber(value) {
   return Number(value.toPrecision(12)).toString();
 }
@@ -1886,6 +1959,7 @@ function setStatus(message) {
 function clearCheckState() {
   lastCheck = null;
   renderCheckResults();
+  renderQualitySummary();
   setStatus("");
 }
 

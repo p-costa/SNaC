@@ -12,6 +12,7 @@ model. It includes:
 - geometric, tanh, and erf monotone and symmetric profiles;
 - interchangeable cell-count, ratio, and endpoint-spacing controls;
 - achieved-grid diagnostics with clickable block/face navigation;
+- project-wide grid-quality summaries and deterministic JSON/Markdown reports;
 - previewed grid-congruence repair with per-axis authority locks;
 - existing-case import from `blocks.nml`, project JSON, and binary grids;
 - exact-rank MPI decomposition balancing in automatic, 1D, 2D, or 3D mode;
@@ -102,6 +103,21 @@ imbalance, minimum local edge, and worst local aspect ratio. If no exact solutio
 exists, the current dimensions remain unchanged and nearby feasible totals are
 offered as buttons that can be balanced immediately. Setting the target to zero
 disables this additional export check.
+
+The Grid quality panel is populated by `Check` and `Update`. It reports total
+cells and ranks, the exact minimum and maximum local cell counts under SNaC's
+base-plus-remainder partitioning, their max/min load ratio, global spacing
+range, maximum adjacent-cell ratio, worst tensor-product cell aspect ratio,
+maximum interface-spacing ratio, and storage. Coordinate storage counts the
+minimum double-precision rectilinear face arrays; SNaC grid storage counts the
+exact four-array binary payload and configured number of copies. It is not an
+estimate of complete solver-field memory.
+
+The JSON and Markdown buttons regenerate a complete report from current project
+state. Reports contain the validation messages and navigable diagnostics,
+global and per-block metrics, per-axis metrics, every connected interface, and
+SNaC binary storage. No timestamp is included, so identical projects produce
+byte-identical reports.
 
 ## Grading Modes
 
@@ -238,15 +254,22 @@ python3 -m utils.snac_grid_generator.cli update project.json -o updated.json
 python3 -m utils.snac_grid_generator.cli repair project.json -o repaired.json
 python3 -m utils.snac_grid_generator.cli decompose project.json -o decomposed.json
 python3 -m utils.snac_grid_generator.cli migrate old-project.json -o project.json
+python3 -m utils.snac_grid_generator.cli report project.json --format json -o grid-report.json
+python3 -m utils.snac_grid_generator.cli report project.json --format markdown -o grid-report.md
 ```
 
-Geometry, grading, repair, validation, and decomposition are format-neutral
-modules. `topology.py` owns face connectivity and deterministic global-index
-reconstruction, independent of block IDs. SNaC's native `gt/gr` mappings and
-binary layout live in `snac_grid.py`; SNaC boundary presets live in
-`snac_bc.py`; and case import/export remains in the SNaC adapters. The browser
-entry point coordinates focused modules for project history, API transport,
-block geometry, scene helpers, and SNaC-specific constants. The GUI's pinned
+Without `-o`, `report` writes the selected representation to standard output.
+It still writes a report for an invalid project and returns a nonzero status,
+which makes the command suitable for CI validation and artifact collection.
+
+Geometry, grading, repair, validation, quality analysis, and decomposition are
+format-neutral modules. `topology.py` owns face connectivity and deterministic
+global-index reconstruction, independent of block IDs. SNaC's native `gt/gr`
+mappings and binary layout live in `snac_grid.py`; SNaC boundary presets live in
+`snac_bc.py`; and case import/export and report rendering remain in the SNaC
+adapters. The browser entry point coordinates focused modules for project
+history, API transport, block geometry, scene helpers, and SNaC-specific
+constants. The GUI's pinned
 Three.js r164 and Lucide 0.468.0 assets are vendored under `static/vendor`, so
 the editor does not require a CDN connection. Update Three.js core and both
 control modules together, retain each upstream license, record the new versions

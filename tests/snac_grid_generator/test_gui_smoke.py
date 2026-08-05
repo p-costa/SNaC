@@ -227,6 +227,38 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
         self.expect(page.locator("#status")).to_contain_text("interface cell count")
         context.close()
 
+    def test_quality_summary_and_report_downloads(self) -> None:
+        context = self.browser.new_context(viewport={"width": 1280, "height": 800})
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(self.url, wait_until="load")
+        page.locator("#check-project").click()
+
+        self.expect(page.locator("#quality-summary")).to_contain_text("Cells")
+        self.expect(page.locator("#quality-summary")).to_contain_text("Cell aspect")
+        self.assertTrue(page.locator("#download-report-json").is_enabled())
+
+        with page.expect_download() as json_download_info:
+            page.locator("#download-report-json").click()
+        json_download = json_download_info.value
+        report = json.loads(Path(json_download.path()).read_text(encoding="utf-8"))
+        self.assertTrue(report["validation"]["ok"])
+        self.assertGreater(report["quality"]["summary"]["totalCells"], 0)
+        self.assertTrue(json_download.suggested_filename.endswith("-quality.json"))
+
+        with page.expect_download() as markdown_download_info:
+            page.locator("#download-report-markdown").click()
+        markdown_download = markdown_download_info.value
+        markdown = Path(markdown_download.path()).read_text(encoding="utf-8")
+        self.assertIn("## Axis Quality", markdown)
+        self.assertIn("## SNaC Storage", markdown)
+        self.assertTrue(markdown_download.suggested_filename.endswith("-quality.md"))
+
+        context.close()
+        self.assertEqual(errors, [])
+
     def _post_api(self, payload: str, headers: dict[str, str]) -> tuple[int, str]:
         connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
         try:

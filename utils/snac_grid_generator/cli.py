@@ -13,6 +13,7 @@ from .decomposition import optimize_project_decomposition
 from .export import export_project
 from .model import Project
 from .repair import repair_project_grids
+from .snac_reporting import build_case_report, render_case_report_markdown, write_case_report
 from .validation import check_project, update_project_structure
 
 _WORKFLOW_COMMANDS = {"check", "decompose", "migrate", "repair", "update"}
@@ -23,13 +24,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if argv and argv[0] == "import":
             return _import_main(argv[1:])
+        if argv and argv[0] == "report":
+            return _report_main(argv[1:])
         if argv and argv[0] in _WORKFLOW_COMMANDS:
             return _workflow_main(argv[0], argv[1:])
         if argv and argv[0] == "export":
             argv = argv[1:]
         return _export_main(argv)
     except (OSError, ValueError, json.JSONDecodeError) as exc:
-        if "--json" in argv:
+        if "--json" in argv or ("--format" in argv and "json" in argv):
             print(json.dumps({"ok": False, "errors": [str(exc)], "warnings": []}, indent=2))
         else:
             print(f"error: {exc}", file=sys.stderr)
@@ -66,6 +69,30 @@ def _import_main(argv: list[str]) -> int:
     for warning in result.warnings:
         print(f"warning: {warning}")
     return 0
+
+
+def _report_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description="Build a SNaC grid validation and quality report.")
+    parser.add_argument("project", type=Path, help="Path to snac_grid_project.json")
+    parser.add_argument(
+        "--format",
+        choices=("json", "markdown"),
+        default="markdown",
+        help="Report representation",
+    )
+    parser.add_argument("-o", "--output", type=Path, help="Write the report instead of printing it")
+    args = parser.parse_args(argv)
+
+    project = _read_project(args.project)
+    report = build_case_report(project)
+    if args.output:
+        output = write_case_report(project, args.output, args.format)
+        print(f"Wrote {args.format} report to {output}")
+    elif args.format == "json":
+        print(json.dumps(report, indent=2))
+    else:
+        print(render_case_report_markdown(report), end="")
+    return 0 if report["validation"]["ok"] else 1
 
 
 def _workflow_main(command: str, argv: list[str]) -> int:

@@ -82,7 +82,7 @@ The MPI panel balances a prescribed total rank count exactly. `Auto`, `1D`, `2D`
 
 The balancing search also favors compact subdomains with lower communication area. The minimum cells per split and optional maximum local aspect are configurable hard limits. Its summary reports the minimum local edge and maximum local aspect ratio, and nearby feasible totals can be applied directly.
 
-The editor can import an existing case from `blocks.nml` and recover exact external grids from `grid/` or `data/` binaries. Sparse 3D grid lines show actual face coordinates, while checked interfaces are colored by their spacing jump. Put the case directory in `Output` and use the folder-import button, or run `python3 -m utils.snac_grid_generator.cli import path/to/case -o imported-project.json`. The CLI also provides `check`, `update`, `repair`, `decompose`, and `migrate` commands with optional JSON diagnostics.
+The editor can import an existing case from `blocks.nml` and recover exact external grids from `grid/` or `data/` binaries. Sparse 3D grid lines show actual face coordinates, while checked interfaces are colored by their spacing jump. The quality panel reports grid, interface, and rank-balance metrics and downloads deterministic JSON or Markdown reports. Put the case directory in `Output` and use the folder-import button, or run `python3 -m utils.snac_grid_generator.cli import path/to/case -o imported-project.json`. The CLI also provides `check`, `update`, `repair`, `decompose`, `migrate`, and `report` commands with machine-readable diagnostics.
 
 ### Visualizing field data
 

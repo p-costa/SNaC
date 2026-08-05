@@ -397,6 +397,56 @@ select {
   color: #ff9b9b;
 }
 
+.quality-panel {
+  display: grid;
+  gap: 9px;
+  padding: 12px 10px;
+  border-top: 1px solid var(--line);
+}
+
+.quality-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.quality-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.quality-actions .button {
+  width: 28px;
+  height: 28px;
+}
+
+.quality-summary {
+  display: grid;
+  gap: 5px;
+  min-height: 185px;
+  align-content: start;
+  font-size: 12px;
+}
+
+.quality-summary > div:not(.quality-empty) {
+  display: flex;
+  justify-content: space-between;
+  gap: 9px;
+  color: var(--muted);
+}
+
+.quality-summary strong {
+  color: var(--text);
+  font-weight: 650;
+  text-align: right;
+}
+
+.quality-empty {
+  color: var(--muted);
+}
+
 .nearby-ranks {
   display: grid;
   gap: 5px;

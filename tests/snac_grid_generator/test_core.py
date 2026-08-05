@@ -15,11 +15,13 @@ from utils.snac_grid_generator import (
     MIN_LOCAL_CELLS,
     Project,
     align_blocks,
+    analyze_grid_quality,
     apply_bc_preset,
     apply_axis_to_aligned_blocks,
     axis_grid_arrays,
     axis_grid_diagnostics,
     check_project,
+    build_case_report,
     duplicate_blocks,
     export_project,
     fit_monotone_spacing,
@@ -27,9 +29,11 @@ from utils.snac_grid_generator import (
     optimize_project_decomposition,
     mirror_blocks,
     repair_project_grids,
+    render_case_report_markdown,
     solve_spacing,
     snap_block_to_face,
     update_project_structure,
+    write_case_report,
 )
 from utils.snac_grid_generator.snac_grid import binary_payload, read_grid_binary
 from utils.snac_grid_generator.cli import main as grid_cli_main
@@ -1621,6 +1625,113 @@ class GridGeneratorTests(unittest.TestCase):
                 )
             migrated = json.loads(migrated_path.read_text(encoding="utf-8"))
             self.assertEqual(migrated["schemaVersion"], 2)
+
+    def test_grid_quality_reports_exact_block_and_interface_metrics(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "name": "fine",
+                        "ng": [4, 2, 2],
+                        "dims": [3, 1, 1],
+                        "lmin": [0, 0, 0],
+                        "lmax": [1, 1, 1],
+                    },
+                    {
+                        "id": 2,
+                        "name": "coarse",
+                        "ng": [2, 2, 2],
+                        "lmin": [1, 0, 0],
+                        "lmax": [3, 1, 1],
+                    },
+                ]
+            }
+        )
+        project, check = update_project_structure(project, source_block_id=1)
+        self.assertTrue(check.ok)
+
+        quality = analyze_grid_quality(project).to_dict()
+        summary = quality["summary"]
+        self.assertEqual(summary["totalCells"], 24)
+        self.assertEqual(summary["totalRanks"], 4)
+        self.assertEqual((summary["cellsPerRankMin"], summary["cellsPerRankMax"]), (4, 8))
+        self.assertEqual(summary["meanCellsPerRank"], 6.0)
+        self.assertEqual(summary["loadImbalance"], 2.0)
+        self.assertEqual((summary["spacingMin"], summary["spacingMax"]), (0.25, 1.0))
+        self.assertEqual(summary["worstCellAspect"], 2.0)
+        self.assertEqual(summary["maxInterfaceRatio"], 4.0)
+        self.assertEqual(summary["coordinateBytes"], 160)
+        self.assertEqual(quality["interfaces"][0]["ratio"], 4.0)
+
+    def test_case_reports_are_deterministic_and_exportable(self) -> None:
+        project = Project.from_dict({"name": "report-case", "blocks": [{"id": 1, "ng": [4, 3, 2]}]})
+        report = build_case_report(project)
+        markdown = render_case_report_markdown(report)
+
+        self.assertTrue(report["validation"]["ok"])
+        self.assertEqual(report["storage"]["snacBinaryBytesPerCopy"], 288)
+        self.assertEqual(markdown, render_case_report_markdown(build_case_report(project)))
+        self.assertIn("# SNaC grid report: report-case", markdown)
+        self.assertIn("## Axis Quality", markdown)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            json_path = write_case_report(project, Path(tmp) / "quality.json")
+            markdown_path = write_case_report(project, Path(tmp) / "quality.md")
+            self.assertEqual(json.loads(json_path.read_text(encoding="utf-8")), report)
+            self.assertEqual(markdown_path.read_text(encoding="utf-8"), markdown)
+
+    def test_headless_cli_writes_quality_reports(self) -> None:
+        project = Project.from_dict({"name": "cli-report", "blocks": [{"id": 1, "ng": [4, 3, 2]}]})
+        with tempfile.TemporaryDirectory() as tmp:
+            project_path = Path(tmp) / "project.json"
+            report_path = Path(tmp) / "report.md"
+            project_path.write_text(json.dumps(project.to_dict()), encoding="utf-8")
+
+            with redirect_stdout(StringIO()) as output:
+                self.assertEqual(
+                    grid_cli_main(["report", str(project_path), "--format", "json"]),
+                    0,
+                )
+                payload = json.loads(output.getvalue())
+            self.assertEqual(payload["quality"]["summary"]["totalCells"], 24)
+
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    grid_cli_main(
+                        [
+                            "report",
+                            str(project_path),
+                            "--format",
+                            "markdown",
+                            "-o",
+                            str(report_path),
+                        ]
+                    ),
+                    0,
+                )
+            self.assertIn("## SNaC Storage", report_path.read_text(encoding="utf-8"))
+
+            invalid_path = Path(tmp) / "invalid.json"
+            invalid_report_path = Path(tmp) / "invalid-report.json"
+            invalid_path.write_text(json.dumps({"blocks": []}), encoding="utf-8")
+            with redirect_stdout(StringIO()):
+                self.assertEqual(
+                    grid_cli_main(
+                        [
+                            "report",
+                            str(invalid_path),
+                            "--format",
+                            "json",
+                            "-o",
+                            str(invalid_report_path),
+                        ]
+                    ),
+                    1,
+                )
+            invalid_report = json.loads(invalid_report_path.read_text(encoding="utf-8"))
+            self.assertFalse(invalid_report["validation"]["ok"])
+            self.assertEqual(invalid_report["quality"]["summary"]["totalCells"], 0)
 
 
 if __name__ == "__main__":
