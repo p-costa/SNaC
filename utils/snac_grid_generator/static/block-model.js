@@ -118,6 +118,20 @@ export function resetFriendBoundaries(block, nscal) {
   block.bcscal = Array.from({ length: normalizedScalarCount(nscal) }, () => [0, 0, 0, 0, 0, 0]);
 }
 
+export function renumberBlocksByOrder(blocks) {
+  const idMap = new Map(blocks.map((block, index) => [block.id, index + 1]));
+  for (const block of blocks) {
+    block.id = idMap.get(block.id);
+    block.name = `block-${block.id}`;
+  }
+  for (const block of blocks) {
+    remapFriendRows(block.cbcvel, block.bcvel, idMap);
+    remapFriendRow(block.cbcpre, block.bcpre, idMap);
+    remapFriendRows(block.cbcscal, block.bcscal, idMap);
+  }
+  return idMap;
+}
+
 export function propagateMpiPartition(blocks, sourceId, axisIndex, value) {
   const graph = new Map(blocks.map((block) => [block.id, new Set()]));
   for (const connection of fullFaceConnections(blocks)) {
@@ -170,6 +184,21 @@ function defaultSegment() {
 
 function completeArray(values, fallback) {
   return Array.from({ length: 6 }, (_, index) => values?.[index] ?? fallback);
+}
+
+function remapFriendRows(codeRows, valueRows, idMap) {
+  for (let index = 0; index < (codeRows?.length ?? 0); index += 1) {
+    remapFriendRow(codeRows[index], valueRows?.[index], idMap);
+  }
+}
+
+function remapFriendRow(codes, values, idMap) {
+  if (!codes || !values) return;
+  for (let face = 0; face < codes.length; face += 1) {
+    if (codes[face] !== "F") continue;
+    const friendId = idMap.get(Math.round(Number(values[face])));
+    if (friendId != null) values[face] = friendId;
+  }
 }
 
 function sameCrossSection(a, b, axisIndex) {

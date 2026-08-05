@@ -265,6 +265,33 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
         page.goto(self.url, wait_until="load")
         page.wait_for_selector(".block-item")
 
+        friend_remap = page.evaluate(
+            """async () => {
+              const {defaultBlock, renumberBlocksByOrder} = await import('/block-model.js');
+              const lower = defaultBlock(4);
+              const upper = defaultBlock(9);
+              for (const [block, face, friend] of [[lower, 1, 9], [upper, 0, 4]]) {
+                block.cbcvel[0][face] = 'F';
+                block.bcvel[0][face] = friend;
+                block.cbcpre[face] = 'F';
+                block.bcpre[face] = friend;
+                block.cbcscal = [['N', 'N', 'N', 'N', 'N', 'N']];
+                block.bcscal = [[0, 0, 0, 0, 0, 0]];
+                block.cbcscal[0][face] = 'F';
+                block.bcscal[0][face] = friend;
+              }
+              const blocks = [upper, lower];
+              renumberBlocksByOrder(blocks);
+              return blocks.map((block, index) => ({
+                id: block.id,
+                name: block.name,
+                refs: [block.bcvel[0][index], block.bcpre[index], block.bcscal[0][index]],
+              }));
+            }"""
+        )
+        self.assertEqual(friend_remap[0], {"id": 1, "name": "block-1", "refs": [2, 2, 2]})
+        self.assertEqual(friend_remap[1], {"id": 2, "name": "block-2", "refs": [1, 1, 1]})
+
         scene = page.locator("#scene")
         first = page.locator('.block-item[data-block-id="1"]')
         second = page.locator('.block-item[data-block-id="2"]')
@@ -329,9 +356,21 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
 
         page.locator('.block-item[data-block-id="2"] .block-main').click()
         page.locator("#block-name").fill("custom-right")
-        page.locator("#reset-block-names").click()
-        self.expect(page.locator('.block-item[data-block-id="2"] strong')).to_have_text("2: block-1")
-        self.expect(page.locator('.block-item[data-block-id="1"] strong')).to_have_text("1: block-2")
+        page.locator("#renumber-blocks").click()
+        self.expect(page.locator(".block-item").first).to_have_attribute("data-block-id", "1")
+        self.expect(page.locator(".block-item").first.locator("strong")).to_have_text("1: block-1")
+        self.expect(page.locator(".block-item").nth(1)).to_have_attribute("data-block-id", "2")
+        self.expect(page.locator(".block-item").nth(1).locator("strong")).to_have_text("2: block-2")
+        self.expect(scene).to_have_attribute("data-primary-block", "1")
+        self.assertEqual(page.locator('[data-field="lmin"][data-index="0"]').input_value(), "1")
+        with page.expect_download() as download_info:
+            page.locator("#download-json").click()
+        renumbered = json.loads(Path(download_info.value.path()).read_text(encoding="utf-8"))
+        self.assertEqual([block["id"] for block in renumbered["blocks"]], [1, 2])
+        self.assertEqual([block["name"] for block in renumbered["blocks"]], ["block-1", "block-2"])
+        self.assertEqual([block["lmin"][0] for block in renumbered["blocks"]], [1.0, 0.0])
+        self.assertEqual(renumbered["blocks"][0]["bcpre"][0], 2)
+        self.assertEqual(renumbered["blocks"][1]["bcpre"][1], 1)
         page.wait_for_timeout(300)
         page.locator("#add-block").click()
         self.expect(page.locator(".block-item")).to_have_count(3)

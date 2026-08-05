@@ -17,6 +17,7 @@ import {
   normalizedPeriodicAxes,
   normalizedScalarCount,
   propagateMpiPartition,
+  renumberBlocksByOrder,
   rescaleExplicitFaces,
   resetFriendBoundaries,
 } from "./block-model.js";
@@ -171,7 +172,7 @@ function bindElements() {
     "reset-project",
     "status",
     "block-list",
-    "reset-block-names",
+    "renumber-blocks",
     "add-block",
     "add-adjacent",
     "adjacent-face",
@@ -294,7 +295,7 @@ function bindStaticEvents() {
     markProjectDirty();
   });
   els.addBlock.addEventListener("click", addFreeBlock);
-  els.resetBlockNames.addEventListener("click", resetBlockNames);
+  els.renumberBlocks.addEventListener("click", renumberBlocksFromOrder);
   els.addAdjacent.addEventListener("click", addAdjacentBlock);
   els.duplicateArray.addEventListener("click", () => applyGeometryOperation("duplicate"));
   els.mirrorBlocks.addEventListener("click", () => applyGeometryOperation("mirror"));
@@ -518,7 +519,7 @@ function renderAll() {
   if (!["single", "double"].includes(project.externalGridPrecision)) project.externalGridPrecision = "double";
   els.gridPrecision.value = project.externalGridPrecision;
   els.gridPrecision.disabled = !project.writeExternalGrid;
-  els.resetBlockNames.disabled = !project.blocks.length;
+  els.renumberBlocks.disabled = !project.blocks.length;
   els.addAdjacent.disabled = !selectedBlock();
   for (const button of [els.duplicateArray, els.mirrorBlocks, els.alignBlocks, els.snapBlock]) {
     button.disabled = !selectedBlock();
@@ -675,18 +676,24 @@ function finishBlockReorder(block, index) {
   setStatus(`Moved ${blockLabel(block)} to position ${index + 1}`);
 }
 
-function resetBlockNames() {
-  const changed = project.blocks.filter((block, index) => block.name !== `block-${index + 1}`);
-  if (!changed.length) {
-    setStatus("Block names already follow the list order");
+function renumberBlocksFromOrder() {
+  const changed = project.blocks.some((block, index) =>
+    block.id !== index + 1 || block.name !== `block-${index + 1}`
+  );
+  if (!changed) {
+    setStatus("Block IDs and names already follow the list order");
     return;
   }
-  project.blocks.forEach((block, index) => {
-    block.name = `block-${index + 1}`;
-  });
+  const idMap = renumberBlocksByOrder(project.blocks);
+  selectedId = idMap.get(selectedId) ?? null;
+  selectedIds = new Set([...selectedIds].map((id) => idMap.get(id)).filter((id) => id != null));
+  hiddenBlockIds = new Set([...hiddenBlockIds].map((id) => idMap.get(id)).filter((id) => id != null));
+  activeDiagnostic = null;
+  previewCache.clear();
+  previewSequence += 1;
   markProjectDirty();
   renderAll();
-  setStatus("Reset block names from the current list order");
+  setStatus("Renumbered block IDs and names from the current list order");
 }
 
 function renderInspector() {
