@@ -200,6 +200,11 @@ base-plus-remainder decomposition as `initmpi`, so they show the actual local
 subdomain cuts for the selected block.
 The `+X/-X`, `+Y/-Y`, and `+Z/-Z` buttons provide fitted orthographic views
 with pan and zoom; `Fit` returns to the free-orbit perspective view.
+`Fit selection` frames the checked blocks without changing the active view.
+Checked blocks can also be hidden or isolated, and `Show all` restores the full
+scene. The clipping tool exposes an X/Y/Z section plane with position and
+direction controls. These inspection settings affect only the viewport; they
+are not stored in the project or written to SNaC case files.
 The grid-line button toggles a sparse 3D view of the selected block's actual
 face coordinates, including imported and repaired explicit grids.
 After `Check` or `Update`, connected faces are outlined by their normal-spacing

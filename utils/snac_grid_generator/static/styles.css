@@ -122,6 +122,60 @@ select {
   font-weight: 700;
 }
 
+.clip-tools {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  width: min(440px, calc(100% - 28px));
+  display: grid;
+  grid-template-columns: auto minmax(100px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(29, 34, 40, 0.96);
+  transform: translateX(-50%);
+}
+
+.clip-tools[hidden] {
+  display: none;
+}
+
+.clip-axis {
+  display: grid;
+  grid-template-columns: repeat(3, 30px);
+}
+
+.clip-axis button {
+  height: 30px;
+  border: 1px solid var(--line);
+  border-right: 0;
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.clip-axis button:first-child {
+  border-radius: 5px 0 0 5px;
+}
+
+.clip-axis button:last-child {
+  border-right: 1px solid var(--line);
+  border-radius: 0 5px 5px 0;
+}
+
+.clip-axis button.active {
+  background: #1f2d29;
+  color: var(--accent-strong);
+  border-color: #326b55;
+}
+
+.clip-tools input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent-strong);
+}
+
 .field {
   display: grid;
   gap: 4px;
@@ -269,6 +323,10 @@ select {
 .block-item.selected {
   border-color: var(--accent);
   background: #1f2d29;
+}
+
+.block-item.hidden-block {
+  opacity: 0.48;
 }
 
 .swatch {
