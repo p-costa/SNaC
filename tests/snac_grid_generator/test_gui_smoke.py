@@ -122,6 +122,23 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
                 self.expect(page.locator("#scene")).to_have_attribute("data-projection", "orthographic")
                 self.expect(page.locator("#scene")).to_have_attribute("data-view", view)
                 self.expect(button).to_have_attribute("aria-pressed", "true")
+            axis_button = page.locator('[data-axis-view="+x"]')
+            axis_button.click()
+            canvas = page.locator("#scene").bounding_box()
+            self.assertIsNotNone(canvas)
+            page.mouse.move(canvas["x"] + canvas["width"] * 0.5, canvas["y"] + canvas["height"] * 0.5)
+            page.mouse.down()
+            page.mouse.move(
+                canvas["x"] + canvas["width"] * 0.65,
+                canvas["y"] + canvas["height"] * 0.6,
+                steps=6,
+            )
+            page.mouse.up()
+            self.expect(page.locator("#scene")).to_have_attribute("data-projection", "orthographic")
+            self.expect(page.locator("#scene")).to_have_attribute("data-view", "free-orthographic")
+            self.expect(axis_button).to_have_attribute("aria-pressed", "false")
+            page.locator("#focus-selection").click()
+            self.expect(page.locator("#scene")).to_have_attribute("data-view", "free-orthographic")
             page.locator("#fit-view").click()
             self.expect(page.locator("#scene")).to_have_attribute("data-projection", "perspective")
             self.expect(page.locator("#scene")).to_have_attribute("data-view", "3d")

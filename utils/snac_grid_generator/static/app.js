@@ -443,6 +443,7 @@ function initScene() {
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.screenSpacePanning = true;
+  controls.addEventListener("change", handleCameraChange);
   raycaster = new THREE.Raycaster();
   pointer = new THREE.Vector2();
   blockGroup = new THREE.Group();
@@ -2340,7 +2341,11 @@ function focusSelection() {
     return;
   }
   if (camera.isOrthographicCamera) {
-    setAxisView(els.scene.dataset.view, blocks);
+    if (axisViewDirection(els.scene.dataset.view)) {
+      setAxisView(els.scene.dataset.view, blocks);
+    } else {
+      frameOrthographic(blocks);
+    }
   } else {
     framePerspective(blocks, camera.position.clone().sub(controls.target));
   }
@@ -2364,14 +2369,13 @@ function framePerspective(blocks, direction) {
 }
 
 function setAxisView(view, blocks = visibleBlocks()) {
-  const axisIndex = AXES.indexOf(view?.slice(1));
-  const sign = view?.startsWith("-") ? -1 : 1;
-  if (axisIndex < 0) return;
+  const direction = axisViewDirection(view);
+  if (!direction) return;
+  const axisIndex = AXES.indexOf(view.slice(1));
 
   const box = projectBox(blocks);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
-  const direction = new THREE.Vector3().setComponent(axisIndex, sign);
   const up = axisIndex === 2
     ? new THREE.Vector3(0, 1, 0)
     : new THREE.Vector3(0, 0, 1);
@@ -2390,13 +2394,66 @@ function setAxisView(view, blocks = visibleBlocks()) {
   orthographicCamera.far = Math.max(10000, distance * 4);
   orthographicCamera.zoom = 1;
   activateCamera(orthographicCamera, view);
-  controls.enableRotate = false;
+  controls.enableRotate = true;
   controls.target.copy(center);
   updateOrthographicProjection(renderer.domElement.clientWidth / renderer.domElement.clientHeight);
   controls.update();
   gridHelper.position.copy(center);
   gridHelper.scale.setScalar(Math.max(1, radius / 5));
   els.scene.dataset.framedBlocks = blocks.map((block) => block.id).join(",");
+}
+
+function frameOrthographic(blocks) {
+  const box = projectBox(blocks);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const offset = camera.position.clone().sub(controls.target);
+  const direction = offset.lengthSq() > 0
+    ? offset.normalize()
+    : new THREE.Vector3(1.6, -2.2, 1.45).normalize();
+  const radius = Math.max(size.x, size.y, size.z, 1);
+
+  orthographicCamera.position.copy(center).addScaledVector(direction, radius * 2.5);
+  orthographicCamera.near = 0.01;
+  orthographicCamera.far = Math.max(10000, radius * 10);
+  orthographicCamera.zoom = 1;
+  controls.target.copy(center);
+  controls.update();
+
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+  orthographicViewSize = {
+    width: Math.max(projectedExtent(size, right), 1e-9),
+    height: Math.max(projectedExtent(size, up), 1e-9),
+  };
+  updateOrthographicProjection(renderer.domElement.clientWidth / renderer.domElement.clientHeight);
+  gridHelper.position.copy(center);
+  gridHelper.scale.setScalar(Math.max(1, radius / 5));
+  els.scene.dataset.framedBlocks = blocks.map((block) => block.id).join(",");
+}
+
+function projectedExtent(size, direction) {
+  return size.x * Math.abs(direction.x)
+    + size.y * Math.abs(direction.y)
+    + size.z * Math.abs(direction.z);
+}
+
+function axisViewDirection(view) {
+  const axisIndex = AXES.indexOf(view?.slice(1));
+  if (axisIndex < 0) return null;
+  const sign = view.startsWith("-") ? -1 : 1;
+  return new THREE.Vector3().setComponent(axisIndex, sign);
+}
+
+function handleCameraChange() {
+  if (!camera?.isOrthographicCamera) return;
+  const expectedDirection = axisViewDirection(els.scene.dataset.view);
+  if (!expectedDirection) return;
+  const direction = camera.position.clone().sub(controls.target);
+  if (direction.lengthSq() === 0) return;
+  if (direction.normalize().dot(expectedDirection) < 1.0 - 1e-10) {
+    setViewState("free-orthographic");
+  }
 }
 
 function activateCamera(nextCamera, view) {
@@ -2408,6 +2465,10 @@ function activateCamera(nextCamera, view) {
     camera.updateProjectionMatrix();
   }
   els.scene.dataset.projection = camera.isOrthographicCamera ? "orthographic" : "perspective";
+  setViewState(view);
+}
+
+function setViewState(view) {
   els.scene.dataset.view = view;
   for (const button of document.querySelectorAll("[data-axis-view]")) {
     const active = button.dataset.axisView === view;

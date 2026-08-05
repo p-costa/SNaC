@@ -199,7 +199,8 @@ velocity-component codes are amber. MPI partition planes use the same
 base-plus-remainder decomposition as `initmpi`, so they show the actual local
 subdomain cuts for the selected block.
 The `+X/-X`, `+Y/-Y`, and `+Z/-Z` buttons provide fitted orthographic views
-with pan and zoom; `Fit` returns to the free-orbit perspective view.
+with pan, zoom, and free rotation. Rotating keeps the orthographic projection
+but leaves the exact axis view; `Fit` returns to the free-orbit perspective view.
 `Fit selection` frames the checked blocks without changing the active view.
 Checked blocks can also be hidden or isolated, and `Show all` restores the full
 scene. The clipping tool exposes an X/Y/Z section plane with position and
