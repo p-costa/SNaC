@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from utils.snac_grid_generator import (
+    MIN_LOCAL_CELLS,
     Project,
     apply_axis_to_aligned_blocks,
     axis_grid_arrays,
@@ -16,6 +17,8 @@ from utils.snac_grid_generator import (
     check_project,
     export_project,
     fit_monotone_spacing,
+    optimize_project_decomposition,
+    repair_project_grids,
     solve_spacing,
     update_project_structure,
 )
@@ -484,6 +487,20 @@ class GridGeneratorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "schema version"):
             Project.from_dict({"schemaVersion": 2, "blocks": []})
 
+    def test_project_json_preserves_decomposition_and_axis_locks(self) -> None:
+        project = Project.from_dict(
+            {
+                "decomposition": {"targetRanks": 64, "mode": "2d", "axes": [True, True, False]},
+                "blocks": [{"id": 1, "axisLocks": [False, True, False]}],
+            }
+        )
+        saved = project.to_dict()
+        self.assertEqual(saved["decomposition"]["targetRanks"], 64)
+        self.assertEqual(saved["decomposition"]["mode"], "2d")
+        self.assertEqual(saved["decomposition"]["axes"], [True, True, False])
+        self.assertEqual(saved["blocks"][0]["axisLocks"], [False, True, False])
+        self.assertEqual(Project.from_dict(saved).to_dict(), saved)
+
     def test_check_rejects_disconnected_blocks(self) -> None:
         project = Project.from_dict(
             {
@@ -596,6 +613,193 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertEqual(changed, [3])
         self.assertEqual(transverse.blocks[1].ng[0], 20)
         self.assertEqual(transverse.blocks[2].ng[0], 12)
+
+    def test_repair_propagates_selected_tangential_grid(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "ng": [12, 17, 8],
+                        "lmin": [0, 0, 0],
+                        "lmax": [1, 1, 1],
+                        "axes": {"y": {"kind": "simple_ratio", "ratio": 3}},
+                    },
+                    {"id": 2, "ng": [20, 9, 8], "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+                ],
+            }
+        )
+        repaired, result = repair_project_grids(project, source_block_id=1)
+        self.assertTrue(result.ok, result.errors)
+        self.assertEqual([change.to_dict() for change in result.changes], [
+            {"blockId": 2, "axis": "y", "sourceBlockId": 1, "oldN": 9, "newN": 17}
+        ])
+        self.assertEqual(repaired.blocks[1].ng, [20, 17, 8])
+        self.assertEqual(repaired.blocks[1].axes["y"].ratio, 3.0)
+
+    def test_repair_respects_locks_and_rejects_locked_conflicts(self) -> None:
+        raw = {
+            "blocks": [
+                {
+                    "id": 1,
+                    "ng": [8, 12, 8],
+                    "lmin": [0, 0, 0],
+                    "lmax": [1, 1, 1],
+                    "axes": {"y": {"kind": "simple_ratio", "ratio": 2}},
+                },
+                {
+                    "id": 2,
+                    "ng": [8, 20, 8],
+                    "lmin": [1, 0, 0],
+                    "lmax": [2, 1, 1],
+                    "axes": {"y": {"kind": "simple_ratio", "ratio": 4}},
+                    "axisLocks": [False, True, False],
+                },
+            ],
+        }
+        repaired, result = repair_project_grids(raw, source_block_id=1)
+        self.assertTrue(result.ok, result.errors)
+        self.assertEqual(repaired.blocks[0].ng[1], 20)
+        self.assertEqual(result.changes[0].source_block_id, 2)
+
+        raw["blocks"][0]["axisLocks"] = [False, True, False]
+        raw["blocks"][1]["ng"][2] = 10
+        failed, result = repair_project_grids(raw, source_block_id=1)
+        self.assertFalse(result.ok)
+        self.assertTrue(any("locked y grids conflict" in error for error in result.errors))
+        self.assertEqual(failed.blocks[1].ng[2], 10)
+        self.assertEqual(result.changes, [])
+
+    def test_decomposition_balances_unequal_blocks_exactly(self) -> None:
+        project = Project.from_dict(
+            {
+                "decomposition": {"targetRanks": 20, "mode": "1d", "axes": [True, False, False]},
+                "blocks": [
+                    {"id": 1, "ng": [128, 64, 64], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "ng": [32, 64, 64], "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+                ],
+            }
+        )
+        decomposed, result = optimize_project_decomposition(project)
+        self.assertTrue(result.ok, result.errors)
+        self.assertEqual([block.dims for block in decomposed.blocks], [[16, 1, 1], [4, 1, 1]])
+        self.assertEqual(result.total_ranks, 20)
+        self.assertEqual(result.active_axes, ("x",))
+        self.assertAlmostEqual(result.imbalance, 1.0)
+        _, structured = update_project_structure(decomposed)
+        self.assertTrue(structured.ok, structured.errors)
+
+    def test_decomposition_modes_obey_topology(self) -> None:
+        for mode, expected_axes in (("1d", 1), ("2d", 2), ("3d", 3)):
+            project = Project.from_dict(
+                {
+                    "decomposition": {"targetRanks": 16, "mode": mode, "axes": [True, True, True]},
+                    "blocks": [
+                        {"id": 1, "ng": [64, 32, 16], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                        {"id": 2, "ng": [64, 32, 16], "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+                    ],
+                }
+            )
+            with self.subTest(mode=mode):
+                decomposed, result = optimize_project_decomposition(project)
+                self.assertTrue(result.ok, result.errors)
+                self.assertEqual(len(result.active_axes), expected_axes)
+                self.assertEqual(sum(np.prod(block.dims) for block in decomposed.blocks), 16)
+                self.assertEqual(decomposed.blocks[0].dims[1:], decomposed.blocks[1].dims[1:])
+
+    def test_decomposition_allows_one_serial_rank_per_block_in_any_mode(self) -> None:
+        project = Project.from_dict(
+            {
+                "decomposition": {"targetRanks": 2, "mode": "3d", "axes": [True, True, True]},
+                "blocks": [
+                    {"id": 1, "ng": [8, 8, 8], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "ng": [8, 8, 8], "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+                ],
+            }
+        )
+        decomposed, result = optimize_project_decomposition(project)
+        self.assertTrue(result.ok, result.errors)
+        self.assertEqual(result.active_axes, ())
+        self.assertEqual([block.dims for block in decomposed.blocks], [[1, 1, 1], [1, 1, 1]])
+
+    def test_decomposition_rejects_disconnected_blocks(self) -> None:
+        project = Project.from_dict(
+            {
+                "decomposition": {"targetRanks": 4, "mode": "auto"},
+                "blocks": [
+                    {"id": 1, "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "lmin": [2, 0, 0], "lmax": [3, 1, 1]},
+                ],
+            }
+        )
+        _, result = optimize_project_decomposition(project)
+        self.assertFalse(result.ok)
+        self.assertTrue(any("disconnected" in error for error in result.errors))
+
+    def test_decomposition_reports_nearby_counts_when_exact_is_impossible(self) -> None:
+        project = Project.from_dict(
+            {
+                "decomposition": {"targetRanks": 5, "mode": "1d", "axes": [False, True, False]},
+                "blocks": [
+                    {"id": 1, "ng": [32, 32, 8], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "ng": [32, 32, 8], "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+                ],
+            }
+        )
+        _, result = optimize_project_decomposition(project)
+        self.assertFalse(result.ok)
+        self.assertIn(4, result.nearby_ranks)
+        self.assertIn(6, result.nearby_ranks)
+
+    def test_large_decompositions_remain_balanced_and_well_shaped(self) -> None:
+        for target in (512, 1024, 2048):
+            project = Project.from_dict(
+                {
+                    "decomposition": {"targetRanks": target, "mode": "3d"},
+                    "blocks": [
+                        {
+                            "id": block_id,
+                            "ng": [nx, 128, 128],
+                            "lmin": [block_id - 1, 0, 0],
+                            "lmax": [block_id, 1, 1],
+                        }
+                        for block_id, nx in enumerate((128, 64, 128, 64), 1)
+                    ],
+                }
+            )
+            with self.subTest(target=target):
+                decomposed, result = optimize_project_decomposition(project, time_limit=0.5)
+                self.assertTrue(result.ok, result.errors)
+                self.assertEqual(sum(np.prod(block.dims) for block in decomposed.blocks), target)
+                self.assertLessEqual(result.imbalance, 1.1)
+                self.assertLessEqual(result.max_local_aspect, 2.0)
+                for block in decomposed.blocks:
+                    for cells, partitions in zip(block.ng, block.dims):
+                        if partitions > 1:
+                            self.assertGreaterEqual(cells // partitions, MIN_LOCAL_CELLS)
+
+    def test_check_enforces_requested_rank_count_and_disabled_axes(self) -> None:
+        project = Project.from_dict(
+            {
+                "decomposition": {"targetRanks": 8, "mode": "1d", "axes": [True, False, False]},
+                "blocks": [{"id": 1, "dims": [2, 2, 1], "ng": [16, 16, 8]}],
+            }
+        )
+        result = check_project(project)
+        self.assertFalse(result.ok)
+        self.assertTrue(any("uses 4 ranks, expected 8" in error for error in result.errors))
+        self.assertTrue(any("disabled y" in error for error in result.errors))
+
+    def test_export_rejects_stale_requested_rank_count(self) -> None:
+        project = Project.from_dict(
+            {
+                "decomposition": {"targetRanks": 8, "mode": "auto"},
+                "blocks": [{"id": 1, "dims": [2, 2, 1], "ng": [16, 16, 8]}],
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaisesRegex(ValueError, "uses 4 ranks, expected 8"):
+                export_project(project, tmp)
 
     def test_check_rejects_broken_manual_friend_value(self) -> None:
         project = Project.from_dict(

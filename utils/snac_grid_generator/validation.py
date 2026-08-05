@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from math import isclose
+from math import isclose, prod
 from typing import Any
 
 import numpy as np
@@ -82,6 +82,36 @@ class CheckResult:
         return {"ok": self.ok, "errors": self.errors, "warnings": self.warnings}
 
 
+@dataclass(frozen=True)
+class GridRepair:
+    """One proposed axis-grid replacement."""
+
+    block_id: int
+    axis: str
+    source_block_id: int
+    old_n: int
+    new_n: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "blockId": self.block_id,
+            "axis": self.axis,
+            "sourceBlockId": self.source_block_id,
+            "oldN": self.old_n,
+            "newN": self.new_n,
+        }
+
+
+@dataclass
+class RepairResult(CheckResult):
+    """Validation messages and replacements proposed by grid repair."""
+
+    changes: list[GridRepair] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {**super().to_dict(), "changes": [change.to_dict() for change in self.changes]}
+
+
 @dataclass
 class _Topology:
     connections: list[FaceConnection] = field(default_factory=list)
@@ -106,6 +136,7 @@ def check_project(project: Project | dict[str, Any]) -> CheckResult:
     result.errors.extend(_check_boundary_pairs(project.blocks))
     result.errors.extend(_check_friend_boundaries(project.blocks, topology.connections))
     result.errors.extend(_check_connected_block_grids(by_id, topology.connections))
+    result.errors.extend(_check_decomposition_request(project))
     result.warnings.extend(_check_spacing_jumps(by_id, topology.connections))
     return result
 
@@ -192,6 +223,65 @@ def apply_axis_to_aligned_blocks(
         changed.append(block_id)
     project.validate()
     return project, changed
+
+
+def repair_project_grids(
+    project: Project | dict[str, Any],
+    source_block_id: int | None = None,
+) -> tuple[Project, RepairResult]:
+    """Propose congruent tangential grids using locks and selected-block authority."""
+
+    original = _project_copy(project)
+    project = _project_copy(original)
+    result = RepairResult()
+    topology = _build_topology(project.blocks, project.periodic_axes)
+    result.errors.extend(topology.errors)
+    result.warnings.extend(topology.warnings)
+    if result.errors:
+        return original, result
+
+    by_id = {block.id: block for block in project.blocks}
+    selected = source_block_id if source_block_id in by_id else None
+    for axis_index, axis in enumerate(AXIS_NAMES):
+        for component in _axis_components(project.blocks, topology.connections, axis_index):
+            if len(component) < 2:
+                continue
+            locked = sorted(block_id for block_id in component if by_id[block_id].axis_locks[axis_index])
+            if len(locked) > 1:
+                reference = by_id[locked[0]]
+                conflicts = [
+                    block_id
+                    for block_id in locked[1:]
+                    if not _same_axis_grid(reference, by_id[block_id], axis_index)
+                ]
+                if conflicts:
+                    result.errors.append(
+                        f"locked {axis} grids conflict between blocks {locked[0]} and {conflicts}"
+                    )
+                    continue
+            owner_id = locked[0] if locked else selected if selected in component else min(component)
+            owner = by_id[owner_id]
+            for block_id in sorted(component):
+                if block_id == owner_id:
+                    continue
+                block = by_id[block_id]
+                if block.axis_locks[axis_index] and not _same_axis_grid(owner, block, axis_index):
+                    result.errors.append(
+                        f"block {block_id}: locked {axis} grid conflicts with authoritative block {owner_id}"
+                    )
+                    continue
+                if _same_axis_grid(owner, block, axis_index):
+                    continue
+                old_n = block.ng[axis_index]
+                block.axes[axis] = AxisSpec.from_dict(owner.axes[axis].to_dict())
+                block.ng[axis_index] = owner.ng[axis_index]
+                result.changes.append(GridRepair(block_id, axis, owner_id, old_n, block.ng[axis_index]))
+
+    if result.errors:
+        result.changes.clear()
+        return original, result
+    project.validate()
+    return project, result
 
 
 def _project_copy(project: Project | dict[str, Any]) -> Project:
@@ -311,6 +401,53 @@ def _add_connection(
     topology.connections.append(connection)
 
 
+def _axis_components(
+    blocks: list[Block],
+    connections: list[FaceConnection],
+    axis_index: int,
+) -> list[set[int]]:
+    graph: dict[int, set[int]] = {block.id: set() for block in blocks}
+    for connection in connections:
+        if connection.axis_index == axis_index:
+            continue
+        graph[connection.a_id].add(connection.b_id)
+        graph[connection.b_id].add(connection.a_id)
+
+    result: list[set[int]] = []
+    unseen = set(graph)
+    while unseen:
+        seed = min(unseen)
+        component = {seed}
+        queue = [seed]
+        unseen.remove(seed)
+        while queue:
+            current = queue.pop(0)
+            for neighbor in graph[current]:
+                if neighbor in unseen:
+                    unseen.remove(neighbor)
+                    component.add(neighbor)
+                    queue.append(neighbor)
+        result.append(component)
+    return result
+
+
+def _same_axis_grid(a: Block, b: Block, axis_index: int) -> bool:
+    if not (
+        _touches(a.lmin[axis_index], b.lmin[axis_index])
+        and _touches(a.lmax[axis_index], b.lmax[axis_index])
+    ):
+        return False
+    try:
+        a_faces = _interior_faces(a, axis_index)
+        b_faces = _interior_faces(b, axis_index)
+    except Exception:
+        return False
+    if a_faces.shape != b_faces.shape:
+        return False
+    scale = max(1.0, abs(a.lmax[axis_index] - a.lmin[axis_index]))
+    return float(np.max(np.abs(a_faces - b_faces))) <= GRID_TOL * scale
+
+
 def _check_block_basics(blocks: list[Block]) -> list[str]:
     errors: list[str] = []
     for block in blocks:
@@ -321,6 +458,34 @@ def _check_block_basics(blocks: list[Block]) -> list[str]:
                 axis_grid_arrays(block.axes[axis].to_dict(), block.lmin[idx], block.lmax[idx], block.ng[idx])
             except Exception as exc:
                 errors.append(f"block {block.id}: invalid {axis} grid ({exc})")
+    return errors
+
+
+def _check_decomposition_request(project: Project) -> list[str]:
+    target = project.decomposition.target_ranks
+    if target == 0:
+        return []
+    errors: list[str] = []
+    if target < len(project.blocks):
+        errors.append(f"target MPI ranks must be at least the number of blocks ({len(project.blocks)})")
+    total = sum(prod(block.dims) for block in project.blocks)
+    if total != target:
+        errors.append(f"MPI decomposition uses {total} ranks, expected {target}")
+
+    active = set()
+    for axis_index, axis in enumerate(AXIS_NAMES):
+        if any(block.dims[axis_index] > 1 for block in project.blocks):
+            active.add(axis_index)
+        if not project.decomposition.axes[axis_index] and any(
+            block.dims[axis_index] > 1 for block in project.blocks
+        ):
+            errors.append(f"MPI decomposition uses disabled {axis} partitions")
+    if project.decomposition.mode != "auto" and target > len(project.blocks):
+        expected = int(project.decomposition.mode[0])
+        if len(active) != expected:
+            errors.append(
+                f"{project.decomposition.mode} decomposition requires {expected} active axes, found {len(active)}"
+            )
     return errors
 
 
