@@ -1,9 +1,4 @@
-"""Grid spacing and SNaC binary-grid helpers.
-
-The functions in this module intentionally mirror ``src/initgrid.f90`` for the
-native SNaC mapping functions, and add OpenFOAM-style multi-grading as an
-external-grid option.
-"""
+"""Reusable one-dimensional grid spacing and grading helpers."""
 
 from __future__ import annotations
 
@@ -13,18 +8,12 @@ from typing import Callable, Sequence
 
 import numpy as np
 
+from .numeric import geometry_tolerance
+from .snac_grid import SNAC_GRID_FUNCTIONS, native_faces
+
 AXIS_NAMES = ("x", "y", "z")
 
-GRID_FUNCTIONS = {
-    0: "Cluster both ends",
-    1: "Cluster lower end",
-    2: "Cluster middle",
-    3: "Cluster upper end",
-    4: "Geometric lower end",
-    5: "Geometric upper end",
-    6: "Geometric both ends",
-    7: "Geometric middle",
-}
+GRID_FUNCTIONS = SNAC_GRID_FUNCTIONS
 
 _REL_TOL = 1.0e-11
 _RMAX = 1.0e5
@@ -32,25 +21,12 @@ _RMAX = 1.0e5
 
 @dataclass(frozen=True)
 class GridArrays:
-    """SNaC-compatible one-dimensional grid arrays for one block axis."""
+    """One-dimensional face, center, and spacing arrays."""
 
     faces: np.ndarray
     centers: np.ndarray
     face_spacing: np.ndarray
     center_spacing: np.ndarray
-
-    @property
-    def binary_payload(self) -> np.ndarray:
-        """Return the array order written by ``save_grid`` in SNaC."""
-
-        return np.concatenate(
-            (
-                self.faces[1:-1],
-                self.centers[1:-1],
-                self.face_spacing[1:-1],
-                self.center_spacing[1:-1],
-            )
-        ).astype("<f8", copy=False)
 
 
 @dataclass(frozen=True)
@@ -274,7 +250,7 @@ def fit_min_max_cell_count(axis: dict, length: float, *, max_cells: int = 1_000_
 
 
 def axis_grid_arrays(axis: dict, lmin: float, lmax: float, n: int) -> GridArrays:
-    """Build SNaC grid arrays for one axis specification."""
+    """Build grid arrays for one axis specification."""
 
     if n < 1:
         raise ValueError("axis grid must contain at least one cell")
@@ -285,7 +261,7 @@ def axis_grid_arrays(axis: dict, lmin: float, lmax: float, n: int) -> GridArrays
     length = float(lmax) - float(lmin)
 
     if kind == "snac":
-        faces = _snac_faces(
+        faces = native_faces(
             n=n,
             lmin=float(lmin),
             lmax=float(lmax),
@@ -303,6 +279,16 @@ def axis_grid_arrays(axis: dict, lmin: float, lmax: float, n: int) -> GridArrays
     elif kind == "max_min":
         widths = _max_min_widths(length, n, axis)
         faces = np.concatenate(([float(lmin)], float(lmin) + np.cumsum(widths)))
+    elif kind == "explicit":
+        faces = np.asarray(axis.get("faces", []), dtype=float)
+        if faces.size != n + 1:
+            raise ValueError(f"explicit grid has {faces.size} faces, expected {n + 1}")
+        if not np.all(np.isfinite(faces)) or np.any(np.diff(faces) <= 0.0):
+            raise ValueError("explicit grid faces must be finite and strictly increasing")
+        tolerance = geometry_tolerance(float(faces[0]), float(faces[-1]), lmin, lmax, scale=length)
+        if abs(float(faces[0]) - float(lmin)) > tolerance or abs(float(faces[-1]) - float(lmax)) > tolerance:
+            raise ValueError("explicit grid faces must span the axis extent")
+        faces = faces.copy()
     else:
         raise ValueError(f"unknown axis grid kind {kind!r}")
 
@@ -816,15 +802,6 @@ def _map_one_end(alpha: float, r0: float, profile: str) -> float:
     return 1.0 + erf((r0 - 1.0) * alpha) / erf(alpha)
 
 
-def _snac_faces(n: int, lmin: float, lmax: float, gt: int, gr: float) -> np.ndarray:
-    mapper = _SNAC_MAPPERS.get(gt, _gridpoint_cluster_two_end)
-    r0 = np.arange(1, n + 1, dtype=float) / float(n)
-    mapped = np.array([mapper(gr, value) for value in r0], dtype=float)
-    faces = np.concatenate(([lmin], lmin + mapped * (lmax - lmin)))
-    faces[-1] = lmax
-    return faces
-
-
 def _arrays_from_faces(faces: np.ndarray) -> GridArrays:
     if faces.ndim != 1 or faces.size < 2:
         raise ValueError("faces must be a one-dimensional array with at least two entries")
@@ -864,69 +841,6 @@ def _arrays_from_faces(faces: np.ndarray) -> GridArrays:
         face_spacing=face_spacing,
         center_spacing=center_spacing,
     )
-
-
-def _gridpoint_cluster_two_end(alpha: float, r0: float) -> float:
-    if alpha != 0.0:
-        return 0.5 * (1.0 + tanh((r0 - 0.5) * alpha) / tanh(alpha / 2.0))
-    return r0
-
-
-def _gridpoint_cluster_one_end(alpha: float, r0: float) -> float:
-    if alpha != 0.0:
-        return 1.0 + tanh((r0 - 1.0) * alpha) / tanh(alpha)
-    return r0
-
-
-def _gridpoint_cluster_one_end_r(alpha: float, r0: float) -> float:
-    if alpha != 0.0:
-        return 1.0 - (1.0 + tanh(((1.0 - r0) - 1.0) * alpha) / tanh(alpha))
-    return r0
-
-
-def _gridpoint_cluster_middle(alpha: float, r0: float) -> float:
-    if alpha == 0.0:
-        return r0
-    if r0 <= 0.5:
-        return 0.5 * tanh(2.0 * alpha * r0) / tanh(alpha)
-    return 0.5 * (2.0 + tanh(2.0 * alpha * (r0 - 1.0)) / tanh(alpha))
-
-
-def _gridpoint_cluster_geometric_one_end(alpha: float, r0: float) -> float:
-    power_value = 1.0 / 3.0
-    if r0 == 1.0:
-        return r0
-    if alpha == 0.0:
-        return r0
-    return r0 * (((1.0 - r0**alpha) / (1.0 - r0) / alpha) ** power_value)
-
-
-def _gridpoint_cluster_geometric_one_end_r(alpha: float, r0: float) -> float:
-    return 1.0 - _gridpoint_cluster_geometric_one_end(alpha, 1.0 - r0)
-
-
-def _gridpoint_cluster_geometric_two_ends(alpha: float, r0: float) -> float:
-    if r0 <= 0.5:
-        return 0.5 * _gridpoint_cluster_geometric_one_end(alpha / 2.0, 2.0 * r0)
-    return 1.0 - 0.5 * _gridpoint_cluster_geometric_one_end(alpha / 2.0, 2.0 * (1.0 - r0))
-
-
-def _gridpoint_cluster_geometric_middle(alpha: float, r0: float) -> float:
-    if r0 <= 0.5:
-        return 0.5 * (1.0 - _gridpoint_cluster_geometric_one_end(alpha / 2.0, (0.5 - r0) * 2.0))
-    return 0.5 * (1.0 + _gridpoint_cluster_geometric_one_end(alpha / 2.0, (r0 - 0.5) * 2.0))
-
-
-_SNAC_MAPPERS: dict[int, Callable[[float, float], float]] = {
-    0: _gridpoint_cluster_two_end,
-    1: _gridpoint_cluster_one_end,
-    2: _gridpoint_cluster_middle,
-    3: _gridpoint_cluster_one_end_r,
-    4: _gridpoint_cluster_geometric_one_end,
-    5: _gridpoint_cluster_geometric_one_end_r,
-    6: _gridpoint_cluster_geometric_two_ends,
-    7: _gridpoint_cluster_geometric_middle,
-}
 
 
 def _sum_geometric(width_start: float, cell_ratio: float, n: int) -> float:

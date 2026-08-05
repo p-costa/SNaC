@@ -4,6 +4,8 @@
 *.bin
 *.MOD
 *.log
+*.egg-info/
+__pycache__/
 *dSYM
 *.xdmf
 *.xmf

@@ -1,20 +1,57 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
+import { postJson } from "./api.js";
+import {
+  AXES,
+  FACE_ORDER,
+  blockCenter,
+  blockSize,
+  defaultBlock,
+  ensureAxis,
+  ensureBoundaryArrays,
+  isCellCountDerived,
+  nextBlockId,
+  normalizedAxisLocks,
+  normalizedDecomposition,
+  normalizedPeriodicAxes,
+  normalizedScalarCount,
+  propagateMpiPartition,
+  rescaleExplicitFaces,
+  resetFriendBoundaries,
+} from "./block-model.js";
+import {
+  SnapshotHistory,
+  clearStoredProject,
+  loadStoredProject,
+  saveStoredProject,
+} from "./project-state.js";
+import {
+  LIBRARY_SCHEMA_VERSION,
+  applyAxisPreset,
+  captureAxisPreset,
+  captureProjectTemplate,
+  loadLibrary,
+  mergeLibraries,
+  normalizeLibrary,
+  removeLibraryItem,
+  renameLibraryItem,
+  replaceLibraryItem,
+  saveLibrary,
+} from "./library.js";
+import {
+  axisLabel,
+  clearDisposableGroup,
+  partitionFaceIndices,
+  planeOutlinePoints,
+  projectBox,
+} from "./scene-helpers.js";
+import {
+  SNAC_GRID_FUNCTIONS as GRID_FUNCTIONS,
+  SNAC_INITIAL_VELOCITY_FIELDS as INIT_FIELDS,
+} from "./snac.js";
+import { builtInAxisPresets, builtInProjectTemplates } from "./snac-templates.js";
 
-const AXES = ["x", "y", "z"];
-const FACE_ORDER = ["x-", "x+", "y-", "y+", "z-", "z+"];
-const INIT_FIELDS = ["zer", "uni", "cou", "poi", "log", "hcp", "hcl", "tgv"];
-const GRID_FUNCTIONS = [
-  "Cluster both ends",
-  "Cluster lower end",
-  "Cluster middle",
-  "Cluster upper end",
-  "Geometric lower end",
-  "Geometric upper end",
-  "Geometric both ends",
-  "Geometric middle",
-];
 const PROFILE_OPTIONS = [
   ["geometric", "Geometric"],
   ["tanh", "tanh"],
@@ -44,21 +81,28 @@ const BOUNDARY_COLORS = { D: 0xe46868, F: 0x43c989, N: 0x76a9ff, mixed: 0xd6bf5b
 
 let project = null;
 let selectedId = 1;
+let selectedIds = new Set([1]);
 let currentAxis = "x";
 let groundGridVisible = true;
 let boundaryColorsVisible = true;
 let partitionPlanesVisible = true;
+let gridLinesVisible = true;
+let spacingJumpsVisible = true;
 let blockTool = "select";
 let lastCheck = null;
+let activeDiagnostic = null;
 let pendingRepair = null;
 let decompositionResult = null;
 let previewTimer = null;
 let previewSequence = 0;
 const previewCache = new Map();
 let historyTimer = null;
-let historyIndex = -1;
-let projectHistory = [];
-const HISTORY_LIMIT = 100;
+const projectHistory = new SnapshotHistory(100);
+let pendingRecovery = null;
+let userLibrary = loadLibrary();
+let currentLibraryTab = "axisPresets";
+let selectedLibraryItem = "builtin:builtin-uniform-32";
+const AUTOSAVE_KEY = "snac-grid-generator-autosave-v1";
 
 const els = {};
 let scene;
@@ -73,11 +117,12 @@ let gridHelper;
 let axesGroup;
 let partitionGroup;
 let selectedGridGroup;
+let spacingJumpGroup;
+let diagnosticGroup;
 let transformControls;
 let selectedBlockMesh = null;
 let transformDrag = null;
 let isTransformDragging = false;
-const axisLabelMaterials = new Map();
 
 bootstrap();
 
@@ -88,8 +133,11 @@ async function bootstrap() {
   const response = await fetch("/api/sample");
   project = await response.json();
   selectedId = project.blocks[0]?.id ?? null;
+  selectedIds = new Set(selectedId == null ? [] : [selectedId]);
   renderAll();
-  resetHistory();
+  const recovery = loadAutosave();
+  resetHistory(false);
+  if (recovery) showRecoveryDialog(recovery);
   schedulePreview(selectedId, 0);
   animate();
 }
@@ -104,7 +152,9 @@ function bindElements() {
     "update-structure",
     "repair-grids",
     "download-json",
+    "import-case",
     "open-json",
+    "open-library",
     "undo-project",
     "redo-project",
     "reset-project",
@@ -114,11 +164,26 @@ function bindElements() {
     "add-adjacent",
     "adjacent-face",
     "adjacent-size",
+    "geometry-axis",
+    "array-count",
+    "array-gap",
+    "duplicate-array",
+    "mirror-plane",
+    "mirror-blocks",
+    "align-mode",
+    "align-blocks",
+    "snap-face",
+    "snap-block",
     "target-ranks",
+    "min-local-cells",
+    "max-local-aspect",
     "decomposition-mode",
     "decomposition-axes",
     "balance-decomposition",
     "decomposition-summary",
+    "download-report-json",
+    "download-report-markdown",
+    "quality-summary",
     "scene",
     "fit-view",
     "toggle-grid",
@@ -127,6 +192,8 @@ function bindElements() {
     "tool-scale",
     "toggle-boundaries",
     "toggle-partitions",
+    "toggle-grid-lines",
+    "toggle-spacing-jumps",
     "block-title",
     "remove-block",
     "block-name",
@@ -142,11 +209,34 @@ function bindElements() {
     "write-external-grid",
     "grid-source",
     "boundary-table",
+    "bc-preset",
+    "bc-preset-face",
+    "bc-preset-u",
+    "bc-preset-v",
+    "bc-preset-w",
+    "bc-preset-p",
+    "apply-bc-preset",
     "check-results",
     "repair-dialog",
     "repair-summary",
     "cancel-repair",
     "confirm-repair",
+    "recovery-dialog",
+    "recovery-summary",
+    "discard-recovery",
+    "restore-recovery",
+    "library-dialog",
+    "close-library",
+    "library-tabs",
+    "library-name",
+    "library-items",
+    "library-summary",
+    "apply-library-item",
+    "save-library-item",
+    "rename-library-item",
+    "delete-library-item",
+    "import-library",
+    "export-library",
   ]) {
     els[toCamel(id)] = document.getElementById(id);
   }
@@ -159,7 +249,7 @@ function bindStaticEvents() {
   });
   els.scalarCount.addEventListener("input", () => {
     project.nscal = normalizedScalarCount(els.scalarCount.value);
-    for (const block of project.blocks) ensureBoundaryArrays(block);
+    for (const block of project.blocks) ensureBoundaryArrays(block, project.nscal);
     renderInspector();
     markProjectDirty();
   });
@@ -178,6 +268,10 @@ function bindStaticEvents() {
   });
   els.addBlock.addEventListener("click", addFreeBlock);
   els.addAdjacent.addEventListener("click", addAdjacentBlock);
+  els.duplicateArray.addEventListener("click", () => applyGeometryOperation("duplicate"));
+  els.mirrorBlocks.addEventListener("click", () => applyGeometryOperation("mirror"));
+  els.alignBlocks.addEventListener("click", () => applyGeometryOperation("align"));
+  els.snapBlock.addEventListener("click", () => applyGeometryOperation("snap"));
   els.removeBlock.addEventListener("click", removeSelectedBlock);
   els.fitView.addEventListener("click", fitView);
   els.toggleGrid.addEventListener("click", () => {
@@ -196,6 +290,14 @@ function bindStaticEvents() {
     partitionPlanesVisible = !partitionPlanesVisible;
     renderScene();
   });
+  els.toggleGridLines.addEventListener("click", () => {
+    gridLinesVisible = !gridLinesVisible;
+    renderScene();
+  });
+  els.toggleSpacingJumps.addEventListener("click", () => {
+    spacingJumpsVisible = !spacingJumpsVisible;
+    renderScene();
+  });
   els.exportCase.addEventListener("click", exportCase);
   els.checkProject.addEventListener("click", () => {
     if (project.inferConnectivity) updateStructure({ successMessage: "Grid checks passed" });
@@ -203,11 +305,26 @@ function bindStaticEvents() {
   });
   els.updateStructure.addEventListener("click", updateStructure);
   els.repairGrids.addEventListener("click", previewGridRepair);
-  els.targetRanks.addEventListener("change", () => {
+  els.targetRanks.addEventListener("input", () => {
     project.decomposition.targetRanks = Math.max(0, Math.round(Number(els.targetRanks.value) || 0));
-    markProjectDirty();
-    renderDecompositionControls();
+    decompositionSettingEdited();
+    els.balanceDecomposition.disabled = !project.blocks.length || project.decomposition.targetRanks < project.blocks.length;
   });
+  els.minLocalCells.addEventListener("input", () => {
+    project.decomposition.minLocalCells = Math.max(1, Math.round(Number(els.minLocalCells.value) || 4));
+    decompositionSettingEdited();
+  });
+  els.maxLocalAspect.addEventListener("input", () => {
+    project.decomposition.maxLocalAspect = Math.max(0, Number(els.maxLocalAspect.value) || 0);
+    decompositionSettingEdited();
+  });
+  for (const input of [els.targetRanks, els.minLocalCells, els.maxLocalAspect]) {
+    input.addEventListener("change", () => {
+      clearCheckState();
+      renderDecompositionSummary();
+      scheduleHistoryCommit();
+    });
+  }
   for (const button of els.decompositionMode.querySelectorAll("button")) {
     button.addEventListener("click", () => {
       project.decomposition.mode = button.dataset.mode;
@@ -232,11 +349,36 @@ function bindStaticEvents() {
   els.balanceDecomposition.addEventListener("click", balanceDecomposition);
   els.cancelRepair.addEventListener("click", closeRepairDialog);
   els.confirmRepair.addEventListener("click", applyGridRepair);
+  els.applyBcPreset.addEventListener("click", applyBoundaryPreset);
   els.downloadJson.addEventListener("click", downloadProjectJson);
+  els.downloadReportJson.addEventListener("click", () => downloadCaseReport("json"));
+  els.downloadReportMarkdown.addEventListener("click", () => downloadCaseReport("markdown"));
+  els.importCase.addEventListener("click", importCase);
   els.openJson.addEventListener("change", openProjectJson);
+  els.openLibrary.addEventListener("click", showLibraryDialog);
+  els.closeLibrary.addEventListener("click", () => els.libraryDialog.close());
+  for (const button of els.libraryTabs.querySelectorAll("button")) {
+    button.addEventListener("click", () => {
+      currentLibraryTab = button.dataset.libraryTab;
+      selectedLibraryItem = null;
+      renderLibraryDialog();
+    });
+  }
+  els.libraryItems.addEventListener("change", () => {
+    selectedLibraryItem = els.libraryItems.value;
+    renderLibrarySelection();
+  });
+  els.applyLibraryItem.addEventListener("click", applySelectedLibraryItem);
+  els.saveLibraryItem.addEventListener("click", saveCurrentLibraryItem);
+  els.renameLibraryItem.addEventListener("click", renameSelectedLibraryItem);
+  els.deleteLibraryItem.addEventListener("click", deleteSelectedLibraryItem);
+  els.importLibrary.addEventListener("change", importLibraryJson);
+  els.exportLibrary.addEventListener("click", exportLibraryJson);
   els.undoProject.addEventListener("click", undoProject);
   els.redoProject.addEventListener("click", redoProject);
   els.resetProject.addEventListener("click", resetProject);
+  els.discardRecovery.addEventListener("click", discardRecovery);
+  els.restoreRecovery.addEventListener("click", restoreRecovery);
   els.scene.addEventListener("pointerdown", selectFromScene);
   window.addEventListener("resize", resizeRenderer);
 }
@@ -257,6 +399,8 @@ function initScene() {
   blockGroup = new THREE.Group();
   boundaryFaceGroup = new THREE.Group();
   selectedGridGroup = new THREE.Group();
+  spacingJumpGroup = new THREE.Group();
+  diagnosticGroup = new THREE.Group();
   partitionGroup = new THREE.Group();
   axesGroup = new THREE.Group();
   gridHelper = new THREE.GridHelper(10, 20, 0x46515c, 0x252b32);
@@ -266,6 +410,8 @@ function initScene() {
   scene.add(blockGroup);
   scene.add(boundaryFaceGroup);
   scene.add(selectedGridGroup);
+  scene.add(spacingJumpGroup);
+  scene.add(diagnosticGroup);
   scene.add(partitionGroup);
 
   transformControls = new TransformControls(camera, renderer.domElement);
@@ -284,17 +430,18 @@ function initScene() {
 
 function renderAll() {
   if (!project) return;
-  project.schemaVersion = project.schemaVersion ?? 1;
+  project.schemaVersion = project.schemaVersion ?? 2;
   project.blocks = project.blocks || [];
   project.nscal = normalizedScalarCount(project.nscal ?? project.nScal);
-  project.periodicAxes = normalizedPeriodicAxes();
-  project.decomposition = normalizedDecomposition();
+  project.periodicAxes = normalizedPeriodicAxes(project);
+  project.decomposition = normalizedDecomposition(project);
   for (const block of project.blocks) {
-    ensureBoundaryArrays(block);
+    ensureBoundaryArrays(block, project.nscal);
     block.axisLocks = normalizedAxisLocks(block.axisLocks);
   }
   project.blocks.sort((a, b) => a.id - b.id);
   if (!selectedBlock()) selectedId = project.blocks[0]?.id ?? null;
+  selectedIds = new Set([...selectedIds].filter((id) => project.blocks.some((block) => block.id === id)));
   els.projectName.value = project.name ?? "snac-grid";
   els.scalarCount.value = project.nscal;
   els.inferConnectivity.checked = project.inferConnectivity !== false;
@@ -304,8 +451,12 @@ function renderAll() {
   els.gridSource.value = project.externalGridSource;
   els.gridSource.disabled = !project.writeExternalGrid;
   els.addAdjacent.disabled = !selectedBlock();
+  for (const button of [els.duplicateArray, els.mirrorBlocks, els.alignBlocks, els.snapBlock]) {
+    button.disabled = !selectedBlock();
+  }
   renderBlockList();
   renderDecompositionControls();
+  renderQualitySummary();
   renderInspector();
   renderScene();
   renderSpacingPreview();
@@ -323,17 +474,23 @@ function renderBlockList() {
     return;
   }
   for (const block of project.blocks) {
-    const button = document.createElement("button");
-    button.className = `block-item${block.id === selectedId ? " selected" : ""}`;
-    button.innerHTML = `
+    const item = document.createElement("div");
+    item.className = `block-item${block.id === selectedId ? " selected" : ""}`;
+    item.innerHTML = `
+      <input type="checkbox" aria-label="Select ${escapeHtml(blockLabel(block))}" ${selectedIds.has(block.id) ? "checked" : ""} />
       <span class="swatch" style="background:#${COLORS[(block.id - 1) % COLORS.length].toString(16).padStart(6, "0")}"></span>
-      <span><strong>${escapeHtml(blockLabel(block))}</strong><span>${block.lmin.join(", ")} -> ${block.lmax.join(", ")}</span></span>
+      <button type="button" class="block-main"><strong>${escapeHtml(blockLabel(block))}</strong><span>${block.lmin.join(", ")} -> ${block.lmax.join(", ")}</span></button>
     `;
-    button.addEventListener("click", () => {
+    item.querySelector("input").addEventListener("change", (event) => {
+      if (event.target.checked) selectedIds.add(block.id);
+      else selectedIds.delete(block.id);
+      renderBlockList();
+    });
+    item.querySelector("button").addEventListener("click", () => {
       selectedId = block.id;
       renderAll();
     });
-    els.blockList.appendChild(button);
+    els.blockList.appendChild(item);
   }
 }
 
@@ -414,8 +571,13 @@ function renderGeometryInputs(block) {
       const field = input.dataset.field;
       const index = Number(input.dataset.index);
       const value = field === "ng" || field === "dims" ? Math.max(1, Math.round(Number(input.value) || 1)) : Number(input.value);
+      const oldMin = block.lmin[index];
+      const oldMax = block.lmax[index];
       block[field][index] = value;
-      if (field === "dims") propagateMpiPartition(block.id, index, value);
+      if (field === "lmin" || field === "lmax") {
+        rescaleExplicitFaces(block, index, oldMin, oldMax, block.lmin[index], block.lmax[index]);
+      }
+      if (field === "dims") propagateMpiPartition(project.blocks, block.id, index, value);
       markProjectDirty(field === "ng" || field === "lmin" || field === "lmax" ? block.id : null);
       if (field === "ng" || field === "lmin" || field === "lmax") schedulePreview(block.id);
       renderScene();
@@ -452,6 +614,7 @@ function renderAxisEditor(block) {
         <option value="simple_ratio">Monotone grading</option>
         <option value="max_min">Symmetric grading</option>
         <option value="multi">Multi-region grading</option>
+        ${selectedKind === "explicit" ? '<option value="explicit">Explicit coordinates</option>' : ""}
       </select>
     </label>
     <div id="grid-kind-body"></div>
@@ -513,7 +676,19 @@ function bindProfileSelect(block, axis) {
 function renderAxisKindBody(block, axis) {
   const body = document.getElementById("grid-kind-body");
   const preview = previewCache.get(block.id)?.[currentAxis];
-  if (axis.kind === "multi") {
+  if (axis.kind === "explicit") {
+    const faces = axis.faces ?? [];
+    const spacings = faces.slice(1).map((face, index) => face - faces[index]);
+    const minimum = spacings.reduce((value, spacing) => Math.min(value, spacing), Number.POSITIVE_INFINITY);
+    const maximum = spacings.reduce((value, spacing) => Math.max(value, spacing), Number.NEGATIVE_INFINITY);
+    body.innerHTML = `
+      <div class="explicit-grid-summary">
+        <span>cells <strong>${Math.max(0, faces.length - 1)}</strong></span>
+        <span>minimum <strong>${formatNumber(minimum)}</strong></span>
+        <span>maximum <strong>${formatNumber(maximum)}</strong></span>
+      </div>
+    `;
+  } else if (axis.kind === "multi") {
     axis.segments = axis.segments?.length ? axis.segments : [{ length: 1, cells: 1, ratio: 1, continuous: false }];
     body.innerHTML = `
       ${profileSelect(axis)}
@@ -731,6 +906,8 @@ function renderDecompositionControls() {
   if (!project?.decomposition) return;
   const spec = project.decomposition;
   els.targetRanks.value = spec.targetRanks;
+  els.minLocalCells.value = spec.minLocalCells;
+  els.maxLocalAspect.value = spec.maxLocalAspect;
   for (const button of els.decompositionMode.querySelectorAll("button")) {
     button.classList.toggle("active", button.dataset.mode === spec.mode);
   }
@@ -777,6 +954,34 @@ function renderDecompositionSummary() {
   `;
 }
 
+function renderQualitySummary() {
+  const quality = lastCheck?.quality;
+  const storage = lastCheck?.storage;
+  const disabled = !project.blocks.length;
+  els.downloadReportJson.disabled = disabled;
+  els.downloadReportMarkdown.disabled = disabled;
+  if (!quality) {
+    els.qualitySummary.innerHTML = `<div class="quality-empty">${escapeHtml(lastCheck?.qualityError ?? "Not evaluated")}</div>`;
+    return;
+  }
+  const summary = quality.summary;
+  const rows = [
+    ["Cells", formatInteger(summary.totalCells)],
+    ["MPI ranks", formatInteger(summary.totalRanks)],
+    ["Cells/rank", `${formatInteger(summary.cellsPerRankMin)} to ${formatInteger(summary.cellsPerRankMax)}`],
+    ["Load ratio", formatNumber(summary.loadImbalance)],
+    ["Spacing", `${formatNumber(summary.spacingMin)} to ${formatNumber(summary.spacingMax)}`],
+    ["Adjacent ratio", formatNumber(summary.maxAdjacentRatio)],
+    ["Cell aspect", formatNumber(summary.worstCellAspect)],
+    ["Interface ratio", formatNumber(summary.maxInterfaceRatio)],
+    ["Coordinates", formatBytes(summary.coordinateBytes)],
+    ["SNaC grids", formatBytes(storage?.snacBinaryBytesTotal ?? 0)],
+  ];
+  els.qualitySummary.innerHTML = rows
+    .map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`)
+    .join("");
+}
+
 async function previewGridRepair() {
   if (!project.blocks.length) {
     setStatus("Add a block before repairing grids");
@@ -798,15 +1003,18 @@ async function previewGridRepair() {
     }
     if (!payload.changes?.length) {
       pendingRepair = null;
-      setStatus("Tangential grids are already congruent");
+      setStatus("Grids and interface spacing are already congruent");
       return;
     }
     pendingRepair = payload;
-    els.repairSummary.innerHTML = payload.changes
-      .map(
-        (change) => `<div class="repair-change"><strong>Block ${change.blockId} · ${change.axis.toUpperCase()}</strong><br>${change.oldN} → ${change.newN} cells, copied from block ${change.sourceBlockId}</div>`
-      )
-      .join("");
+    els.repairSummary.innerHTML = `${payload.changes
+      .map((change) => {
+        if (change.kind === "spacing") {
+          return `<div class="repair-change"><strong>Block ${change.blockId} · ${change.face.toUpperCase()}</strong><br>${formatNumber(change.oldSpacing)} → ${formatNumber(change.newSpacing)}, matched to block ${change.sourceBlockId}</div>`;
+        }
+        return `<div class="repair-change"><strong>Block ${change.blockId} · ${change.axis.toUpperCase()}</strong><br>${change.oldN} → ${change.newN} cells, copied from block ${change.sourceBlockId}</div>`;
+      })
+      .join("")}${(payload.warnings ?? []).map((warning) => `<div class="repair-warning">${escapeHtml(warning)}</div>`).join("")}`;
     els.repairDialog.showModal();
     setStatus(`${payload.changes.length} proposed grid repair${payload.changes.length === 1 ? "" : "s"}`);
   } catch (error) {
@@ -865,8 +1073,30 @@ async function balanceDecomposition() {
   }
 }
 
+async function applyBoundaryPreset() {
+  const blockIds = selectedBlockIds();
+  if (!blockIds.length) return;
+  setStatus("Applying boundary preset...");
+  try {
+    const payload = await postJson("/api/bc-preset", {
+      project,
+      blockIds,
+      preset: els.bcPreset.value,
+      face: els.bcPresetFace.value,
+      velocity: [els.bcPresetU.value, els.bcPresetV.value, els.bcPresetW.value].map(Number),
+      pressure: Number(els.bcPresetP.value) || 0,
+    });
+    project = payload.project;
+    markProjectDirty();
+    renderAll();
+    setStatus(`Applied preset to ${blockIds.length} block${blockIds.length === 1 ? "" : "s"}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
 function renderBoundaryTable(block) {
-  ensureBoundaryArrays(block);
+  ensureBoundaryArrays(block, project.nscal);
   els.boundaryTable.innerHTML = FACE_ORDER.map((face, index) => {
     return `
       <div class="boundary-row">
@@ -918,31 +1148,76 @@ function renderCheckResults() {
   if (!els.checkResults) return;
   const errors = lastCheck?.errors ?? [];
   const warnings = lastCheck?.warnings ?? [];
+  const diagnostics = lastCheck?.diagnostics ?? [
+    ...errors.map((message) => ({ severity: "error", message, locations: [] })),
+    ...warnings.map((message) => ({ severity: "warning", message, locations: [] })),
+  ];
   els.exportCase.disabled = !project.blocks.length || errors.length > 0;
   if (!lastCheck) {
+    activeDiagnostic = null;
     els.checkResults.innerHTML = "";
     return;
   }
+  if (
+    activeDiagnostic &&
+    !diagnostics.some((item) => item.code === activeDiagnostic.code && item.message === activeDiagnostic.message)
+  ) {
+    activeDiagnostic = null;
+  }
   if (!errors.length && !warnings.length) {
+    activeDiagnostic = null;
     els.checkResults.innerHTML = `<div class="check-line ok">Structured grid checks passed</div>`;
     return;
   }
-  els.checkResults.innerHTML = `
-    ${errors.map((message) => `<div class="check-line error">${escapeHtml(message)}</div>`).join("")}
-    ${warnings.map((message) => `<div class="check-line warning">${escapeHtml(message)}</div>`).join("")}
-  `;
+  els.checkResults.innerHTML = diagnostics
+    .map((diagnostic, index) => {
+      const actionable = (diagnostic.locations ?? []).some((location) =>
+        project.blocks.some((block) => block.id === location.blockId)
+      );
+      const tag = actionable ? "button" : "div";
+      const attributes = actionable
+        ? `type="button" data-diagnostic-index="${index}" title="Show affected block or face"`
+        : "";
+      const icon = actionable ? `<i data-lucide="locate-fixed"></i>` : "";
+      return `<${tag} class="check-line ${diagnostic.severity}${actionable ? " actionable" : ""}" ${attributes}>${icon}<span>${escapeHtml(diagnostic.message)}</span></${tag}>`;
+    })
+    .join("");
+  for (const button of els.checkResults.querySelectorAll("[data-diagnostic-index]")) {
+    button.addEventListener("click", () => focusDiagnostic(diagnostics[Number(button.dataset.diagnosticIndex)]));
+  }
+}
+
+function focusDiagnostic(diagnostic) {
+  const blockIds = (diagnostic.locations ?? [])
+    .map((location) => location.blockId)
+    .filter((blockId) => project.blocks.some((block) => block.id === blockId));
+  if (!blockIds.length) return;
+  activeDiagnostic = diagnostic;
+  selectedId = blockIds[0];
+  selectedIds = new Set(blockIds);
+  if (AXES.includes(diagnostic.axis)) currentAxis = diagnostic.axis;
+  const block = selectedBlock();
+  if (block) controls.target.set(...blockCenter(block));
+  renderAll();
+  setStatus(`Showing ${diagnostic.code?.replaceAll("_", " ") ?? "grid issue"}`);
 }
 
 function renderScene() {
   transformControls.detach();
   selectedBlockMesh = null;
   boundaryFaceGroup.visible = true;
-  selectedGridGroup.visible = true;
+  selectedGridGroup.visible = gridLinesVisible;
   partitionGroup.visible = true;
+  spacingJumpGroup.visible = spacingJumpsVisible;
   clearDisposableGroup(blockGroup);
   clearDisposableGroup(boundaryFaceGroup);
   clearDisposableGroup(selectedGridGroup);
   clearDisposableGroup(partitionGroup);
+  clearDisposableGroup(spacingJumpGroup);
+  clearDisposableGroup(diagnosticGroup);
+  const diagnosticIds = new Set(
+    (activeDiagnostic?.locations ?? []).map((location) => location.blockId)
+  );
   for (const block of project.blocks) {
     const size = blockSize(block);
     const center = blockCenter(block);
@@ -950,7 +1225,7 @@ function renderScene() {
     const material = new THREE.MeshStandardMaterial({
       color,
       transparent: true,
-      opacity: block.id === selectedId ? 0.43 : 0.24,
+      opacity: diagnosticIds.has(block.id) ? 0.52 : block.id === selectedId ? 0.43 : 0.24,
       roughness: 0.62,
       metalness: 0.0,
       side: THREE.DoubleSide,
@@ -964,16 +1239,60 @@ function renderScene() {
 
     const edges = new THREE.LineSegments(
       new THREE.EdgesGeometry(mesh.geometry),
-      new THREE.LineBasicMaterial({ color: block.id === selectedId ? 0xffffff : 0x9aa6b2, transparent: true, opacity: block.id === selectedId ? 0.95 : 0.48 })
+      new THREE.LineBasicMaterial({
+        color: diagnosticIds.has(block.id)
+          ? activeDiagnostic.severity === "error" ? 0xff6b6b : 0xf0c36a
+          : block.id === selectedId ? 0xffffff : 0x9aa6b2,
+        transparent: true,
+        opacity: diagnosticIds.has(block.id) || block.id === selectedId ? 0.95 : 0.48,
+      })
     );
     mesh.add(edges);
   }
   drawBoundaryFaces();
   drawSelectedGrid();
   drawPartitionPlanes();
+  drawInterfaceSpacing();
+  drawDiagnosticHighlight();
   updateAxesHelper();
   attachSelectedTransform();
   renderViewControls();
+}
+
+function drawDiagnosticHighlight() {
+  if (!activeDiagnostic) return;
+  const color = activeDiagnostic.severity === "error" ? 0xff6b6b : 0xf0c36a;
+  for (const location of activeDiagnostic.locations ?? []) {
+    if (!location.face) continue;
+    const block = project.blocks.find((item) => item.id === location.blockId);
+    const face = FACE_ORDER.indexOf(location.face);
+    if (!block || face < 0) continue;
+    const axisIndex = Math.floor(face / 2);
+    const value = face % 2 === 0 ? block.lmin[axisIndex] : block.lmax[axisIndex];
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(planeOutlinePoints(block, axisIndex, value)),
+      new THREE.LineBasicMaterial({ color, depthTest: false })
+    );
+    line.renderOrder = 8;
+    diagnosticGroup.add(line);
+  }
+}
+
+function drawInterfaceSpacing() {
+  if (!spacingJumpsVisible) return;
+  for (const metric of lastCheck?.interfaces ?? []) {
+    const block = project.blocks.find((item) => item.id === metric.blockId);
+    if (!block) continue;
+    const axisIndex = AXES.indexOf(metric.axis);
+    const value = metric.face.endsWith("+") ? block.lmax[axisIndex] : block.lmin[axisIndex];
+    const color = metric.ratio > 3 ? 0xe46868 : metric.ratio > 1.5 ? 0xd6bf5b : 0x43c989;
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(planeOutlinePoints(block, axisIndex, value)),
+      new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95, depthTest: false })
+    );
+    line.renderOrder = 5;
+    spacingJumpGroup.add(line);
+  }
 }
 
 function drawBoundaryFaces() {
@@ -1041,49 +1360,9 @@ function drawPartitionPlanes() {
   }
 }
 
-function partitionFaceIndices(n, partitions) {
-  if (partitions <= 1) return [];
-  const base = Math.floor(n / partitions);
-  const remainder = n % partitions;
-  return Array.from({ length: partitions - 1 }, (_, rank) => {
-    const count = rank + 1;
-    return count * base + Math.min(count, remainder);
-  });
-}
-
-function planeOutlinePoints(block, axisIndex, value) {
-  const [xmin, ymin, zmin] = block.lmin;
-  const [xmax, ymax, zmax] = block.lmax;
-  if (axisIndex === 0) {
-    return [
-      new THREE.Vector3(value, ymin, zmin),
-      new THREE.Vector3(value, ymax, zmin),
-      new THREE.Vector3(value, ymax, zmax),
-      new THREE.Vector3(value, ymin, zmax),
-      new THREE.Vector3(value, ymin, zmin),
-    ];
-  }
-  if (axisIndex === 1) {
-    return [
-      new THREE.Vector3(xmin, value, zmin),
-      new THREE.Vector3(xmax, value, zmin),
-      new THREE.Vector3(xmax, value, zmax),
-      new THREE.Vector3(xmin, value, zmax),
-      new THREE.Vector3(xmin, value, zmin),
-    ];
-  }
-  return [
-    new THREE.Vector3(xmin, ymin, value),
-    new THREE.Vector3(xmax, ymin, value),
-    new THREE.Vector3(xmax, ymax, value),
-    new THREE.Vector3(xmin, ymax, value),
-    new THREE.Vector3(xmin, ymin, value),
-  ];
-}
-
 function updateAxesHelper() {
   clearDisposableGroup(axesGroup, false);
-  const box = projectBox();
+  const box = projectBox(project.blocks);
   const size = box.getSize(new THREE.Vector3());
   const origin = box.min.clone();
   if (!Number.isFinite(origin.x)) origin.set(0, 0, 0);
@@ -1104,35 +1383,9 @@ function updateAxesHelper() {
   }
 }
 
-function axisLabel(label, color) {
-  const key = `${label}-${color}`;
-  if (axisLabelMaterials.has(key)) {
-    const sprite = new THREE.Sprite(axisLabelMaterials.get(key));
-    sprite.userData.sharedMaterial = true;
-    return sprite;
-  }
-  const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
-  ctx.font = "700 42px Inter, Arial, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(label, 32, 34);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
-  axisLabelMaterials.set(key, material);
-  const sprite = new THREE.Sprite(material);
-  sprite.userData.sharedMaterial = true;
-  return sprite;
-}
-
 function drawSelectedGrid() {
   const block = selectedBlock();
-  if (!block) return;
+  if (!block || !gridLinesVisible) return;
   const preview = previewCache.get(block.id);
   if (!preview) return;
   const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32 });
@@ -1218,8 +1471,9 @@ async function requestPreview(blockId, sequence) {
     if (sequence !== previewSequence) return;
     const block = project.blocks.find((item) => item.id === payload.blockId);
     if (!block) return;
+    const cellCountChanged = block.ng.some((value, index) => value !== payload.ng[index]);
     block.ng = payload.ng;
-    scheduleHistoryCommit();
+    if (cellCountChanged) scheduleHistoryCommit();
     previewCache.set(block.id, payload.axes);
     for (const input of els.resolutionGrid.querySelectorAll('input[data-field="ng"]')) {
       const index = Number(input.dataset.index);
@@ -1247,22 +1501,6 @@ function gridDefinitionChanged(block) {
   renderScene();
 }
 
-function clearDisposableGroup(group, disposeGeometries = true) {
-  const geometries = new Set();
-  const materials = new Set();
-  for (const child of [...group.children]) {
-    child.traverse((object) => {
-      if (object.userData.sharedMaterial) return;
-      if (disposeGeometries && object.geometry) geometries.add(object.geometry);
-      if (!object.material) return;
-      for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material);
-    });
-    group.remove(child);
-  }
-  for (const geometry of geometries) geometry.dispose();
-  for (const material of materials) material.dispose();
-}
-
 function setBlockTool(tool) {
   blockTool = tool;
   renderScene();
@@ -1282,6 +1520,12 @@ function handleTransformDragging(event) {
     transformDrag = {
       blockId: selectedBlockMesh.userData.blockId,
       baseSize: [...selectedBlockMesh.userData.baseSize],
+      baseLmin: [...selectedBlock().lmin],
+      baseLmax: [...selectedBlock().lmax],
+      baseFaces: AXES.map((axis) => {
+        const spec = ensureAxis(selectedBlock(), axis);
+        return spec.kind === "explicit" ? [...spec.faces] : null;
+      }),
     };
     controls.enabled = false;
     boundaryFaceGroup.visible = false;
@@ -1311,6 +1555,17 @@ function handleTransformObjectChange() {
   const size = transformDrag.baseSize.map((value, index) => Math.max(1.0e-9, value * Math.abs(mesh.scale.getComponent(index))));
   block.lmin = center.map((value, index) => value - 0.5 * size[index]);
   block.lmax = center.map((value, index) => value + 0.5 * size[index]);
+  for (let index = 0; index < 3; index += 1) {
+    rescaleExplicitFaces(
+      block,
+      index,
+      transformDrag.baseLmin[index],
+      transformDrag.baseLmax[index],
+      block.lmin[index],
+      block.lmax[index],
+      transformDrag.baseFaces[index]
+    );
+  }
   updateGeometryInputValues(block);
   markProjectDirty(block.id);
   renderBlockList();
@@ -1336,22 +1591,28 @@ function renderViewControls() {
   els.toolScale.disabled = !selectedBlock();
   els.toggleBoundaries.classList.toggle("active", boundaryColorsVisible);
   els.togglePartitions.classList.toggle("active", partitionPlanesVisible);
+  els.toggleGridLines.classList.toggle("active", gridLinesVisible);
+  els.toggleSpacingJumps.classList.toggle("active", spacingJumpsVisible);
 }
 
 function addFreeBlock() {
   const source = selectedBlock() ?? project.blocks[0];
-  const copy = source ? structuredClone(source) : defaultBlock(nextBlockId());
-  copy.id = nextBlockId();
+  const copy = source ? structuredClone(source) : defaultBlock(nextBlockId(project.blocks));
+  copy.id = nextBlockId(project.blocks);
   copy.name = `block-${copy.id}`;
   copy.axisLocks = [false, false, false];
   if (source) {
+    const oldMin = copy.lmin[0];
+    const oldMax = copy.lmax[0];
     const width = source.lmax[0] - source.lmin[0];
     copy.lmin[0] += width;
     copy.lmax[0] += width;
+    rescaleExplicitFaces(copy, 0, oldMin, oldMax, copy.lmin[0], copy.lmax[0]);
   }
-  resetFriendBoundaries(copy);
+  resetFriendBoundaries(copy, project.nscal);
   project.blocks.push(copy);
   selectedId = copy.id;
+  selectedIds = new Set([copy.id]);
   markProjectDirty(copy.id);
   renderAll();
 }
@@ -1364,9 +1625,11 @@ function addAdjacentBlock() {
   const sign = face[1] === "+" ? 1 : -1;
   const thickness = positiveNumber(els.adjacentSize.value, source.lmax[axis] - source.lmin[axis]);
   const copy = structuredClone(source);
-  copy.id = nextBlockId();
+  copy.id = nextBlockId(project.blocks);
   copy.name = `block-${copy.id}`;
   copy.axisLocks = [false, false, false];
+  const oldMin = copy.lmin[axis];
+  const oldMax = copy.lmax[axis];
   if (sign > 0) {
     copy.lmin[axis] = source.lmax[axis];
     copy.lmax[axis] = source.lmax[axis] + thickness;
@@ -1374,17 +1637,65 @@ function addAdjacentBlock() {
     copy.lmax[axis] = source.lmin[axis];
     copy.lmin[axis] = source.lmin[axis] - thickness;
   }
-  resetFriendBoundaries(copy);
+  rescaleExplicitFaces(copy, axis, oldMin, oldMax, copy.lmin[axis], copy.lmax[axis]);
+  resetFriendBoundaries(copy, project.nscal);
   project.blocks.push(copy);
   selectedId = copy.id;
+  selectedIds = new Set([copy.id]);
   markProjectDirty(copy.id);
   renderAll();
+}
+
+async function applyGeometryOperation(operation) {
+  if (!selectedBlock()) return;
+  let blockIds = selectedBlockIds();
+  const payload = {
+    project,
+    operation,
+    blockIds,
+    sourceBlockId: selectedId,
+    axis: els.geometryAxis.value,
+  };
+  if (operation === "duplicate") {
+    payload.count = Math.max(1, Math.round(Number(els.arrayCount.value) || 1));
+    payload.gap = Number(els.arrayGap.value) || 0;
+  } else if (operation === "mirror") {
+    payload.plane = Number(els.mirrorPlane.value) || 0;
+  } else if (operation === "align") {
+    payload.mode = els.alignMode.value;
+  } else if (operation === "snap") {
+    blockIds = blockIds.filter((id) => id !== selectedId);
+    if (blockIds.length !== 1) {
+      setStatus("Select one target block and make the source block primary");
+      return;
+    }
+    payload.blockIds = blockIds;
+    payload.face = els.snapFace.value;
+  }
+  setStatus(`${operation[0].toUpperCase()}${operation.slice(1)} blocks...`);
+  try {
+    const result = await postJson("/api/geometry", payload);
+    project = result.project;
+    const changed = result.changedBlockIds ?? [];
+    if (["duplicate", "mirror"].includes(operation) && changed.length) {
+      selectedIds = new Set(changed);
+      selectedId = changed[0];
+    }
+    previewCache.clear();
+    previewSequence += 1;
+    markProjectDirty();
+    renderAll();
+    setStatus(`${operation[0].toUpperCase()}${operation.slice(1)} updated ${changed.length} block${changed.length === 1 ? "" : "s"}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
 }
 
 function removeSelectedBlock() {
   if (!selectedBlock()) return;
   project.blocks = project.blocks.filter((block) => block.id !== selectedId);
   previewCache.delete(selectedId);
+  selectedIds.delete(selectedId);
   selectedId = project.blocks[0]?.id ?? null;
   markProjectDirty();
   renderAll();
@@ -1393,6 +1704,7 @@ function removeSelectedBlock() {
 function resetProject() {
   project.blocks = [];
   selectedId = null;
+  selectedIds.clear();
   lastCheck = null;
   pendingRepair = null;
   decompositionResult = null;
@@ -1409,6 +1721,8 @@ async function checkProject(options = {}) {
     const payload = await postJson("/api/check", { project }, { allowInvalid: true });
     lastCheck = payload;
     renderCheckResults();
+    renderQualitySummary();
+    renderScene();
     if (!payload.ok) {
       setStatus(`${payload.errors.length} check issue${payload.errors.length === 1 ? "" : "s"}`);
       return false;
@@ -1419,6 +1733,8 @@ async function checkProject(options = {}) {
   } catch (error) {
     lastCheck = { ok: false, errors: [error.message], warnings: [] };
     renderCheckResults();
+    renderQualitySummary();
+    renderScene();
     setStatus(error.message);
     return false;
   }
@@ -1459,6 +1775,8 @@ async function exportCase() {
   setStatus("Writing files...");
   try {
     const payload = await postJson("/api/export", { outputDir: els.outputDir.value, project });
+    commitHistory();
+    clearAutosave();
     const warningText = payload.warnings?.length ? `, ${payload.warnings.length} warnings` : "";
     setStatus(`Wrote ${payload.files.length} files to ${payload.outputDir}${warningText}`);
   } catch (error) {
@@ -1466,17 +1784,246 @@ async function exportCase() {
   }
 }
 
-async function postJson(url, body, options = {}) {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const payload = await response.json();
-  if (!response.ok || (payload.ok === false && !options.allowInvalid)) {
-    throw new Error(payload.error || payload.errors?.join("; ") || "request failed");
+async function importCase() {
+  const caseDir = els.outputDir.value.trim();
+  if (!caseDir) {
+    setStatus("Set the case folder in Output");
+    return;
   }
-  return payload;
+  setStatus("Importing SNaC case...");
+  try {
+    const payload = await postJson("/api/import", { caseDir });
+    project = payload.project;
+    selectedId = project.blocks[0]?.id ?? null;
+    selectedIds = new Set(selectedId == null ? [] : [selectedId]);
+    lastCheck = null;
+    pendingRepair = null;
+    decompositionResult = null;
+    previewCache.clear();
+    previewSequence += 1;
+    renderAll();
+    clearAutosave();
+    resetHistory(false);
+    fitView();
+    const warningText = payload.warnings?.length
+      ? `, ${payload.warnings.length} warning${payload.warnings.length === 1 ? "" : "s"}`
+      : "";
+    setStatus(`Imported ${project.blocks.length} blocks from ${payload.source}${warningText}`);
+    await checkProject({ silent: true });
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function showLibraryDialog() {
+  renderLibraryDialog();
+  els.libraryDialog.showModal();
+}
+
+function renderLibraryDialog() {
+  for (const button of els.libraryTabs.querySelectorAll("button")) {
+    button.classList.toggle("active", button.dataset.libraryTab === currentLibraryTab);
+  }
+  const entries = libraryEntries();
+  if (!entries.some((entry) => entry.key === selectedLibraryItem)) selectedLibraryItem = entries[0]?.key ?? null;
+  els.libraryItems.innerHTML = entries
+    .map((entry) => `<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.item.name)}${entry.builtIn ? " (built-in)" : ""}</option>`)
+    .join("");
+  els.libraryItems.value = selectedLibraryItem ?? "";
+  renderLibrarySelection();
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function renderLibrarySelection() {
+  const entry = selectedLibraryEntry();
+  const axisMode = currentLibraryTab === "axisPresets";
+  if (!entry) {
+    els.libraryName.value = "";
+    els.librarySummary.textContent = "Empty library";
+  } else {
+    els.libraryName.value = entry.builtIn ? `${entry.item.name} copy` : entry.item.name;
+    els.librarySummary.innerHTML = libraryItemSummary(entry);
+  }
+  els.applyLibraryItem.disabled = !entry || (axisMode && !selectedBlock());
+  els.saveLibraryItem.disabled = axisMode && !selectedBlock();
+  els.saveLibraryItem.title = axisMode ? "Save current axis to library" : "Save current project to library";
+  els.renameLibraryItem.disabled = !entry || entry.builtIn;
+  els.deleteLibraryItem.disabled = !entry || entry.builtIn;
+}
+
+function libraryEntries() {
+  const builtIns = currentLibraryTab === "axisPresets" ? builtInAxisPresets() : builtInProjectTemplates();
+  return [
+    ...builtIns.map((item) => ({ key: `builtin:${item.id}`, item, builtIn: true })),
+    ...userLibrary[currentLibraryTab].map((item) => ({ key: `user:${item.id}`, item, builtIn: false })),
+  ];
+}
+
+function selectedLibraryEntry() {
+  return libraryEntries().find((entry) => entry.key === selectedLibraryItem) ?? null;
+}
+
+function libraryItemSummary(entry) {
+  const source = entry.builtIn ? "Built-in" : "User";
+  if (currentLibraryTab === "axisPresets") {
+    const axis = entry.item.axis;
+    const rows = [
+      `<strong>${escapeHtml(source)} axis preset</strong>`,
+      `${formatInteger(entry.item.ng)} cells`,
+      escapeHtml(axisKindLabel(axis.kind)),
+    ];
+    if (axis.profile) rows.push(escapeHtml(axis.profile));
+    if (axis.kind === "multi") rows.push(`${axis.segments?.length ?? 0} regions`);
+    if (entry.item.coordinateSpace === "relative") rows.push("Relative coordinates");
+    return rows.map((row) => `<div>${row}</div>`).join("");
+  }
+  const candidate = entry.item.project;
+  const periodic = AXES.filter((_, index) => candidate.periodicAxes?.[index]).map((axis) => axis.toUpperCase());
+  return [
+    `<strong>${escapeHtml(source)} case template</strong>`,
+    `${formatInteger(candidate.blocks.length)} block${candidate.blocks.length === 1 ? "" : "s"}`,
+    `${formatInteger(candidate.nscal ?? candidate.nScal ?? 0)} scalars`,
+    `Periodic: ${periodic.length ? periodic.join(", ") : "none"}`,
+  ].map((row) => `<div>${row}</div>`).join("");
+}
+
+function axisKindLabel(kind) {
+  return {
+    snac: "Native SNaC",
+    simple_ratio: "Monotone grading",
+    max_min: "Symmetric grading",
+    multi: "Multi-region grading",
+    explicit: "Explicit coordinates",
+  }[kind] ?? String(kind ?? "Axis grid");
+}
+
+async function applySelectedLibraryItem() {
+  const entry = selectedLibraryEntry();
+  if (!entry) return;
+  if (currentLibraryTab === "axisPresets") {
+    const block = selectedBlock();
+    if (!block) return;
+    try {
+      const axisIndex = AXES.indexOf(currentAxis);
+      const applied = applyAxisPreset(entry.item, block.lmin[axisIndex], block.lmax[axisIndex]);
+      block.axes[currentAxis] = applied.axis;
+      block.ng[axisIndex] = applied.ng;
+      markProjectDirty(block.id);
+      renderAll();
+      schedulePreview(block.id, 0);
+      setStatus(`Applied ${entry.item.name} to ${currentAxis.toUpperCase()}`);
+    } catch (error) {
+      setStatus(error.message);
+    }
+    return;
+  }
+  setStatus(`Applying ${entry.item.name}...`);
+  try {
+    commitHistory();
+    const payload = await postJson("/api/migrate", { project: entry.item.project });
+    project = payload.project;
+    selectedId = project.blocks[0]?.id ?? null;
+    selectedIds = new Set(selectedId == null ? [] : [selectedId]);
+    lastCheck = null;
+    pendingRepair = null;
+    decompositionResult = null;
+    previewCache.clear();
+    previewSequence += 1;
+    renderAll();
+    commitHistory();
+    fitView();
+    els.libraryDialog.close();
+    const structured = project.inferConnectivity ? await updateStructure({ silent: true }) : true;
+    if (structured) setStatus(`Applied ${entry.item.name}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function saveCurrentLibraryItem() {
+  const selected = selectedLibraryEntry();
+  const existingId = selected && !selected.builtIn ? selected.item.id : undefined;
+  try {
+    assertLibraryNameAvailable(els.libraryName.value, existingId);
+    let item;
+    if (currentLibraryTab === "axisPresets") {
+      const block = selectedBlock();
+      if (!block) throw new Error("Select a block before saving an axis preset");
+      const axisIndex = AXES.indexOf(currentAxis);
+      item = captureAxisPreset(
+        els.libraryName.value,
+        ensureAxis(block, currentAxis),
+        block.ng[axisIndex],
+        block.lmin[axisIndex],
+        block.lmax[axisIndex],
+        existingId
+      );
+    } else {
+      item = captureProjectTemplate(els.libraryName.value, project, existingId);
+    }
+    userLibrary = saveLibrary(replaceLibraryItem(userLibrary, currentLibraryTab, item));
+    selectedLibraryItem = `user:${item.id}`;
+    renderLibraryDialog();
+    setStatus(`${existingId ? "Updated" : "Saved"} ${item.name}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function renameSelectedLibraryItem() {
+  const entry = selectedLibraryEntry();
+  if (!entry || entry.builtIn) return;
+  try {
+    assertLibraryNameAvailable(els.libraryName.value, entry.item.id);
+    userLibrary = saveLibrary(renameLibraryItem(userLibrary, currentLibraryTab, entry.item.id, els.libraryName.value));
+    renderLibraryDialog();
+    setStatus(`Renamed library item to ${els.libraryName.value}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function deleteSelectedLibraryItem() {
+  const entry = selectedLibraryEntry();
+  if (!entry || entry.builtIn) return;
+  const name = entry.item.name;
+  try {
+    userLibrary = saveLibrary(removeLibraryItem(userLibrary, currentLibraryTab, entry.item.id));
+    selectedLibraryItem = null;
+    renderLibraryDialog();
+    setStatus(`Deleted ${name}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+async function importLibraryJson(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = "";
+  try {
+    const incoming = normalizeLibrary(JSON.parse(await file.text()));
+    const merged = mergeLibraries(userLibrary, incoming);
+    userLibrary = saveLibrary(merged.library);
+    selectedLibraryItem = null;
+    renderLibraryDialog();
+    const count = merged.counts.axisPresets + merged.counts.projectTemplates;
+    setStatus(`Imported ${count} library item${count === 1 ? "" : "s"}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function exportLibraryJson() {
+  const content = `${JSON.stringify({ ...userLibrary, schemaVersion: LIBRARY_SCHEMA_VERSION }, null, 2)}\n`;
+  downloadText(content, "snac-grid-library.json", "application/json");
+  setStatus("Downloaded grid library");
+}
+
+function assertLibraryNameAvailable(name, exceptId) {
+  const target = String(name ?? "").trim().toLocaleLowerCase();
+  const duplicate = libraryEntries().some((entry) => entry.item.id !== exceptId && entry.item.name.toLocaleLowerCase() === target);
+  if (duplicate) throw new Error("Library item names must be unique");
 }
 
 function downloadProjectJson() {
@@ -1486,31 +2033,58 @@ function downloadProjectJson() {
   link.download = `${project.name || "snac-grid"}.json`;
   link.click();
   URL.revokeObjectURL(link.href);
+  commitHistory();
+  clearAutosave();
 }
 
-function openProjectJson(event) {
+async function downloadCaseReport(format) {
+  setStatus(`Building ${format === "json" ? "JSON" : "Markdown"} report...`);
+  try {
+    const payload = await postJson("/api/report", { project });
+    const extension = format === "json" ? "json" : "md";
+    const type = format === "json" ? "application/json" : "text/markdown";
+    const content = format === "json"
+      ? `${JSON.stringify(payload.report, null, 2)}\n`
+      : payload.markdown;
+    const base = (project.name || "snac-grid").replace(/[^A-Za-z0-9._-]+/g, "-");
+    downloadText(content, `${base}-quality.${extension}`, type);
+    setStatus(`Downloaded ${extension.toUpperCase()} quality report`);
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function downloadText(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+async function openProjectJson(event) {
   const file = event.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      project = JSON.parse(reader.result);
-      project.blocks = project.blocks || [];
-      selectedId = project.blocks[0]?.id ?? null;
-      lastCheck = null;
-      pendingRepair = null;
-      decompositionResult = null;
-      previewCache.clear();
-      previewSequence += 1;
-      renderAll();
-      resetHistory();
-      setStatus(`Loaded ${file.name}`);
-    } catch (error) {
-      setStatus(error.message);
-    }
-  };
-  reader.readAsText(file);
   event.target.value = "";
+  try {
+    const loaded = JSON.parse(await file.text());
+    const payload = await postJson("/api/migrate", { project: loaded });
+    project = payload.project;
+    selectedId = project.blocks[0]?.id ?? null;
+    selectedIds = new Set(selectedId == null ? [] : [selectedId]);
+    lastCheck = null;
+    pendingRepair = null;
+    decompositionResult = null;
+    previewCache.clear();
+    previewSequence += 1;
+    renderAll();
+    clearAutosave();
+    resetHistory(false);
+    setStatus(`Loaded ${file.name}`);
+  } catch (error) {
+    setStatus(error.message);
+  }
 }
 
 function selectFromScene(event) {
@@ -1522,6 +2096,7 @@ function selectFromScene(event) {
   const hit = raycaster.intersectObjects(blockGroup.children, false).find((item) => item.object.userData.blockId);
   if (hit && hit.object.userData.blockId !== selectedId) {
     selectedId = hit.object.userData.blockId;
+    if (event.shiftKey) selectedIds.add(selectedId);
     renderAll();
   }
 }
@@ -1541,21 +2116,8 @@ function resizeRenderer() {
   camera.updateProjectionMatrix();
 }
 
-function projectBox() {
-  const box = new THREE.Box3();
-  for (const block of project.blocks) {
-    box.expandByPoint(new THREE.Vector3(...block.lmin));
-    box.expandByPoint(new THREE.Vector3(...block.lmax));
-  }
-  if (box.isEmpty()) {
-    box.expandByPoint(new THREE.Vector3(0, 0, 0));
-    box.expandByPoint(new THREE.Vector3(1, 1, 1));
-  }
-  return box;
-}
-
 function fitView() {
-  const box = projectBox();
+  const box = projectBox(project.blocks);
   if (box.isEmpty()) {
     controls.target.set(0, 0, 0);
     camera.position.set(3.0, -4.5, 3.0);
@@ -1576,176 +2138,13 @@ function selectedBlock() {
   return project?.blocks?.find((block) => block.id === selectedId);
 }
 
+function selectedBlockIds() {
+  const ids = [...selectedIds].filter((id) => project.blocks.some((block) => block.id === id));
+  return ids.length ? ids : selectedId == null ? [] : [selectedId];
+}
+
 function blockLabel(block) {
   return block.name ? `${block.id}: ${block.name}` : `Block ${block.id}`;
-}
-
-function blockSize(block) {
-  return block.lmax.map((value, index) => Math.max(1e-9, value - block.lmin[index]));
-}
-
-function blockCenter(block) {
-  return block.lmin.map((value, index) => 0.5 * (value + block.lmax[index]));
-}
-
-function ensureAxis(block, axis) {
-  block.axes = block.axes || {};
-  block.axes[axis] = block.axes[axis] || defaultAxis();
-  block.axes[axis].segments = block.axes[axis].segments || [{ length: 1, cells: 1, ratio: 1, continuous: false }];
-  for (const segment of block.axes[axis].segments) segment.continuous = Boolean(segment.continuous);
-  block.axes[axis].profile = block.axes[axis].profile || "geometric";
-  block.axes[axis].controls = block.axes[axis].controls || ["n", "ratio"];
-  return block.axes[axis];
-}
-
-function isCellCountDerived(axis) {
-  return axis.kind === "max_min" || (axis.kind === "simple_ratio" && !axis.controls?.includes("n"));
-}
-
-function defaultAxis() {
-  return {
-    kind: "snac",
-    gt: 0,
-    gr: 0,
-    ratio: 1,
-    cell_ratio: 1,
-    width_start: 0.01,
-    width_end: 0.02,
-    controls: ["n", "ratio"],
-    profile: "geometric",
-    min: 0.01,
-    max: 0.02,
-    side: "end",
-    segments: [{ length: 1, cells: 1, ratio: 1, continuous: false }],
-  };
-}
-
-function defaultBlock(id) {
-  return {
-    id,
-    name: "",
-    dims: [1, 1, 1],
-    ng: [32, 32, 2],
-    lmin: [0, 0, 0],
-    lmax: [1, 1, 0.05],
-    axes: { x: defaultAxis(), y: defaultAxis(), z: defaultAxis() },
-    axisLocks: [false, false, false],
-    cbcvel: Array.from({ length: 3 }, () => ["D", "D", "D", "D", "D", "D"]),
-    cbcpre: ["N", "N", "N", "N", "N", "N"],
-    bcvel: Array.from({ length: 3 }, () => [0, 0, 0, 0, 0, 0]),
-    bcpre: [0, 0, 0, 0, 0, 0],
-    cbcscal: [],
-    bcscal: [],
-    inflow: [0, 0, 0, 0, 0, 0],
-    inivel: "zer",
-  };
-}
-
-function ensureBoundaryArrays(block) {
-  const nscal = normalizedScalarCount(project.nscal);
-  block.cbcvel = Array.from({ length: 3 }, (_, component) => completeArray(block.cbcvel?.[component], "D"));
-  block.cbcpre = completeArray(block.cbcpre, "N");
-  block.bcvel = Array.from({ length: 3 }, (_, component) => completeArray(block.bcvel?.[component], 0));
-  block.bcpre = completeArray(block.bcpre, 0);
-  block.cbcscal = Array.from({ length: nscal }, (_, iscal) => completeArray(block.cbcscal?.[iscal], "N"));
-  block.bcscal = Array.from({ length: nscal }, (_, iscal) => completeArray(block.bcscal?.[iscal], 0));
-  block.inflow = completeArray(block.inflow, 0);
-}
-
-function completeArray(values, fallback) {
-  const result = Array.isArray(values) ? values.slice(0, 6) : [];
-  while (result.length < 6) result.push(fallback);
-  return result;
-}
-
-function normalizedPeriodicAxes() {
-  const values = Array.isArray(project.periodicAxes) ? project.periodicAxes : [false, false, false];
-  return AXES.map((_, index) => Boolean(values[index]));
-}
-
-function normalizedDecomposition() {
-  const value = project.decomposition ?? {};
-  const targetRanks = Math.max(0, Math.round(Number(value.targetRanks ?? value.target_ranks) || 0));
-  const mode = ["auto", "1d", "2d", "3d"].includes(value.mode) ? value.mode : "auto";
-  const sourceAxes = Array.isArray(value.axes) ? value.axes : [true, true, true];
-  const axes = AXES.map((_, index) => (index < sourceAxes.length ? Boolean(sourceAxes[index]) : true));
-  if (!axes.some(Boolean)) axes[0] = true;
-  return { targetRanks, mode, axes };
-}
-
-function normalizedAxisLocks(values) {
-  const source = Array.isArray(values) ? values : [];
-  return AXES.map((_, index) => Boolean(source[index]));
-}
-
-function normalizedScalarCount(value = project?.nscal ?? 0) {
-  return Math.max(0, Math.round(Number(value) || 0));
-}
-
-function resetFriendBoundaries(block) {
-  block.cbcvel = Array.from({ length: 3 }, () => ["D", "D", "D", "D", "D", "D"]);
-  block.cbcpre = ["N", "N", "N", "N", "N", "N"];
-  block.bcvel = Array.from({ length: 3 }, () => [0, 0, 0, 0, 0, 0]);
-  block.bcpre = [0, 0, 0, 0, 0, 0];
-  block.cbcscal = Array.from({ length: normalizedScalarCount(project.nscal) }, () => ["N", "N", "N", "N", "N", "N"]);
-  block.bcscal = Array.from({ length: normalizedScalarCount(project.nscal) }, () => [0, 0, 0, 0, 0, 0]);
-}
-
-function propagateMpiPartition(sourceId, axisIndex, value) {
-  const graph = new Map(project.blocks.map((block) => [block.id, new Set()]));
-  for (const connection of fullFaceConnections(project.blocks)) {
-    if (connection.axisIndex === axisIndex) continue;
-    graph.get(connection.a.id).add(connection.b.id);
-    graph.get(connection.b.id).add(connection.a.id);
-  }
-  const queue = [sourceId];
-  const seen = new Set(queue);
-  while (queue.length) {
-    const blockId = queue.shift();
-    const block = project.blocks.find((item) => item.id === blockId);
-    if (block) block.dims[axisIndex] = value;
-    for (const neighborId of graph.get(blockId) ?? []) {
-      if (!seen.has(neighborId)) {
-        seen.add(neighborId);
-        queue.push(neighborId);
-      }
-    }
-  }
-}
-
-function fullFaceConnections(blocks) {
-  const connections = [];
-  for (let i = 0; i < blocks.length; i += 1) {
-    for (let j = i + 1; j < blocks.length; j += 1) {
-      const a = blocks[i];
-      const b = blocks[j];
-      for (let axisIndex = 0; axisIndex < 3; axisIndex += 1) {
-        if (touches(a.lmax[axisIndex], b.lmin[axisIndex]) && sameCrossSection(a, b, axisIndex)) {
-          connections.push({ a, b, axisIndex });
-        }
-        if (touches(b.lmax[axisIndex], a.lmin[axisIndex]) && sameCrossSection(a, b, axisIndex)) {
-          connections.push({ a: b, b: a, axisIndex });
-        }
-      }
-    }
-  }
-  return connections;
-}
-
-function sameCrossSection(a, b, axisIndex) {
-  for (let index = 0; index < 3; index += 1) {
-    if (index === axisIndex) continue;
-    if (!touches(a.lmin[index], b.lmin[index]) || !touches(a.lmax[index], b.lmax[index])) return false;
-  }
-  return true;
-}
-
-function touches(a, b) {
-  return Math.abs(a - b) <= 1e-10;
-}
-
-function nextBlockId() {
-  return Math.max(0, ...project.blocks.map((block) => block.id)) + 1;
 }
 
 function numberInput(field, index, value, min = null, disabled = false) {
@@ -1798,6 +2197,17 @@ function formatPercent(value) {
   return `${(100 * value).toPrecision(value < 0.001 ? 2 : 3)}%`;
 }
 
+function formatBytes(value) {
+  let size = Number(value) || 0;
+  const units = ["B", "KiB", "MiB", "GiB"];
+  let index = 0;
+  while (size >= 1024 && index < units.length - 1) {
+    size /= 1024;
+    index += 1;
+  }
+  return `${formatNumber(size)} ${units[index]}`;
+}
+
 function formatInputNumber(value) {
   return Number(value.toPrecision(12)).toString();
 }
@@ -1809,7 +2219,14 @@ function setStatus(message) {
 function clearCheckState() {
   lastCheck = null;
   renderCheckResults();
+  renderQualitySummary();
   setStatus("");
+}
+
+function decompositionSettingEdited() {
+  pendingRepair = null;
+  decompositionResult = null;
+  lastCheck = null;
 }
 
 function markProjectDirty(blockId = null) {
@@ -1826,20 +2243,22 @@ function projectSnapshot() {
     project: JSON.stringify(project),
     decompositionResult: decompositionResult ? JSON.stringify(decompositionResult) : null,
     selectedId,
+    selectedIds: [...selectedIds],
     currentAxis,
   };
 }
 
-function resetHistory() {
+function resetHistory(save = true) {
   window.clearTimeout(historyTimer);
   historyTimer = null;
-  projectHistory = [projectSnapshot()];
-  historyIndex = 0;
+  projectHistory.reset(projectSnapshot());
   updateHistoryButtons();
+  if (save) saveAutosave();
 }
 
 function scheduleHistoryCommit(delay = 250) {
   if (isTransformDragging) return;
+  saveAutosave();
   window.clearTimeout(historyTimer);
   historyTimer = window.setTimeout(commitHistory, delay);
 }
@@ -1848,33 +2267,28 @@ function commitHistory() {
   window.clearTimeout(historyTimer);
   historyTimer = null;
   const snapshot = projectSnapshot();
-  const current = projectHistory[historyIndex];
-  if (current?.project === snapshot.project && current?.decompositionResult === snapshot.decompositionResult) return;
-  projectHistory = projectHistory.slice(0, historyIndex + 1);
-  projectHistory.push(snapshot);
-  if (projectHistory.length > HISTORY_LIMIT) projectHistory.shift();
-  historyIndex = projectHistory.length - 1;
+  saveAutosave();
+  projectHistory.commit(snapshot);
   updateHistoryButtons();
 }
 
 function undoProject() {
   commitHistory();
-  if (historyIndex <= 0) return;
-  restoreHistory(historyIndex - 1);
+  const state = projectHistory.undo();
+  if (state) restoreHistory(state);
 }
 
 function redoProject() {
-  if (historyIndex >= projectHistory.length - 1) return;
-  restoreHistory(historyIndex + 1);
+  const state = projectHistory.redo();
+  if (state) restoreHistory(state);
 }
 
-function restoreHistory(index) {
+function restoreHistory(state) {
   window.clearTimeout(historyTimer);
   historyTimer = null;
-  historyIndex = index;
-  const state = projectHistory[historyIndex];
   project = JSON.parse(state.project);
   selectedId = project.blocks.some((block) => block.id === state.selectedId) ? state.selectedId : project.blocks[0]?.id ?? null;
+  selectedIds = new Set((state.selectedIds ?? []).filter((id) => project.blocks.some((block) => block.id === id)));
   currentAxis = state.currentAxis;
   lastCheck = null;
   pendingRepair = null;
@@ -1885,10 +2299,58 @@ function restoreHistory(index) {
   setStatus("");
 }
 
+function saveAutosave() {
+  saveStoredProject(AUTOSAVE_KEY, project);
+}
+
+function clearAutosave() {
+  clearStoredProject(AUTOSAVE_KEY);
+}
+
+function loadAutosave() {
+  return loadStoredProject(AUTOSAVE_KEY);
+}
+
+function showRecoveryDialog(recovery) {
+  pendingRecovery = recovery;
+  const savedAt = new Date(recovery.savedAt);
+  const time = Number.isNaN(savedAt.getTime()) ? "an earlier session" : savedAt.toLocaleString();
+  els.recoverySummary.textContent = `${recovery.project.name || "Untitled project"}, saved ${time}`;
+  els.recoveryDialog.showModal();
+}
+
+async function restoreRecovery() {
+  if (!pendingRecovery) return;
+  try {
+    const payload = await postJson("/api/migrate", { project: pendingRecovery.project });
+    project = payload.project;
+    selectedId = project.blocks[0]?.id ?? null;
+    selectedIds = new Set(selectedId == null ? [] : [selectedId]);
+    pendingRecovery = null;
+    els.recoveryDialog.close();
+    previewCache.clear();
+    previewSequence += 1;
+    renderAll();
+    resetHistory();
+    fitView();
+    setStatus("Recovered autosaved project");
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
+function discardRecovery() {
+  pendingRecovery = null;
+  clearAutosave();
+  els.recoveryDialog.close();
+  resetHistory(false);
+  setStatus("Started with the sample project");
+}
+
 function updateHistoryButtons() {
   if (!els.undoProject || !els.redoProject) return;
-  els.undoProject.disabled = historyIndex <= 0;
-  els.redoProject.disabled = historyIndex < 0 || historyIndex >= projectHistory.length - 1;
+  els.undoProject.disabled = !projectHistory.canUndo;
+  els.redoProject.disabled = !projectHistory.canRedo;
 }
 
 function escapeHtml(value) {

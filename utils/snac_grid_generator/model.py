@@ -7,8 +7,8 @@ from math import isfinite
 from typing import Any
 
 from .grid import AXIS_NAMES, fit_min_max_cell_count, fit_monotone_spacing
-
-PROJECT_SCHEMA_VERSION = 1
+from .migrations import PROJECT_SCHEMA_VERSION, migrate_project_dict
+from .numeric import geometry_tolerance
 
 
 @dataclass
@@ -55,6 +55,7 @@ class AxisSpec:
     max: float = 0.02
     side: str = "end"
     segments: list[GradingSegment] = field(default_factory=lambda: [GradingSegment()])
+    faces: list[float] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> "AxisSpec":
@@ -94,7 +95,11 @@ class AxisSpec:
             min=float(data.get("min", 0.01)),
             max=float(data.get("max", 0.02)),
             side=side,
-            segments=[GradingSegment.from_dict(item) for item in data.get("segments", [{"length": 1, "cells": 1, "ratio": 1}])],
+            segments=[
+                GradingSegment.from_dict(item)
+                for item in data.get("segments", [{"length": 1, "cells": 1, "ratio": 1}])
+            ],
+            faces=[float(value) for value in data.get("faces", [])],
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -112,6 +117,7 @@ class AxisSpec:
             "max": self.max,
             "side": self.side,
             "segments": [segment.to_dict() for segment in self.segments],
+            "faces": self.faces,
         }
 
 
@@ -122,6 +128,8 @@ class DecompositionSpec:
     target_ranks: int = 0
     mode: str = "auto"
     axes: list[bool] = field(default_factory=lambda: [True, True, True])
+    min_local_cells: int = 4
+    max_local_aspect: float = 0.0
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> "DecompositionSpec":
@@ -130,6 +138,8 @@ class DecompositionSpec:
             target_ranks=max(0, int(data.get("targetRanks", data.get("target_ranks", 0)))),
             mode=str(data.get("mode", "auto")).lower(),
             axes=_bool_list(data.get("axes"), 3, True),
+            min_local_cells=int(data.get("minLocalCells", data.get("min_local_cells", 4))),
+            max_local_aspect=float(data.get("maxLocalAspect", data.get("max_local_aspect", 0.0))),
         )
 
     def validate(self) -> None:
@@ -139,12 +149,18 @@ class DecompositionSpec:
         self.axes = self.axes[:3]
         if self.target_ranks and not any(self.axes):
             raise ValueError("automatic decomposition requires at least one partition axis")
+        if self.min_local_cells < 1:
+            raise ValueError("minimum local cells must be at least 1")
+        if self.max_local_aspect and self.max_local_aspect < 1.0:
+            raise ValueError("maximum local aspect must be zero or at least 1")
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "targetRanks": self.target_ranks,
             "mode": self.mode,
             "axes": self.axes,
+            "minLocalCells": self.min_local_cells,
+            "maxLocalAspect": self.max_local_aspect,
         }
 
 
@@ -216,7 +232,22 @@ class Block:
         for index, axis in enumerate(AXIS_NAMES):
             self.axes.setdefault(axis, AxisSpec())
             length = self.lmax[index] - self.lmin[index]
-            if self.axes[axis].kind == "max_min":
+            if self.axes[axis].kind == "explicit":
+                faces = self.axes[axis].faces
+                if len(faces) < 2 or not all(isfinite(value) for value in faces):
+                    raise ValueError(f"block {self.id}: explicit {axis} grid requires finite face coordinates")
+                if any(high <= low for low, high in zip(faces, faces[1:])):
+                    raise ValueError(f"block {self.id}: explicit {axis} grid faces must increase")
+                tolerance = geometry_tolerance(
+                    faces[0], faces[-1], self.lmin[index], self.lmax[index], scale=length
+                )
+                if (
+                    abs(faces[0] - self.lmin[index]) > tolerance
+                    or abs(faces[-1] - self.lmax[index]) > tolerance
+                ):
+                    raise ValueError(f"block {self.id}: explicit {axis} grid must span the block extent")
+                self.ng[index] = len(faces) - 1
+            elif self.axes[axis].kind == "max_min":
                 self.ng[index] = fit_min_max_cell_count(self.axes[axis].to_dict(), length).n
             elif self.axes[axis].kind == "simple_ratio":
                 self.ng[index] = fit_monotone_spacing(self.axes[axis].to_dict(), length, self.ng[index]).n
@@ -257,9 +288,7 @@ class Project:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Project":
-        schema_version = int(data.get("schemaVersion", PROJECT_SCHEMA_VERSION))
-        if schema_version != PROJECT_SCHEMA_VERSION:
-            raise ValueError(f"unsupported project schema version {schema_version}")
+        data = migrate_project_dict(data)
         blocks = [Block.from_dict(item) for item in data.get("blocks", [Block(id=1).to_dict()])]
         inferred_nscal = max((len(block.cbcscal) for block in blocks), default=0)
         project = cls(

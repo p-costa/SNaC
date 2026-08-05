@@ -142,7 +142,7 @@ If scalars are enabled, `block_cbcscal(0:1,1:3,is,iblock)` and `block_bcscal(0:1
 
 `block_inflow_type` enables the built-in inflow profile generator on Dirichlet velocity boundaries. A non-positive value enforces the constant boundary value.
 
-`block_inivel` chooses the initial velocity field. Supported values include `zer`, `uni`, `cou`, `poi`, `log`, `hcp`, `hcl`, and `tgv`.
+`block_inivel` chooses the initial velocity field. Supported values are `zer`, `uni`, `cou`, `poi`, `log`, `hcp`, `hcl`, `tgv`, `kov`, and `pdc`.
 
 ## External Axis Grids
 
