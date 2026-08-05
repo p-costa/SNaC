@@ -758,16 +758,37 @@ dialog::backdrop {
 }
 
 .check-line {
+  width: 100%;
   min-height: 30px;
   display: flex;
   align-items: center;
+  gap: 7px;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 7px 9px;
   background: #171c22;
   color: var(--muted);
   font-size: 12px;
+  font-family: inherit;
+  text-align: left;
   line-height: 1.25;
+}
+
+.check-line.actionable {
+  cursor: pointer;
+}
+
+.check-line.actionable:hover,
+.check-line.actionable:focus-visible {
+  background: #202730;
+  outline: 1px solid currentColor;
+  outline-offset: 1px;
+}
+
+.check-line svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
 }
 
 .check-line.ok {

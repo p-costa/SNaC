@@ -76,6 +76,7 @@ let gridLinesVisible = true;
 let spacingJumpsVisible = true;
 let blockTool = "select";
 let lastCheck = null;
+let activeDiagnostic = null;
 let pendingRepair = null;
 let decompositionResult = null;
 let previewTimer = null;
@@ -100,6 +101,7 @@ let axesGroup;
 let partitionGroup;
 let selectedGridGroup;
 let spacingJumpGroup;
+let diagnosticGroup;
 let transformControls;
 let selectedBlockMesh = null;
 let transformDrag = null;
@@ -344,6 +346,7 @@ function initScene() {
   boundaryFaceGroup = new THREE.Group();
   selectedGridGroup = new THREE.Group();
   spacingJumpGroup = new THREE.Group();
+  diagnosticGroup = new THREE.Group();
   partitionGroup = new THREE.Group();
   axesGroup = new THREE.Group();
   gridHelper = new THREE.GridHelper(10, 20, 0x46515c, 0x252b32);
@@ -354,6 +357,7 @@ function initScene() {
   scene.add(boundaryFaceGroup);
   scene.add(selectedGridGroup);
   scene.add(spacingJumpGroup);
+  scene.add(diagnosticGroup);
   scene.add(partitionGroup);
 
   transformControls = new TransformControls(camera, renderer.domElement);
@@ -1061,19 +1065,58 @@ function renderCheckResults() {
   if (!els.checkResults) return;
   const errors = lastCheck?.errors ?? [];
   const warnings = lastCheck?.warnings ?? [];
+  const diagnostics = lastCheck?.diagnostics ?? [
+    ...errors.map((message) => ({ severity: "error", message, locations: [] })),
+    ...warnings.map((message) => ({ severity: "warning", message, locations: [] })),
+  ];
   els.exportCase.disabled = !project.blocks.length || errors.length > 0;
   if (!lastCheck) {
+    activeDiagnostic = null;
     els.checkResults.innerHTML = "";
     return;
   }
+  if (
+    activeDiagnostic &&
+    !diagnostics.some((item) => item.code === activeDiagnostic.code && item.message === activeDiagnostic.message)
+  ) {
+    activeDiagnostic = null;
+  }
   if (!errors.length && !warnings.length) {
+    activeDiagnostic = null;
     els.checkResults.innerHTML = `<div class="check-line ok">Structured grid checks passed</div>`;
     return;
   }
-  els.checkResults.innerHTML = `
-    ${errors.map((message) => `<div class="check-line error">${escapeHtml(message)}</div>`).join("")}
-    ${warnings.map((message) => `<div class="check-line warning">${escapeHtml(message)}</div>`).join("")}
-  `;
+  els.checkResults.innerHTML = diagnostics
+    .map((diagnostic, index) => {
+      const actionable = (diagnostic.locations ?? []).some((location) =>
+        project.blocks.some((block) => block.id === location.blockId)
+      );
+      const tag = actionable ? "button" : "div";
+      const attributes = actionable
+        ? `type="button" data-diagnostic-index="${index}" title="Show affected block or face"`
+        : "";
+      const icon = actionable ? `<i data-lucide="locate-fixed"></i>` : "";
+      return `<${tag} class="check-line ${diagnostic.severity}${actionable ? " actionable" : ""}" ${attributes}>${icon}<span>${escapeHtml(diagnostic.message)}</span></${tag}>`;
+    })
+    .join("");
+  for (const button of els.checkResults.querySelectorAll("[data-diagnostic-index]")) {
+    button.addEventListener("click", () => focusDiagnostic(diagnostics[Number(button.dataset.diagnosticIndex)]));
+  }
+}
+
+function focusDiagnostic(diagnostic) {
+  const blockIds = (diagnostic.locations ?? [])
+    .map((location) => location.blockId)
+    .filter((blockId) => project.blocks.some((block) => block.id === blockId));
+  if (!blockIds.length) return;
+  activeDiagnostic = diagnostic;
+  selectedId = blockIds[0];
+  selectedIds = new Set(blockIds);
+  if (AXES.includes(diagnostic.axis)) currentAxis = diagnostic.axis;
+  const block = selectedBlock();
+  if (block) controls.target.set(...blockCenter(block));
+  renderAll();
+  setStatus(`Showing ${diagnostic.code?.replaceAll("_", " ") ?? "grid issue"}`);
 }
 
 function renderScene() {
@@ -1088,6 +1131,10 @@ function renderScene() {
   clearDisposableGroup(selectedGridGroup);
   clearDisposableGroup(partitionGroup);
   clearDisposableGroup(spacingJumpGroup);
+  clearDisposableGroup(diagnosticGroup);
+  const diagnosticIds = new Set(
+    (activeDiagnostic?.locations ?? []).map((location) => location.blockId)
+  );
   for (const block of project.blocks) {
     const size = blockSize(block);
     const center = blockCenter(block);
@@ -1095,7 +1142,7 @@ function renderScene() {
     const material = new THREE.MeshStandardMaterial({
       color,
       transparent: true,
-      opacity: block.id === selectedId ? 0.43 : 0.24,
+      opacity: diagnosticIds.has(block.id) ? 0.52 : block.id === selectedId ? 0.43 : 0.24,
       roughness: 0.62,
       metalness: 0.0,
       side: THREE.DoubleSide,
@@ -1109,7 +1156,13 @@ function renderScene() {
 
     const edges = new THREE.LineSegments(
       new THREE.EdgesGeometry(mesh.geometry),
-      new THREE.LineBasicMaterial({ color: block.id === selectedId ? 0xffffff : 0x9aa6b2, transparent: true, opacity: block.id === selectedId ? 0.95 : 0.48 })
+      new THREE.LineBasicMaterial({
+        color: diagnosticIds.has(block.id)
+          ? activeDiagnostic.severity === "error" ? 0xff6b6b : 0xf0c36a
+          : block.id === selectedId ? 0xffffff : 0x9aa6b2,
+        transparent: true,
+        opacity: diagnosticIds.has(block.id) || block.id === selectedId ? 0.95 : 0.48,
+      })
     );
     mesh.add(edges);
   }
@@ -1117,9 +1170,29 @@ function renderScene() {
   drawSelectedGrid();
   drawPartitionPlanes();
   drawInterfaceSpacing();
+  drawDiagnosticHighlight();
   updateAxesHelper();
   attachSelectedTransform();
   renderViewControls();
+}
+
+function drawDiagnosticHighlight() {
+  if (!activeDiagnostic) return;
+  const color = activeDiagnostic.severity === "error" ? 0xff6b6b : 0xf0c36a;
+  for (const location of activeDiagnostic.locations ?? []) {
+    if (!location.face) continue;
+    const block = project.blocks.find((item) => item.id === location.blockId);
+    const face = FACE_ORDER.indexOf(location.face);
+    if (!block || face < 0) continue;
+    const axisIndex = Math.floor(face / 2);
+    const value = face % 2 === 0 ? block.lmin[axisIndex] : block.lmax[axisIndex];
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(planeOutlinePoints(block, axisIndex, value)),
+      new THREE.LineBasicMaterial({ color, depthTest: false })
+    );
+    line.renderOrder = 8;
+    diagnosticGroup.add(line);
+  }
 }
 
 function drawInterfaceSpacing() {

@@ -13,6 +13,7 @@ import numpy as np
 from .grid import AXIS_NAMES
 from .model import AxisSpec, Project
 from .numeric import coordinates_close, geometry_tolerance
+from .snac_grid import read_grid_binary
 from .topology import axis_extent
 
 
@@ -290,34 +291,49 @@ def _load_external_grids(project: Project, case_dir: Path, warnings: list[str]) 
             available = [(source, path) for source, path in candidates if path.is_file()]
             if not available:
                 continue
-            source, path = available[0]
-            faces = _read_binary_faces(path, block.ng[axis_index], block.lmin[axis_index], block.lmax[axis_index])
-            block.axes[axis] = AxisSpec(kind="explicit", faces=faces)
-            sources.add(source)
-            if len(available) > 1:
-                other_faces = _read_binary_faces(
-                    available[1][1], block.ng[axis_index], block.lmin[axis_index], block.lmax[axis_index]
-                )
-                sources.add(available[1][0])
-                if not np.allclose(faces, other_faces, rtol=1.0e-12, atol=1.0e-14):
+            decoded = []
+            failures = []
+            for source, path in available:
+                try:
+                    grid = read_grid_binary(
+                        path,
+                        block.ng[axis_index],
+                        block.lmin[axis_index],
+                        block.lmax[axis_index],
+                    )
+                except (OSError, ValueError) as exc:
+                    failures.append((source, path, str(exc)))
+                    continue
+                decoded.append((source, path, grid))
+                sources.add(source)
+                if grid.dtype != "<f8":
                     warnings.append(
-                        f"block {block.id} {axis}: grid/ and data/ files differ; imported grid/"
+                        f"block {block.id} {axis}: imported {source}/ {grid.dtype} grid; "
+                        "export uses little-endian float64"
+                    )
+
+            if not decoded:
+                details = "; ".join(f"{source}/: {message}" for source, _, message in failures)
+                raise ValueError(f"block {block.id} {axis}: no valid external grid ({details})")
+            for source, _, message in failures:
+                warnings.append(
+                    f"block {block.id} {axis}: ignored invalid {source}/ grid ({message})"
+                )
+
+            source, _, selected = decoded[0]
+            block.axes[axis] = AxisSpec(kind="explicit", faces=selected.faces.tolist())
+            for other_source, _, other in decoded[1:]:
+                tolerance = geometry_tolerance(
+                    block.lmin[axis_index],
+                    block.lmax[axis_index],
+                    scale=axis_extent(block, axis_index),
+                )
+                if not np.allclose(selected.faces, other.faces, rtol=0.0, atol=tolerance):
+                    warnings.append(
+                        f"block {block.id} {axis}: {source}/ and {other_source}/ grids differ; "
+                        f"imported {source}/"
                     )
     return sources
-
-
-def _read_binary_faces(path: Path, n: int, lmin: float, lmax: float) -> list[float]:
-    for dtype in ("<f8", ">f8", "<f4", ">f4"):
-        values = np.fromfile(path, dtype=dtype)
-        if values.size != 4 * n:
-            continue
-        faces = np.concatenate(([lmin], values[:n].astype(float)))
-        scale = abs(lmax - lmin)
-        tolerance = max(1.0e-8 * scale, geometry_tolerance(lmin, lmax, scale=scale))
-        if np.all(np.isfinite(faces)) and np.all(np.diff(faces) > 0.0) and abs(faces[-1] - lmax) <= tolerance:
-            faces[-1] = lmax
-            return faces.tolist()
-    raise ValueError(f"{path} is not a compatible SNaC grid binary for {n} cells")
 
 
 def _infer_periodic_axes(project: Project) -> list[bool]:

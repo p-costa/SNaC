@@ -11,7 +11,7 @@ model. It includes:
 - OpenFOAM-style multi-region grading with optional spacing continuity;
 - geometric, tanh, and erf monotone and symmetric profiles;
 - interchangeable cell-count, ratio, and endpoint-spacing controls;
-- achieved-grid diagnostics and interface-spacing warnings;
+- achieved-grid diagnostics with clickable block/face navigation;
 - previewed grid-congruence repair with per-axis authority locks;
 - existing-case import from `blocks.nml`, project JSON, and binary grids;
 - exact-rank MPI decomposition balancing in automatic, 1D, 2D, or 3D mode;
@@ -19,7 +19,7 @@ model. It includes:
 - common SNaC velocity/pressure boundary presets;
 - autosave recovery and project-schema migration;
 - headless check, update, repair, and decomposition workflows;
-- structured-grid validation before writing case files.
+- structured-grid validation and transactional case writing.
 
 Python 3.8 or newer is supported. Install the runtime dependency from the
 repository root with:
@@ -32,6 +32,12 @@ Browser and lint tests use the separate test manifest:
 
 ```sh
 python3 -m pip install -r utils/snac_grid_generator/requirements-test.txt
+```
+
+The grid-generator Python sources and tests have an enforced Flake8 baseline:
+
+```sh
+python3 -m flake8 utils/snac_grid_generator tests/snac_grid_generator
 ```
 
 Run the GUI from the repository root:
@@ -64,6 +70,10 @@ partition counts across connected blocks where SNaC requires the neighboring
 subdomains to line up. Export runs the same structured-grid checks and refuses
 to write files when they fail. Large normal-spacing jumps across block
 interfaces are reported as warnings.
+
+Check messages that identify blocks or faces are buttons. Selecting one checks
+all affected blocks, switches to the relevant axis, centers the viewport target,
+and outlines affected faces in red or amber.
 
 The selected axis can be copied to every face-connected block with the same
 extent in that axis using `Apply to aligned blocks`. For example, a Y grid can
@@ -181,14 +191,20 @@ The `Grid files` selector controls where those external grid files are copied.
 `gt/gr`. `grid/ + data/` also duplicates those grid files under `data/`, matching
 the grid snapshots SNaC writes with saved output.
 
-Each export is staged before it replaces the case files. The hidden
-`.snac_grid_generator_manifest.json` records files owned by the generator so a
-later export can remove obsolete block grids without deleting unrelated solver
-output.
+Each export is fully staged and validated before publication. Existing
+generator-owned files are backed up during publication and restored if any
+replacement fails. The hidden `.snac_grid_generator_manifest.json` records file
+ownership so later exports can remove obsolete block grids without deleting
+unrelated solver output. A malformed manifest, symbolic-link target, or
+unmanaged file collision stops export and leaves the existing case untouched.
 
 The binary grid files follow `save_grid` in `src/initgrid.f90`: for each axis,
 the file contains the face coordinate, center coordinate, face spacing, and
-center spacing arrays for the block's `ng` entries, in double precision.
+center spacing arrays for the block's `ng` entries. Export uses little-endian
+double precision. Import accepts little- or big-endian single or double
+precision and validates all four arrays against one another; invalid files are
+rejected instead of importing plausible face coordinates from a corrupted
+payload.
 
 You can also export from a saved project JSON:
 
@@ -200,8 +216,10 @@ To open an existing case in the GUI, put its directory in `Output` and use the
 folder-import button. `snac_grid_project.json` is preferred when present;
 otherwise the importer reconstructs the project from `blocks.nml`. Any
 `grid/grid_[xyz]_b_###.bin` files, or `data/` equivalents, replace the axis
-definition with their exact face coordinates. The same conversion is available
-headlessly:
+definition with their exact face coordinates. If one copy is invalid and the
+other is valid, the valid copy is imported with a warning. If both are valid but
+differ, `grid/` remains authoritative and the difference is reported. The same
+conversion is available headlessly:
 
 ```sh
 python3 -m utils.snac_grid_generator.cli import path/to/case -o imported-project.json

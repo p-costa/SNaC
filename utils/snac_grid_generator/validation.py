@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from .diagnostics import Diagnostic, diagnostics_for_messages
 from .grid import AXIS_NAMES, axis_grid_arrays
 from .model import AxisSpec, Block, Project
 from .numeric import coordinates_close, geometry_tolerance
@@ -37,6 +38,10 @@ class CheckResult:
     def ok(self) -> bool:
         return not self.errors
 
+    @property
+    def diagnostics(self) -> list[Diagnostic]:
+        return diagnostics_for_messages(self.errors, self.warnings, self.interfaces)
+
     def extend(self, other: "CheckResult") -> None:
         self.errors.extend(other.errors)
         self.warnings.extend(other.warnings)
@@ -48,20 +53,21 @@ class CheckResult:
             "errors": self.errors,
             "warnings": self.warnings,
             "interfaces": self.interfaces,
+            "diagnostics": [diagnostic.to_dict() for diagnostic in self.diagnostics],
         }
 
 
 def check_project(project: Project | dict[str, Any]) -> CheckResult:
     """Check that a project can be exported as a structured SNaC grid."""
 
-    project = _project_copy(project)
+    project = copy_project(project)
     result = CheckResult()
     topology = build_topology(project.blocks, project.periodic_axes)
     result.errors.extend(topology.errors)
     result.warnings.extend(topology.warnings)
     if not project.blocks:
         result.errors.append("project has no blocks and cannot be exported as a SNaC case")
-    result.errors.extend(_check_connected_components(project.blocks, topology.connections))
+    result.errors.extend(connected_component_errors(project.blocks, topology.connections))
     by_id = {block.id: block for block in project.blocks}
 
     result.errors.extend(_check_block_basics(project.blocks))
@@ -76,7 +82,7 @@ def check_project(project: Project | dict[str, Any]) -> CheckResult:
 def infer_project_connectivity(project: Project | dict[str, Any]) -> tuple[Project, CheckResult]:
     """Return a copy with full-face ``F`` boundary connectivity inferred."""
 
-    project = _project_copy(project)
+    project = copy_project(project)
     result = CheckResult()
     topology = build_topology(project.blocks, project.periodic_axes)
     result.errors.extend(topology.errors)
@@ -119,7 +125,7 @@ def apply_axis_to_aligned_blocks(
 ) -> tuple[Project, list[int]]:
     """Copy one axis grid to face-connected blocks with the same axis extent."""
 
-    project = _project_copy(project)
+    project = copy_project(project)
     if axis not in AXIS_NAMES:
         raise ValueError(f"unknown axis {axis!r}")
     source = next((block for block in project.blocks if block.id == source_block_id), None)
@@ -170,7 +176,9 @@ def apply_axis_to_aligned_blocks(
     return project, changed
 
 
-def _project_copy(project: Project | dict[str, Any]) -> Project:
+def copy_project(project: Project | dict[str, Any]) -> Project:
+    """Return a validated copy of a project or project dictionary."""
+
     if isinstance(project, Project):
         return Project.from_dict(project.to_dict())
     return Project.from_dict(project)
@@ -235,7 +243,12 @@ def _check_decomposition_request(project: Project) -> list[str]:
     return errors
 
 
-def _check_connected_components(blocks: list[Block], connections: list[FaceConnection]) -> list[str]:
+def connected_component_errors(
+    blocks: list[Block],
+    connections: list[FaceConnection],
+) -> list[str]:
+    """Return an error when the block connection graph is disconnected."""
+
     if len(blocks) < 2:
         return []
 
@@ -273,8 +286,8 @@ def _check_connected_block_grids(by_id: dict[int, Block], connections: list[Face
             if a.dims[axis_index] != b.dims[axis_index]:
                 errors.append(f"blocks {a.id} and {b.id}: touching MPI partitions have different dims along {axis}")
             try:
-                a_faces = _interior_faces(a, axis_index)
-                b_faces = _interior_faces(b, axis_index)
+                a_faces = block_interior_faces(a, axis_index)
+                b_faces = block_interior_faces(b, axis_index)
             except Exception as exc:
                 errors.append(f"blocks {a.id} and {b.id}: could not compare {axis} grid ({exc})")
                 continue
@@ -299,7 +312,7 @@ def _check_connected_block_grids(by_id: dict[int, Block], connections: list[Face
 def interface_spacing_metrics(project: Project | dict[str, Any]) -> list[dict[str, Any]]:
     """Return normal-spacing ratios for every valid full-face connection."""
 
-    project = _project_copy(project)
+    project = copy_project(project)
     topology = build_topology(project.blocks, project.periodic_axes)
     metrics, _ = _interface_spacing_metrics(
         {block.id: block for block in project.blocks},
@@ -319,8 +332,8 @@ def _interface_spacing_metrics(
         b = by_id[connection.b_id]
         axis = connection.axis_index
         try:
-            a_width = _boundary_width(a, axis, connection.a_face)
-            b_width = _boundary_width(b, axis, connection.b_face)
+            a_width = block_boundary_width(a, axis, connection.a_face)
+            b_width = block_boundary_width(b, axis, connection.b_face)
         except Exception as exc:
             warnings.append(f"blocks {a.id} and {b.id}: could not compare interface spacing ({exc})")
             continue
@@ -395,7 +408,9 @@ def _propagate_mpi_partitions(
     return warnings
 
 
-def _interior_faces(block: Block, axis_index: int) -> np.ndarray:
+def block_interior_faces(block: Block, axis_index: int) -> np.ndarray:
+    """Return physical face coordinates for one block axis."""
+
     axis = AXIS_NAMES[axis_index]
     arrays = axis_grid_arrays(
         block.axes[axis].to_dict(),
@@ -406,7 +421,9 @@ def _interior_faces(block: Block, axis_index: int) -> np.ndarray:
     return arrays.faces[:-1]
 
 
-def _boundary_width(block: Block, axis_index: int, face: int) -> float:
+def block_boundary_width(block: Block, axis_index: int, face: int) -> float:
+    """Return the cell width normal to one block face."""
+
     axis = AXIS_NAMES[axis_index]
     arrays = axis_grid_arrays(
         block.axes[axis].to_dict(),

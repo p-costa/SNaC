@@ -22,9 +22,9 @@ from .validation import (
     GRID_TOL,
     SPACING_JUMP_WARNING_RATIO,
     CheckResult,
-    _boundary_width,
-    _interior_faces,
-    _project_copy,
+    block_boundary_width,
+    block_interior_faces,
+    copy_project,
 )
 
 
@@ -78,8 +78,8 @@ def repair_project_grids(
 ) -> tuple[Project, RepairResult]:
     """Propose congruent grids and matched normal interface spacing."""
 
-    original = _project_copy(project)
-    project = _project_copy(original)
+    original = copy_project(project)
+    project = copy_project(original)
     result = RepairResult()
     topology = build_topology(project.blocks, project.periodic_axes)
     result.errors.extend(topology.errors)
@@ -158,8 +158,8 @@ def _repair_interface_spacing(
         a = by_id[connection.a_id]
         b = by_id[connection.b_id]
         axis = connection.axis_index
-        a_width = _boundary_width(a, axis, connection.a_face)
-        b_width = _boundary_width(b, axis, connection.b_face)
+        a_width = block_boundary_width(a, axis, connection.a_face)
+        b_width = block_boundary_width(b, axis, connection.b_face)
         ratio = max(a_width, b_width) / min(a_width, b_width)
         if ratio <= SPACING_JUMP_WARNING_RATIO:
             continue
@@ -170,7 +170,8 @@ def _repair_interface_spacing(
         if a.id == b.id:
             if a_locked:
                 result.errors.append(
-                    f"block {a.id}: locked periodic {AXIS_NAMES[axis]} grid has an interface spacing jump of {ratio:.3g}"
+                    f"block {a.id}: locked periodic {AXIS_NAMES[axis]} grid has an "
+                    f"interface spacing jump of {ratio:.3g}"
                 )
                 continue
             target = sqrt(a_width * b_width)
@@ -179,7 +180,8 @@ def _repair_interface_spacing(
             continue
         if a_locked and b_locked:
             result.errors.append(
-                f"blocks {a.id} and {b.id}: locked {AXIS_NAMES[axis]} grids have an interface spacing jump of {ratio:.3g}"
+                f"blocks {a.id} and {b.id}: locked {AXIS_NAMES[axis]} grids have an "
+                f"interface spacing jump of {ratio:.3g}"
             )
             continue
         if a_locked:
@@ -392,8 +394,8 @@ def _same_axis_grid(a: Block, b: Block, axis_index: int) -> bool:
     ):
         return False
     try:
-        a_faces = _interior_faces(a, axis_index)
-        b_faces = _interior_faces(b, axis_index)
+        a_faces = block_interior_faces(a, axis_index)
+        b_faces = block_interior_faces(b, axis_index)
     except Exception:
         return False
     if a_faces.shape != b_faces.shape:

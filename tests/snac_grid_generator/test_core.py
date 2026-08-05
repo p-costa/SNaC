@@ -5,6 +5,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 import tempfile
 import unittest
+from unittest.mock import patch
 import warnings
 from pathlib import Path
 
@@ -30,7 +31,7 @@ from utils.snac_grid_generator import (
     snap_block_to_face,
     update_project_structure,
 )
-from utils.snac_grid_generator.snac_grid import binary_payload
+from utils.snac_grid_generator.snac_grid import binary_payload, read_grid_binary
 from utils.snac_grid_generator.cli import main as grid_cli_main
 from utils.snac_grid_generator.topology import FaceConnection, infer_global_index_extents
 
@@ -239,7 +240,12 @@ class GridGeneratorTests(unittest.TestCase):
 
     def test_single_ratio_can_be_biased_to_upper_end(self) -> None:
         for profile in ("geometric", "tanh", "erf"):
-            arrays = axis_grid_arrays({"kind": "simple_ratio", "ratio": 4.0, "side": "start", "profile": profile}, 0.0, 1.0, 32)
+            arrays = axis_grid_arrays(
+                {"kind": "simple_ratio", "ratio": 4.0, "side": "start", "profile": profile},
+                0.0,
+                1.0,
+                32,
+            )
             widths = arrays.face_spacing[1:-1]
             self.assertAlmostEqual(widths[-1] / widths[0], 0.25, places=7)
 
@@ -424,6 +430,90 @@ class GridGeneratorTests(unittest.TestCase):
         np.testing.assert_allclose(axis.faces, expected, rtol=0.0, atol=1.0e-14)
         self.assertTrue(imported.write_external_grid)
 
+    def test_binary_grid_reader_validates_all_stored_arrays(self) -> None:
+        project = Project.from_dict({"blocks": [{"id": 1, "ng": [4, 4, 4]}]})
+        arrays = axis_grid_arrays(project.blocks[0].axes["x"].to_dict(), 0.0, 1.0, 4)
+        payload = binary_payload(arrays).copy()
+        payload[4] += 0.1
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "grid_x_b_001.bin"
+            payload.tofile(path)
+            with self.assertRaisesRegex(ValueError, "cell centers"):
+                read_grid_binary(path, 4, 0.0, 1.0)
+
+    def test_binary_grid_reader_accepts_big_endian_single_precision(self) -> None:
+        project = Project.from_dict({"blocks": [{"id": 1, "ng": [4, 4, 4]}]})
+        arrays = axis_grid_arrays(project.blocks[0].axes["x"].to_dict(), 0.0, 1.0, 4)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "grid_x_b_001.bin"
+            binary_payload(arrays).astype(">f4").tofile(path)
+            decoded = read_grid_binary(path, 4, 0.0, 1.0)
+
+        self.assertEqual(decoded.dtype, ">f4")
+        np.testing.assert_allclose(decoded.faces, arrays.faces[:-1], rtol=0.0, atol=1.0e-6)
+
+    def test_case_import_falls_back_to_valid_duplicate_grid(self) -> None:
+        project = Project.from_dict(
+            {
+                "writeExternalGrid": True,
+                "externalGridSource": "both",
+                "blocks": [{"id": 1, "ng": [4, 4, 4]}],
+            }
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_project(project, root)
+            (root / "snac_grid_project.json").unlink()
+            grid_path = root / "grid" / "grid_x_b_001.bin"
+            payload = np.fromfile(grid_path, dtype="<f8")
+            payload[4] += 0.1
+            payload.tofile(grid_path)
+
+            result = import_case(root)
+
+        self.assertEqual(result.project.blocks[0].axes["x"].kind, "explicit")
+        self.assertTrue(any("ignored invalid grid/ grid" in warning for warning in result.warnings))
+
+    def test_case_round_trip_preserves_namelist_and_binary_grids(self) -> None:
+        project = Project.from_dict(
+            {
+                "name": "round-trip",
+                "writeExternalGrid": True,
+                "blocks": [
+                    {
+                        "id": 1,
+                        "ng": [5, 4, 3],
+                        "axes": {
+                            "x": {
+                                "kind": "explicit",
+                                "faces": [0.0, 0.08, 0.23, 0.47, 0.72, 1.0],
+                            }
+                        },
+                    }
+                ],
+            }
+        )
+        with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
+            first_path = Path(first)
+            second_path = Path(second)
+            export_project(project, first_path)
+            (first_path / "snac_grid_project.json").unlink()
+            imported = import_case(first_path).project
+            export_project(imported, second_path)
+
+            self.assertEqual(
+                (first_path / "blocks.nml").read_bytes(),
+                (second_path / "blocks.nml").read_bytes(),
+            )
+            for axis in ("x", "y", "z"):
+                relative = Path("grid") / f"grid_{axis}_b_001.bin"
+                self.assertEqual(
+                    (first_path / relative).read_bytes(),
+                    (second_path / relative).read_bytes(),
+                )
+
     def test_explicit_grids_require_external_grid_writing(self) -> None:
         project = Project.from_dict(
             {
@@ -576,6 +666,104 @@ class GridGeneratorTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "inconsistent global-index loop"):
             infer_global_index_extents(blocks, conflicting)
 
+    def test_generated_block_lattice_indices_ignore_ids_and_input_order(self) -> None:
+        x_cells = [2, 5, 3, 4]
+        y_cells = [3, 6, 2]
+        ids = [9, 2, 12, 5, 7, 1, 11, 4, 10, 3, 8, 6]
+        records = []
+        expected = {}
+        for j, ny in enumerate(y_cells):
+            for i, nx in enumerate(x_cells):
+                block_id = ids[j * len(x_cells) + i]
+                records.append(
+                    {
+                        "id": block_id,
+                        "ng": [nx, ny, 2],
+                        "lmin": [float(i), float(j), 0.0],
+                        "lmax": [float(i + 1), float(j + 1), 1.0],
+                    }
+                )
+                lo = [sum(x_cells[:i]) + 1, sum(y_cells[:j]) + 1, 1]
+                expected[block_id] = (lo, [lo[0] + nx - 1, lo[1] + ny - 1, 2])
+
+        blocks = Project.from_dict({"blocks": list(reversed(records))}).blocks
+        self.assertEqual(infer_global_index_extents(blocks), expected)
+
+    def test_generated_grading_profiles_remain_monotone(self) -> None:
+        for profile in ("geometric", "tanh", "erf"):
+            for n in (2, 3, 8, 31):
+                for ratio in (0.1, 1.0, 10.0):
+                    with self.subTest(profile=profile, n=n, ratio=ratio):
+                        arrays = axis_grid_arrays(
+                            {
+                                "kind": "simple_ratio",
+                                "profile": profile,
+                                "controls": ["n", "ratio"],
+                                "ratio": ratio,
+                            },
+                            -2.0,
+                            3.0,
+                            n,
+                        )
+                        faces = arrays.faces[:-1]
+                        widths = np.diff(faces)
+                        self.assertTrue(np.all(np.isfinite(widths)))
+                        self.assertTrue(np.all(widths > 0.0))
+                        self.assertAlmostEqual(float(faces[0]), -2.0)
+                        self.assertAlmostEqual(float(faces[-1]), 3.0)
+                        self.assertAlmostEqual(float(widths[-1] / widths[0]), ratio, places=8)
+
+    def test_large_coordinate_offset_with_small_cells_remains_structured(self) -> None:
+        origin = 1.0e9
+        length = 1.0e-3
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 8,
+                        "ng": [32, 4, 4],
+                        "lmin": [origin, 0.0, 0.0],
+                        "lmax": [origin + length, 1.0, 1.0],
+                    },
+                    {
+                        "id": 3,
+                        "ng": [48, 4, 4],
+                        "lmin": [origin + length, 0.0, 0.0],
+                        "lmax": [origin + 2.0 * length, 1.0, 1.0],
+                    },
+                ]
+            }
+        )
+        extents = infer_global_index_extents(project.blocks)
+        self.assertEqual(extents[8][0], [1, 1, 1])
+        self.assertEqual(extents[3][0], [33, 1, 1])
+
+        arrays = axis_grid_arrays(
+            {"kind": "simple_ratio", "ratio": 4.0},
+            origin,
+            origin + length,
+            32,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "offset-grid.bin"
+            binary_payload(arrays).tofile(path)
+            decoded = read_grid_binary(path, 32, origin, origin + length)
+        np.testing.assert_array_equal(decoded.faces, arrays.faces[:-1])
+
+    def test_malformed_namelists_fail_with_clear_errors(self) -> None:
+        cases = {
+            "missing group": "nblocks=1\n/\n",
+            "incomplete group": "&blocks\nnblocks=1\n",
+            "missing nblocks": "&blocks\nblock_ng(1)=4,4,4\n/\n",
+            "empty assignment": "&blocks\nnblocks=\n/\n",
+            "unterminated quote": "&blocks\nnblocks=1\nblock_inivel(1)='zer\n/\n",
+        }
+        for label, content in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / "blocks.nml").write_text(content, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    import_case(tmp)
+
     def test_empty_project_can_exist_but_cannot_be_exported(self) -> None:
         project = Project.from_dict({"name": "empty", "blocks": []})
         check = check_project(project)
@@ -649,6 +837,24 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertTrue(any("disconnected" in error for error in result.errors))
 
+    def test_check_returns_navigable_interface_diagnostics(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {"id": 1, "ng": [4, 4, 4], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "ng": [4, 5, 4], "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+                ]
+            }
+        )
+        diagnostics = check_project(project).to_dict()["diagnostics"]
+        diagnostic = next(item for item in diagnostics if item["code"] == "interface_cell_count")
+
+        self.assertEqual(diagnostic["axis"], "y")
+        self.assertEqual(
+            diagnostic["locations"],
+            [{"blockId": 1, "face": "x+"}, {"blockId": 2, "face": "x-"}],
+        )
+
     def test_export_removes_stale_owned_grids_and_preserves_other_files(self) -> None:
         project = Project.from_dict({"name": "managed", "blocks": [{"id": 1, "ng": [4, 4, 4]}]})
         with tempfile.TemporaryDirectory() as tmp:
@@ -692,6 +898,66 @@ class GridGeneratorTests(unittest.TestCase):
 
             self.assertEqual((root / "blocks.nml").read_bytes(), old_blocks)
             self.assertEqual((root / "snac_grid_project.json").read_bytes(), old_project)
+
+    def test_export_refuses_unmanaged_collisions_and_bad_manifests(self) -> None:
+        project = Project.from_dict({"blocks": [{"id": 1, "ng": [4, 4, 4]}]})
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blocks = root / "blocks.nml"
+            blocks.write_text("manual case\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "unmanaged file"):
+                export_project(project, root)
+            self.assertEqual(blocks.read_text(encoding="utf-8"), "manual case\n")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".snac_grid_generator_manifest.json").write_text(
+                "not json\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "cannot read generator manifest"):
+                export_project(project, root)
+
+    def test_export_rolls_back_after_publication_failure(self) -> None:
+        original = Project.from_dict(
+            {
+                "name": "before",
+                "writeExternalGrid": True,
+                "blocks": [{"id": 1, "ng": [4, 4, 4]}],
+            }
+        )
+        updated = Project.from_dict(
+            {
+                "name": "after",
+                "writeExternalGrid": True,
+                "blocks": [{"id": 1, "ng": [5, 4, 4]}],
+            }
+        )
+        real_replace = Path.replace
+
+        def fail_during_publish(source: Path, target: Path) -> Path:
+            if ".snac_grid_stage_" in source.as_posix() and source.name == "snac_grid_project.json":
+                raise OSError("injected publication failure")
+            return real_replace(source, target)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            export_project(original, root)
+            before = {
+                path.relative_to(root): path.read_bytes()
+                for path in root.rglob("*")
+                if path.is_file()
+            }
+            with patch.object(Path, "replace", fail_during_publish):
+                with self.assertRaisesRegex(OSError, "injected publication failure"):
+                    export_project(updated, root)
+            after = {
+                path.relative_to(root): path.read_bytes()
+                for path in root.rglob("*")
+                if path.is_file()
+            }
+
+        self.assertEqual(after, before)
 
     def test_check_rejects_partial_face_contact(self) -> None:
         project = Project.from_dict(

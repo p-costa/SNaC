@@ -64,17 +64,13 @@ def export_project(project: Project | dict[str, Any], output_dir: str | Path) ->
         warnings.extend(stage_warnings)
         relative_files = [path.relative_to(stage_path) for path in staged_files]
         _write_manifest(stage_path, relative_files)
+        _publish_staged_project(
+            stage_path,
+            output_path,
+            relative_files,
+            previous_files,
+        )
 
-        for relative in [*relative_files, Path(_MANIFEST_NAME)]:
-            target = output_path / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            (stage_path / relative).replace(target)
-
-    current_files = set(relative_files)
-    for relative in previous_files - current_files:
-        stale = output_path / relative
-        if stale.is_file():
-            stale.unlink()
     _remove_empty_generated_directories(output_path)
 
     files = [output_path / relative for relative in relative_files]
@@ -123,16 +119,86 @@ def _read_manifest(output_path: Path) -> set[Path]:
         return set()
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, TypeError):
-        return set()
+    except (OSError, ValueError, TypeError) as exc:
+        raise ValueError(f"cannot read generator manifest {path}: {exc}") from exc
     if payload.get("version") != _MANIFEST_VERSION or not isinstance(payload.get("files"), list):
-        return set()
+        raise ValueError(f"unsupported or malformed generator manifest {path}")
     files: set[Path] = set()
     for item in payload["files"]:
         relative = _safe_relative_path(item)
-        if relative is not None:
-            files.add(relative)
+        if relative is None:
+            raise ValueError(f"generator manifest {path} contains an unsafe path")
+        files.add(relative)
     return files
+
+
+def _publish_staged_project(
+    stage_path: Path,
+    output_path: Path,
+    relative_files: list[Path],
+    previous_files: set[Path],
+) -> None:
+    manifest = Path(_MANIFEST_NAME)
+    publish_files = [*relative_files, manifest]
+    _check_publish_collisions(output_path, publish_files, previous_files)
+
+    affected = sorted(set(publish_files) | previous_files, key=lambda path: path.as_posix())
+    with TemporaryDirectory(prefix=".snac_grid_backup_", dir=output_path) as temporary:
+        backup_path = Path(temporary)
+        backed_up: list[Path] = []
+        published: list[Path] = []
+        try:
+            for relative in affected:
+                target = output_path / relative
+                if target.is_symlink():
+                    raise ValueError(f"refusing to replace symbolic link {target}")
+                if target.is_file():
+                    backup = backup_path / relative
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    target.replace(backup)
+                    backed_up.append(relative)
+                elif target.exists():
+                    raise ValueError(f"generated path is not a file: {target}")
+
+            for relative in publish_files:
+                target = output_path / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                (stage_path / relative).replace(target)
+                published.append(relative)
+        except Exception:
+            for relative in reversed(published):
+                target = output_path / relative
+                if target.is_file() or target.is_symlink():
+                    target.unlink()
+            for relative in reversed(backed_up):
+                target = output_path / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                (backup_path / relative).replace(target)
+            _remove_empty_generated_directories(output_path)
+            raise
+
+
+def _check_publish_collisions(
+    output_path: Path,
+    publish_files: list[Path],
+    previous_files: set[Path],
+) -> None:
+    manifest = Path(_MANIFEST_NAME)
+    manifest_exists = (output_path / manifest).is_file()
+    for relative in publish_files:
+        target = output_path / relative
+        if target.is_symlink():
+            raise ValueError(f"refusing to replace symbolic link {target}")
+        if target.exists() and relative not in previous_files:
+            if relative != manifest or not manifest_exists:
+                raise ValueError(
+                    f"refusing to overwrite unmanaged file {target}; choose another output directory"
+                )
+        parent = target.parent
+        while parent != output_path:
+            if parent.exists() and not parent.is_dir():
+                raise ValueError(f"generated parent path is not a directory: {parent}")
+            parent = parent.parent
 
 
 def _legacy_generator_files(output_path: Path) -> set[Path]:

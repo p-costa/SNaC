@@ -13,8 +13,8 @@ from .model import Block, Project
 from .topology import FaceConnection, build_topology
 from .validation import (
     CheckResult,
-    _check_connected_components,
-    _project_copy,
+    connected_component_errors,
+    copy_project,
 )
 
 MIN_LOCAL_CELLS = 4
@@ -117,7 +117,7 @@ def optimize_project_decomposition(
 ) -> tuple[Project, DecompositionResult]:
     """Choose an exact-rank, topology-compatible MPI decomposition."""
 
-    project = _project_copy(project)
+    project = copy_project(project)
     target = project.decomposition.target_ranks
     min_local_cells = project.decomposition.min_local_cells
     max_local_aspect = project.decomposition.max_local_aspect
@@ -125,7 +125,7 @@ def optimize_project_decomposition(
     topology = build_topology(project.blocks, project.periodic_axes)
     result.errors.extend(topology.errors)
     result.warnings.extend(topology.warnings)
-    result.errors.extend(_check_connected_components(project.blocks, topology.connections))
+    result.errors.extend(connected_component_errors(project.blocks, topology.connections))
     if result.errors:
         return project, result
     if not project.blocks:

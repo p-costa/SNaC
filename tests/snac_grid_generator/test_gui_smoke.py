@@ -208,6 +208,25 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
         self.assertEqual(status, 413)
         self.assertIn("too large", json.loads(body)["error"])
 
+    def test_validation_diagnostic_selects_the_affected_interface(self) -> None:
+        context = self.browser.new_context(viewport={"width": 1280, "height": 800})
+        page = context.new_page()
+        page.goto(self.url, wait_until="load")
+        page.locator(".block-item .block-main").nth(1).click()
+        page.locator('[data-field="ng"][data-index="1"]').fill("33")
+        page.locator("#check-project").click()
+
+        diagnostic = page.locator(".check-line.actionable").filter(
+            has_text="different ng along y"
+        )
+        self.expect(diagnostic).to_have_count(1)
+        diagnostic.click()
+
+        self.assertTrue(page.get_by_label("Select 1: left", exact=True).is_checked())
+        self.assertTrue(page.get_by_label("Select 2: right", exact=True).is_checked())
+        self.expect(page.locator("#status")).to_contain_text("interface cell count")
+        context.close()
+
     def _post_api(self, payload: str, headers: dict[str, str]) -> tuple[int, str]:
         connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
         try:

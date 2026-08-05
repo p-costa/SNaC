@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from math import tanh
+from pathlib import Path
 from typing import Callable, Protocol
 
 import numpy as np
@@ -24,6 +26,17 @@ class GridArraysLike(Protocol):
     centers: np.ndarray
     face_spacing: np.ndarray
     center_spacing: np.ndarray
+
+
+@dataclass(frozen=True)
+class BinaryGrid:
+    """Validated arrays read from one SNaC grid binary."""
+
+    faces: np.ndarray
+    centers: np.ndarray
+    face_spacing: np.ndarray
+    center_spacing: np.ndarray
+    dtype: str
 
 
 def native_faces(n: int, lmin: float, lmax: float, gt: int, gr: float) -> np.ndarray:
@@ -48,6 +61,103 @@ def binary_payload(arrays: GridArraysLike) -> np.ndarray:
             arrays.center_spacing[1:-1],
         )
     ).astype("<f8", copy=False)
+
+
+def read_grid_binary(
+    path: str | Path,
+    n: int,
+    lmin: float,
+    lmax: float,
+) -> BinaryGrid:
+    """Read and validate the four arrays written by SNaC ``save_grid``."""
+
+    if n < 1:
+        raise ValueError("grid binary cell count must be positive")
+    if not lmax > lmin:
+        raise ValueError("grid binary extent must be positive")
+    path = Path(path)
+    payload = path.read_bytes()
+    expected_sizes = {4 * n * itemsize for itemsize in (4, 8)}
+    if len(payload) not in expected_sizes:
+        sizes = " or ".join(str(value) for value in sorted(expected_sizes))
+        raise ValueError(
+            f"{path} has {len(payload)} bytes; expected {sizes} bytes for {n} cells"
+        )
+
+    itemsize = len(payload) // (4 * n)
+    failures: list[str] = []
+    for endian in ("<", ">"):
+        dtype = np.dtype(f"{endian}f{itemsize}")
+        values = np.frombuffer(payload, dtype=dtype).reshape(4, n).astype(float)
+        try:
+            return _validated_binary_grid(values, dtype, lmin, lmax)
+        except ValueError as exc:
+            failures.append(str(exc))
+    raise ValueError(
+        f"{path} is not a consistent SNaC grid binary for {n} cells "
+        f"({'; '.join(dict.fromkeys(failures))})"
+    )
+
+
+def _validated_binary_grid(
+    values: np.ndarray,
+    dtype: np.dtype,
+    lmin: float,
+    lmax: float,
+) -> BinaryGrid:
+    if not np.all(np.isfinite(values)):
+        raise ValueError("contains non-finite values")
+
+    stored_faces, centers, face_spacing, center_spacing = values
+    faces = np.concatenate(([float(lmin)], stored_faces))
+    length = abs(float(lmax) - float(lmin))
+    relative_tolerance = 5.0e-5 if dtype.itemsize == 4 else 5.0e-11
+    coordinate_tolerance = max(
+        relative_tolerance * length,
+        np.finfo(dtype).eps * max(abs(lmin), abs(lmax), length) * 16.0,
+    )
+    spacing_tolerance = max(
+        relative_tolerance * length,
+        np.finfo(dtype).eps * length * 16.0,
+    )
+    if abs(float(faces[-1]) - float(lmax)) > coordinate_tolerance:
+        raise ValueError("upper face does not match the block extent")
+    faces[-1] = float(lmax)
+    widths = np.diff(faces)
+    if np.any(widths <= 0.0):
+        raise ValueError("face coordinates are not strictly increasing")
+
+    expected_centers = 0.5 * (faces[:-1] + faces[1:])
+    expected_center_spacing = np.concatenate(
+        (0.5 * (widths[:-1] + widths[1:]), [widths[-1]])
+    )
+    checks = (
+        ("cell centers", centers, expected_centers, 0.0, coordinate_tolerance),
+        ("face spacings", face_spacing, widths, relative_tolerance, spacing_tolerance),
+        (
+            "center spacings",
+            center_spacing,
+            expected_center_spacing,
+            relative_tolerance,
+            spacing_tolerance,
+        ),
+    )
+    for label, actual, expected, rtol, atol in checks:
+        if not np.allclose(
+            actual,
+            expected,
+            rtol=rtol,
+            atol=atol,
+        ):
+            raise ValueError(f"stored {label} disagree with the face coordinates")
+
+    return BinaryGrid(
+        faces=faces,
+        centers=centers.copy(),
+        face_spacing=face_spacing.copy(),
+        center_spacing=center_spacing.copy(),
+        dtype=dtype.str,
+    )
 
 
 def _gridpoint_cluster_two_end(alpha: float, r0: float) -> float:

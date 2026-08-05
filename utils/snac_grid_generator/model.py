@@ -95,7 +95,10 @@ class AxisSpec:
             min=float(data.get("min", 0.01)),
             max=float(data.get("max", 0.02)),
             side=side,
-            segments=[GradingSegment.from_dict(item) for item in data.get("segments", [{"length": 1, "cells": 1, "ratio": 1}])],
+            segments=[
+                GradingSegment.from_dict(item)
+                for item in data.get("segments", [{"length": 1, "cells": 1, "ratio": 1}])
+            ],
             faces=[float(value) for value in data.get("faces", [])],
         )
 
