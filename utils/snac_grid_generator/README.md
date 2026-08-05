@@ -195,9 +195,10 @@ left untouched.
 
 The viewport can color the selected block's boundary faces: velocity `D` is
 red, velocity `N` is blue, friend boundaries are green, and faces with mixed
-velocity-component codes are amber. MPI partition planes use the same
+velocity-component codes are amber. Boundary colors and MPI partition planes
+follow the multi-block selection. Partition planes use the same
 base-plus-remainder decomposition as `initmpi`, so they show the actual local
-subdomain cuts for the selected block.
+subdomain cuts.
 The `+X/-X`, `+Y/-Y`, and `+Z/-Z` buttons provide fitted orthographic views
 with pan, zoom, and free rotation. Rotating keeps the orthographic projection
 but leaves the exact axis view; `Fit` returns to the free-orbit perspective view.
@@ -206,19 +207,25 @@ Checked blocks can also be hidden or isolated, and `Show all` restores the full
 scene. The clipping tool exposes an X/Y/Z section plane with position and
 direction controls. These inspection settings affect only the viewport; they
 are not stored in the project or written to SNaC case files.
-The grid-line button toggles a sparse 3D view of the selected block's actual
-face coordinates, including imported and repaired explicit grids.
+The grid-line menu shows no grids, the selected blocks, or all visible blocks.
+It draws a sparse 3D view of each block's actual face coordinates, including
+imported and repaired explicit grids.
 After `Check` or `Update`, connected faces are outlined by their normal-spacing
 ratio: green below 1.5, amber above 1.5, and red above the warning ratio of 3.
 
-The checkboxes in the block list define a multi-block selection and the
-highlighted block remains the primary source. Selected blocks can be duplicated
-as an array, mirrored about a coordinate plane, or aligned to the primary block.
+The checkboxes in the block list define a multi-block selection; `Shift`-click
+provides the same additive selection in the list and 3D view. The most recently
+added block in the selection is the highlighted primary source. Selected blocks
+can be duplicated as an array, mirrored about a coordinate plane, or aligned to
+the primary block.
 One checked target can also be snapped to a face of the primary block. Mirroring
-reverses the corresponding grading as well as the block geometry.
+reverses the corresponding grading as well as the block geometry. Blocks can be
+reordered with their drag handles without changing IDs or friend references,
+and the reset-names action restores names in the form `block-<ID>`.
 
 The select, move, and resize viewport tools edit block bounds directly. A move
-or resize invalidates the last structural check and refreshes the grid preview.
+or resize invalidates the last structural check and refreshes the grid preview;
+clicking the active move or resize tool again returns to selection mode.
 Undo and redo retain up to 100 coalesced project edits, including decomposition
 diagnostics; reset can be undone, while opening another project starts a fresh
 history. Project edits are autosaved in browser storage. On the next launch the

@@ -87,7 +87,7 @@ let currentAxis = "x";
 let groundGridVisible = true;
 let boundaryColorsVisible = true;
 let partitionPlanesVisible = true;
-let gridLinesVisible = true;
+let gridLinesMode = "selected";
 let spacingJumpsVisible = true;
 let blockTool = "select";
 let lastCheck = null;
@@ -96,6 +96,7 @@ let pendingRepair = null;
 let decompositionResult = null;
 let previewTimer = null;
 let previewSequence = 0;
+let draggedBlockId = null;
 const previewCache = new Map();
 let historyTimer = null;
 const projectHistory = new SnapshotHistory(100);
@@ -125,13 +126,14 @@ let boundaryFaceGroup;
 let gridHelper;
 let axesGroup;
 let partitionGroup;
-let selectedGridGroup;
+let gridLineGroup;
 let spacingJumpGroup;
 let diagnosticGroup;
 let transformControls;
 let selectedBlockMesh = null;
 let transformDrag = null;
 let isTransformDragging = false;
+let scenePointerDown = null;
 
 bootstrap();
 
@@ -169,6 +171,7 @@ function bindElements() {
     "reset-project",
     "status",
     "block-list",
+    "reset-block-names",
     "add-block",
     "add-adjacent",
     "adjacent-face",
@@ -210,7 +213,7 @@ function bindElements() {
     "tool-scale",
     "toggle-boundaries",
     "toggle-partitions",
-    "toggle-grid-lines",
+    "grid-lines-mode",
     "toggle-spacing-jumps",
     "block-title",
     "remove-block",
@@ -291,6 +294,7 @@ function bindStaticEvents() {
     markProjectDirty();
   });
   els.addBlock.addEventListener("click", addFreeBlock);
+  els.resetBlockNames.addEventListener("click", resetBlockNames);
   els.addAdjacent.addEventListener("click", addAdjacentBlock);
   els.duplicateArray.addEventListener("click", () => applyGeometryOperation("duplicate"));
   els.mirrorBlocks.addEventListener("click", () => applyGeometryOperation("mirror"));
@@ -322,6 +326,7 @@ function bindStaticEvents() {
     groundGridVisible = !groundGridVisible;
     gridHelper.visible = groundGridVisible;
     els.toggleGrid.classList.toggle("active", groundGridVisible);
+    els.toggleGrid.setAttribute("aria-pressed", String(groundGridVisible));
   });
   els.toolSelect.addEventListener("click", () => setBlockTool("select"));
   els.toolMove.addEventListener("click", () => setBlockTool("translate"));
@@ -334,9 +339,10 @@ function bindStaticEvents() {
     partitionPlanesVisible = !partitionPlanesVisible;
     renderScene();
   });
-  els.toggleGridLines.addEventListener("click", () => {
-    gridLinesVisible = !gridLinesVisible;
+  els.gridLinesMode.addEventListener("change", () => {
+    gridLinesMode = els.gridLinesMode.value;
     renderScene();
+    scheduleGridPreviews(0);
   });
   els.toggleSpacingJumps.addEventListener("click", () => {
     spacingJumpsVisible = !spacingJumpsVisible;
@@ -423,7 +429,9 @@ function bindStaticEvents() {
   els.resetProject.addEventListener("click", resetProject);
   els.discardRecovery.addEventListener("click", discardRecovery);
   els.restoreRecovery.addEventListener("click", restoreRecovery);
-  els.scene.addEventListener("pointerdown", selectFromScene);
+  els.scene.addEventListener("pointerdown", beginSceneSelection);
+  els.scene.addEventListener("pointerup", completeSceneSelection);
+  els.scene.addEventListener("pointercancel", cancelSceneSelection);
   window.addEventListener("resize", resizeRenderer);
 }
 
@@ -448,7 +456,7 @@ function initScene() {
   pointer = new THREE.Vector2();
   blockGroup = new THREE.Group();
   boundaryFaceGroup = new THREE.Group();
-  selectedGridGroup = new THREE.Group();
+  gridLineGroup = new THREE.Group();
   spacingJumpGroup = new THREE.Group();
   diagnosticGroup = new THREE.Group();
   partitionGroup = new THREE.Group();
@@ -459,7 +467,7 @@ function initScene() {
   scene.add(axesGroup);
   scene.add(blockGroup);
   scene.add(boundaryFaceGroup);
-  scene.add(selectedGridGroup);
+  scene.add(gridLineGroup);
   scene.add(spacingJumpGroup);
   scene.add(diagnosticGroup);
   scene.add(partitionGroup);
@@ -489,12 +497,16 @@ function renderAll() {
     ensureBoundaryArrays(block, project.nscal);
     block.axisLocks = normalizedAxisLocks(block.axisLocks);
   }
-  project.blocks.sort((a, b) => a.id - b.id);
+  const blockIds = new Set(project.blocks.map((block) => block.id));
   hiddenBlockIds = new Set(
-    [...hiddenBlockIds].filter((id) => project.blocks.some((block) => block.id === id))
+    [...hiddenBlockIds].filter((id) => blockIds.has(id))
   );
-  if (!selectedBlock()) selectedId = project.blocks[0]?.id ?? null;
-  selectedIds = new Set([...selectedIds].filter((id) => project.blocks.some((block) => block.id === id)));
+  selectedIds = new Set([...selectedIds].filter((id) => blockIds.has(id)));
+  if (selectedId != null && !blockIds.has(selectedId)) {
+    selectedId = firstSelectedBlockId() ?? project.blocks[0]?.id ?? null;
+  }
+  if (selectedId == null && selectedIds.size) selectedId = firstSelectedBlockId();
+  if (selectedId != null) selectedIds.add(selectedId);
   els.projectName.value = project.name ?? "snac-grid";
   els.scalarCount.value = project.nscal;
   els.inferConnectivity.checked = project.inferConnectivity !== false;
@@ -506,6 +518,7 @@ function renderAll() {
   if (!["single", "double"].includes(project.externalGridPrecision)) project.externalGridPrecision = "double";
   els.gridPrecision.value = project.externalGridPrecision;
   els.gridPrecision.disabled = !project.writeExternalGrid;
+  els.resetBlockNames.disabled = !project.blocks.length;
   els.addAdjacent.disabled = !selectedBlock();
   for (const button of [els.duplicateArray, els.mirrorBlocks, els.alignBlocks, els.snapBlock]) {
     button.disabled = !selectedBlock();
@@ -519,7 +532,7 @@ function renderAll() {
   renderCheckResults();
   updateHistoryButtons();
   renderViewControls();
-  if (selectedId != null && !previewCache.has(selectedId)) schedulePreview(selectedId);
+  scheduleGridPreviews();
   if (window.lucide) window.lucide.createIcons();
 }
 
@@ -531,28 +544,147 @@ function renderBlockList() {
   }
   for (const block of project.blocks) {
     const item = document.createElement("div");
+    const selected = selectedIds.has(block.id);
     item.className = [
       "block-item",
-      block.id === selectedId ? "selected" : "",
+      selected ? "selected" : "",
+      block.id === selectedId ? "primary" : "",
       hiddenBlockIds.has(block.id) ? "hidden-block" : "",
     ].filter(Boolean).join(" ");
+    item.dataset.blockId = String(block.id);
     item.innerHTML = `
-      <input type="checkbox" aria-label="Select ${escapeHtml(blockLabel(block))}" ${selectedIds.has(block.id) ? "checked" : ""} />
+      <button type="button" class="block-drag-handle" draggable="true" aria-label="Reorder ${escapeHtml(blockLabel(block))}" title="Drag to reorder"><i data-lucide="grip-vertical"></i></button>
+      <input type="checkbox" aria-label="Select ${escapeHtml(blockLabel(block))}" ${selected ? "checked" : ""} />
       <span class="swatch" style="background:#${COLORS[(block.id - 1) % COLORS.length].toString(16).padStart(6, "0")}"></span>
       <button type="button" class="block-main"><strong>${escapeHtml(blockLabel(block))}</strong><span>${block.lmin.join(", ")} -> ${block.lmax.join(", ")}</span></button>
     `;
     item.querySelector("input").addEventListener("change", (event) => {
-      if (event.target.checked) selectedIds.add(block.id);
-      else selectedIds.delete(block.id);
-      renderBlockList();
-      renderViewControls();
+      setBlockSelected(block.id, event.target.checked, false);
     });
-    item.querySelector("button").addEventListener("click", () => {
-      selectedId = block.id;
-      renderAll();
+    item.querySelector(".block-main").addEventListener("click", (event) => {
+      selectBlock(block.id, event.shiftKey);
     });
+    const dragHandle = item.querySelector(".block-drag-handle");
+    dragHandle.addEventListener("dragstart", (event) => startBlockDrag(event, block.id));
+    dragHandle.addEventListener("dragend", clearBlockDrag);
+    dragHandle.addEventListener("keydown", (event) => handleBlockOrderKey(event, block.id));
+    item.addEventListener("dragover", (event) => showBlockDropPosition(event, block.id));
+    item.addEventListener("dragleave", (event) => clearBlockDropPosition(event.currentTarget));
+    item.addEventListener("drop", (event) => dropBlock(event, block.id));
     els.blockList.appendChild(item);
   }
+}
+
+function selectBlock(blockId, toggle = false) {
+  if (!project.blocks.some((block) => block.id === blockId)) return;
+  if (toggle) {
+    setBlockSelected(blockId, !selectedIds.has(blockId), true);
+    return;
+  }
+  selectedId = blockId;
+  selectedIds = new Set([blockId]);
+  activeDiagnostic = null;
+  renderAll();
+}
+
+function setBlockSelected(blockId, selected, makePrimary) {
+  if (!project.blocks.some((block) => block.id === blockId)) return;
+  if (selected) {
+    selectedIds.add(blockId);
+    if (makePrimary || selectedId == null) selectedId = blockId;
+  } else {
+    selectedIds.delete(blockId);
+    if (selectedId === blockId) selectedId = firstSelectedBlockId();
+  }
+  activeDiagnostic = null;
+  renderAll();
+}
+
+function firstSelectedBlockId() {
+  return project?.blocks?.find((block) => selectedIds.has(block.id))?.id ?? null;
+}
+
+function startBlockDrag(event, blockId) {
+  draggedBlockId = blockId;
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", String(blockId));
+  els.blockList.querySelector(`[data-block-id="${blockId}"]`)?.classList.add("dragging");
+}
+
+function showBlockDropPosition(event, targetId) {
+  if (draggedBlockId == null || draggedBlockId === targetId) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  clearBlockDropPositions();
+  const item = event.currentTarget;
+  const after = event.clientY >= item.getBoundingClientRect().top + item.offsetHeight / 2;
+  item.classList.add(after ? "drop-after" : "drop-before");
+}
+
+function clearBlockDropPosition(item) {
+  item.classList.remove("drop-before", "drop-after");
+}
+
+function clearBlockDropPositions() {
+  for (const item of els.blockList.querySelectorAll(".block-item")) clearBlockDropPosition(item);
+}
+
+function dropBlock(event, targetId) {
+  if (draggedBlockId == null || draggedBlockId === targetId) return;
+  event.preventDefault();
+  const after = event.currentTarget.classList.contains("drop-after");
+  const blockId = draggedBlockId;
+  clearBlockDrag();
+  reorderBlock(blockId, targetId, after);
+}
+
+function clearBlockDrag() {
+  draggedBlockId = null;
+  clearBlockDropPositions();
+  for (const item of els.blockList.querySelectorAll(".dragging")) item.classList.remove("dragging");
+}
+
+function handleBlockOrderKey(event, blockId) {
+  if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
+  event.preventDefault();
+  const index = project.blocks.findIndex((block) => block.id === blockId);
+  const targetIndex = index + (event.key === "ArrowUp" ? -1 : 1);
+  if (index < 0 || targetIndex < 0 || targetIndex >= project.blocks.length) return;
+  const [block] = project.blocks.splice(index, 1);
+  project.blocks.splice(targetIndex, 0, block);
+  finishBlockReorder(block, targetIndex);
+}
+
+function reorderBlock(blockId, targetId, after) {
+  const sourceIndex = project.blocks.findIndex((block) => block.id === blockId);
+  if (sourceIndex < 0) return;
+  const [block] = project.blocks.splice(sourceIndex, 1);
+  const targetIndex = project.blocks.findIndex((item) => item.id === targetId);
+  if (targetIndex < 0) {
+    project.blocks.splice(sourceIndex, 0, block);
+    return;
+  }
+  const insertionIndex = targetIndex + (after ? 1 : 0);
+  project.blocks.splice(insertionIndex, 0, block);
+  finishBlockReorder(block, insertionIndex);
+}
+
+function finishBlockReorder(block, index) {
+  markProjectDirty();
+  renderAll();
+  setStatus(`Moved ${blockLabel(block)} to position ${index + 1}`);
+}
+
+function resetBlockNames() {
+  const changed = project.blocks.filter((block) => block.name !== `block-${block.id}`);
+  if (!changed.length) {
+    setStatus("Block names already use their defaults");
+    return;
+  }
+  for (const block of changed) block.name = `block-${block.id}`;
+  markProjectDirty();
+  renderAll();
+  setStatus(`Reset ${changed.length} block name${changed.length === 1 ? "" : "s"}`);
 }
 
 function renderInspector() {
@@ -1275,18 +1407,19 @@ function renderScene() {
   transformControls.detach();
   selectedBlockMesh = null;
   boundaryFaceGroup.visible = true;
-  selectedGridGroup.visible = gridLinesVisible;
+  gridLineGroup.visible = gridLinesMode !== "off";
   partitionGroup.visible = true;
   spacingJumpGroup.visible = spacingJumpsVisible;
   clearDisposableGroup(blockGroup);
   clearDisposableGroup(boundaryFaceGroup);
-  clearDisposableGroup(selectedGridGroup);
+  clearDisposableGroup(gridLineGroup);
   clearDisposableGroup(partitionGroup);
   clearDisposableGroup(spacingJumpGroup);
   clearDisposableGroup(diagnosticGroup);
   const diagnosticIds = new Set(
     (activeDiagnostic?.locations ?? []).map((location) => location.blockId)
   );
+  const selectedSet = new Set(selectedBlockIds());
   for (const block of project.blocks) {
     if (hiddenBlockIds.has(block.id)) continue;
     const size = blockSize(block);
@@ -1295,7 +1428,9 @@ function renderScene() {
     const material = new THREE.MeshStandardMaterial({
       color,
       transparent: true,
-      opacity: diagnosticIds.has(block.id) ? 0.52 : block.id === selectedId ? 0.43 : 0.24,
+      opacity: diagnosticIds.has(block.id)
+        ? 0.52
+        : block.id === selectedId ? 0.43 : selectedSet.has(block.id) ? 0.34 : 0.24,
       roughness: 0.62,
       metalness: 0.0,
       side: THREE.DoubleSide,
@@ -1312,15 +1447,15 @@ function renderScene() {
       new THREE.LineBasicMaterial({
         color: diagnosticIds.has(block.id)
           ? activeDiagnostic.severity === "error" ? 0xff6b6b : 0xf0c36a
-          : block.id === selectedId ? 0xffffff : 0x9aa6b2,
+          : block.id === selectedId ? 0xffffff : selectedSet.has(block.id) ? color : 0x9aa6b2,
         transparent: true,
-        opacity: diagnosticIds.has(block.id) || block.id === selectedId ? 0.95 : 0.48,
+        opacity: diagnosticIds.has(block.id) || selectedSet.has(block.id) ? 0.95 : 0.48,
       })
     );
     mesh.add(edges);
   }
   drawBoundaryFaces();
-  drawSelectedGrid();
+  drawGridLines();
   drawPartitionPlanes();
   drawInterfaceSpacing();
   drawDiagnosticHighlight();
@@ -1370,32 +1505,39 @@ function drawInterfaceSpacing() {
 }
 
 function drawBoundaryFaces() {
-  const block = selectedBlock();
-  if (!block || hiddenBlockIds.has(block.id) || !boundaryColorsVisible) return;
-  const size = blockSize(block);
-  const center = blockCenter(block);
-  for (let face = 0; face < 6; face += 1) {
-    const axisIndex = Math.floor(face / 2);
-    const side = face % 2;
-    const dimensions = axisIndex === 0 ? [size[1], size[2]] : axisIndex === 1 ? [size[0], size[2]] : [size[0], size[1]];
-    const geometry = new THREE.PlaneGeometry(dimensions[0], dimensions[1]);
-    if (axisIndex === 0) geometry.rotateY(Math.PI / 2);
-    if (axisIndex === 1) geometry.rotateX(Math.PI / 2);
-    const material = new THREE.MeshBasicMaterial({
-      color: boundaryFaceColor(block, face),
-      transparent: true,
-      opacity: 0.2,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(...center);
-    mesh.position.setComponent(axisIndex, side === 0 ? block.lmin[axisIndex] : block.lmax[axisIndex]);
-    mesh.renderOrder = 2;
-    boundaryFaceGroup.add(mesh);
+  const drawnBlockIds = [];
+  if (!boundaryColorsVisible) {
+    els.scene.dataset.boundaryBlocks = "";
+    return;
   }
+  for (const block of selectedVisibleBlocks()) {
+    drawnBlockIds.push(block.id);
+    const size = blockSize(block);
+    const center = blockCenter(block);
+    for (let face = 0; face < 6; face += 1) {
+      const axisIndex = Math.floor(face / 2);
+      const side = face % 2;
+      const dimensions = axisIndex === 0 ? [size[1], size[2]] : axisIndex === 1 ? [size[0], size[2]] : [size[0], size[1]];
+      const geometry = new THREE.PlaneGeometry(dimensions[0], dimensions[1]);
+      if (axisIndex === 0) geometry.rotateY(Math.PI / 2);
+      if (axisIndex === 1) geometry.rotateX(Math.PI / 2);
+      const material = new THREE.MeshBasicMaterial({
+        color: boundaryFaceColor(block, face),
+        transparent: true,
+        opacity: 0.2,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(...center);
+      mesh.position.setComponent(axisIndex, side === 0 ? block.lmin[axisIndex] : block.lmax[axisIndex]);
+      mesh.renderOrder = 2;
+      boundaryFaceGroup.add(mesh);
+    }
+  }
+  els.scene.dataset.boundaryBlocks = drawnBlockIds.join(",");
 }
 
 function boundaryFaceColor(block, face) {
@@ -1410,28 +1552,36 @@ function boundaryFaceColor(block, face) {
 }
 
 function drawPartitionPlanes() {
-  const block = selectedBlock();
-  const preview = block ? previewCache.get(block.id) : null;
-  if (!block || hiddenBlockIds.has(block.id) || !preview || !partitionPlanesVisible) return;
-  const scale = Math.max(...blockSize(block), 1.0);
-  const material = new THREE.LineDashedMaterial({
-    color: 0xd6bf5b,
-    transparent: true,
-    opacity: 0.82,
-    dashSize: scale * 0.025,
-    gapSize: scale * 0.014,
-  });
-  for (let axisIndex = 0; axisIndex < 3; axisIndex += 1) {
-    const faces = preview[AXES[axisIndex]]?.faces ?? [];
-    for (const faceIndex of partitionFaceIndices(block.ng[axisIndex], block.dims[axisIndex])) {
-      if (faceIndex <= 0 || faceIndex >= faces.length - 1) continue;
-      const geometry = new THREE.BufferGeometry().setFromPoints(planeOutlinePoints(block, axisIndex, faces[faceIndex]));
-      const line = new THREE.Line(geometry, material);
-      line.computeLineDistances();
-      line.renderOrder = 3;
-      partitionGroup.add(line);
+  const drawnBlockIds = [];
+  if (!partitionPlanesVisible) {
+    els.scene.dataset.partitionBlocks = "";
+    return;
+  }
+  for (const block of selectedVisibleBlocks()) {
+    const preview = previewCache.get(block.id);
+    if (!preview) continue;
+    drawnBlockIds.push(block.id);
+    const scale = Math.max(...blockSize(block), 1.0);
+    const material = new THREE.LineDashedMaterial({
+      color: 0xd6bf5b,
+      transparent: true,
+      opacity: 0.82,
+      dashSize: scale * 0.025,
+      gapSize: scale * 0.014,
+    });
+    for (let axisIndex = 0; axisIndex < 3; axisIndex += 1) {
+      const faces = preview[AXES[axisIndex]]?.faces ?? [];
+      for (const faceIndex of partitionFaceIndices(block.ng[axisIndex], block.dims[axisIndex])) {
+        if (faceIndex <= 0 || faceIndex >= faces.length - 1) continue;
+        const geometry = new THREE.BufferGeometry().setFromPoints(planeOutlinePoints(block, axisIndex, faces[faceIndex]));
+        const line = new THREE.Line(geometry, material);
+        line.computeLineDistances();
+        line.renderOrder = 3;
+        partitionGroup.add(line);
+      }
     }
   }
+  els.scene.dataset.partitionBlocks = drawnBlockIds.join(",");
 }
 
 function updateAxesHelper() {
@@ -1457,22 +1607,33 @@ function updateAxesHelper() {
   }
 }
 
-function drawSelectedGrid() {
-  const block = selectedBlock();
-  if (!block || hiddenBlockIds.has(block.id) || !gridLinesVisible) return;
-  const preview = previewCache.get(block.id);
-  if (!preview) return;
-  const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32 });
-  for (const axis of AXES) {
-    const idx = AXES.indexOf(axis);
-    const faces = preview[axis]?.faces ?? [];
-    const step = Math.max(1, Math.floor(faces.length / 34));
-    for (let i = 0; i < faces.length; i += step) {
-      const value = faces[i];
-      const points = planeOutlinePoints(block, idx, value);
-      selectedGridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
+function drawGridLines() {
+  const drawnBlockIds = [];
+  if (gridLinesMode === "off") {
+    els.scene.dataset.gridBlocks = "";
+    return;
+  }
+  const blocks = gridLinesMode === "all" ? visibleBlocks() : selectedVisibleBlocks();
+  for (const block of blocks) {
+    const preview = previewCache.get(block.id);
+    if (!preview) continue;
+    drawnBlockIds.push(block.id);
+    const material = new THREE.LineBasicMaterial({
+      color: block.id === selectedId ? 0xffffff : COLORS[(block.id - 1) % COLORS.length],
+      transparent: true,
+      opacity: block.id === selectedId ? 0.36 : 0.28,
+    });
+    for (const axis of AXES) {
+      const idx = AXES.indexOf(axis);
+      const faces = preview[axis]?.faces ?? [];
+      const step = Math.max(1, Math.floor(faces.length / 34));
+      for (let i = 0; i < faces.length; i += step) {
+        const points = planeOutlinePoints(block, idx, faces[i]);
+        gridLineGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
+      }
     }
   }
+  els.scene.dataset.gridBlocks = drawnBlockIds.join(",");
 }
 
 function visibleBlocks() {
@@ -1509,6 +1670,7 @@ function showAllBlocks() {
 function refreshInspectionView(message) {
   renderBlockList();
   renderScene();
+  scheduleGridPreviews(0);
   setStatus(message);
 }
 
@@ -1550,7 +1712,7 @@ function applyClipping() {
   for (const group of [
     blockGroup,
     boundaryFaceGroup,
-    selectedGridGroup,
+    gridLineGroup,
     partitionGroup,
     spacingJumpGroup,
     diagnosticGroup,
@@ -1571,6 +1733,9 @@ function updateInspectionDataset() {
   els.scene.dataset.clipAxis = AXES[clippingAxisIndex];
   els.scene.dataset.clipDirection = String(clippingDirection);
   els.scene.dataset.hiddenBlocks = [...hiddenBlockIds].sort((a, b) => a - b).join(",");
+  els.scene.dataset.selectedBlocks = selectedBlockIds().join(",");
+  els.scene.dataset.primaryBlock = selectedId == null ? "" : String(selectedId);
+  els.scene.dataset.gridMode = gridLinesMode;
 }
 
 function renderSpacingPreview() {
@@ -1631,10 +1796,39 @@ function renderSpacingPreview() {
 }
 
 function schedulePreview(blockId = selectedId, delay = 120) {
-  if (blockId == null) return;
+  const blockIds = [
+    blockId,
+    ...gridPreviewBlocks().filter((block) => !previewCache.has(block.id)).map((block) => block.id),
+  ];
+  schedulePreviews(blockIds, delay);
+}
+
+function scheduleGridPreviews(delay = 120) {
+  schedulePreviews(
+    gridPreviewBlocks().filter((block) => !previewCache.has(block.id)).map((block) => block.id),
+    delay,
+  );
+}
+
+function gridPreviewBlocks() {
+  return gridLinesMode === "all" ? visibleBlocks() : selectedVisibleBlocks();
+}
+
+function schedulePreviews(blockIds, delay) {
+  const uniqueIds = [...new Set(blockIds)].filter((blockId) =>
+    blockId != null && project.blocks.some((block) => block.id === blockId)
+  );
+  if (!uniqueIds.length) return;
   window.clearTimeout(previewTimer);
   const sequence = ++previewSequence;
-  previewTimer = window.setTimeout(() => requestPreview(blockId, sequence), delay);
+  previewTimer = window.setTimeout(() => requestPreviews(uniqueIds, sequence), delay);
+}
+
+async function requestPreviews(blockIds, sequence) {
+  for (const blockId of blockIds) {
+    if (sequence !== previewSequence) return;
+    await requestPreview(blockId, sequence);
+  }
 }
 
 async function requestPreview(blockId, sequence) {
@@ -1674,7 +1868,7 @@ function gridDefinitionChanged(block) {
 }
 
 function setBlockTool(tool) {
-  blockTool = tool;
+  blockTool = tool === blockTool && tool !== "select" ? "select" : tool;
   renderScene();
 }
 
@@ -1701,7 +1895,7 @@ function handleTransformDragging(event) {
     };
     controls.enabled = false;
     boundaryFaceGroup.visible = false;
-    selectedGridGroup.visible = false;
+    gridLineGroup.visible = false;
     partitionGroup.visible = false;
     return;
   }
@@ -1759,7 +1953,10 @@ function renderViewControls() {
     translate: els.toolMove,
     scale: els.toolScale,
   };
-  for (const [tool, button] of Object.entries(toolButtons)) button.classList.toggle("active", blockTool === tool);
+  for (const [tool, button] of Object.entries(toolButtons)) {
+    button.classList.toggle("active", blockTool === tool);
+    button.setAttribute("aria-pressed", String(blockTool === tool));
+  }
   els.toolMove.disabled = !selectedVisible.length;
   els.toolScale.disabled = !selectedVisible.length;
   els.focusSelection.disabled = !selectedVisible.length;
@@ -1778,9 +1975,14 @@ function renderViewControls() {
   els.flipClipping.classList.toggle("active", clippingDirection < 0);
   els.flipClipping.setAttribute("aria-pressed", String(clippingDirection < 0));
   els.toggleBoundaries.classList.toggle("active", boundaryColorsVisible);
+  els.toggleBoundaries.setAttribute("aria-pressed", String(boundaryColorsVisible));
   els.togglePartitions.classList.toggle("active", partitionPlanesVisible);
-  els.toggleGridLines.classList.toggle("active", gridLinesVisible);
+  els.togglePartitions.setAttribute("aria-pressed", String(partitionPlanesVisible));
+  els.gridLinesMode.value = gridLinesMode;
   els.toggleSpacingJumps.classList.toggle("active", spacingJumpsVisible);
+  els.toggleSpacingJumps.setAttribute("aria-pressed", String(spacingJumpsVisible));
+  els.toggleGrid.classList.toggle("active", groundGridVisible);
+  els.toggleGrid.setAttribute("aria-pressed", String(groundGridVisible));
 }
 
 function addFreeBlock() {
@@ -1883,10 +2085,12 @@ async function applyGeometryOperation(operation) {
 
 function removeSelectedBlock() {
   if (!selectedBlock()) return;
+  const removedId = selectedId;
   project.blocks = project.blocks.filter((block) => block.id !== selectedId);
-  previewCache.delete(selectedId);
-  selectedIds.delete(selectedId);
-  selectedId = project.blocks[0]?.id ?? null;
+  previewCache.delete(removedId);
+  selectedIds.delete(removedId);
+  selectedId = firstSelectedBlockId() ?? project.blocks[0]?.id ?? null;
+  if (selectedId != null) selectedIds.add(selectedId);
   markProjectDirty();
   renderAll();
 }
@@ -2292,18 +2496,36 @@ async function openProjectJson(event) {
   }
 }
 
-function selectFromScene(event) {
+function beginSceneSelection(event) {
+  if (blockTool !== "select" || event.button !== 0) return;
+  scenePointerDown = {
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    shiftKey: event.shiftKey,
+  };
+}
+
+function completeSceneSelection(event) {
+  if (!scenePointerDown || event.pointerId !== scenePointerDown.pointerId) return;
+  const pointerDown = scenePointerDown;
+  scenePointerDown = null;
+  if (Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 4) return;
+  selectFromScene(event, pointerDown.shiftKey || event.shiftKey);
+}
+
+function cancelSceneSelection() {
+  scenePointerDown = null;
+}
+
+function selectFromScene(event, additive = false) {
   if (blockTool !== "select") return;
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
   const hit = raycaster.intersectObjects(blockGroup.children, false).find((item) => item.object.userData.blockId);
-  if (hit && hit.object.userData.blockId !== selectedId) {
-    selectedId = hit.object.userData.blockId;
-    if (event.shiftKey) selectedIds.add(selectedId);
-    renderAll();
-  }
+  if (hit) selectBlock(hit.object.userData.blockId, additive);
 }
 
 function animate() {
@@ -2497,7 +2719,7 @@ function selectedBlock() {
 }
 
 function selectedBlockIds() {
-  const ids = [...selectedIds].filter((id) => project.blocks.some((block) => block.id === id));
+  const ids = project.blocks.filter((block) => selectedIds.has(block.id)).map((block) => block.id);
   return ids.length ? ids : selectedId == null ? [] : [selectedId];
 }
 
@@ -2664,6 +2886,7 @@ function restoreHistory(state) {
   previewCache.clear();
   previewSequence += 1;
   renderAll();
+  saveAutosave();
   setStatus("");
 }
 
