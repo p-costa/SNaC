@@ -96,7 +96,9 @@ def _write_project(project: Project, output_path: Path) -> tuple[list[Path], lis
     for block in sorted(blocks, key=lambda item: item.id):
         if project.write_external_grid:
             for grid_dir in _grid_dirs(project.external_grid_source, grid_path, data_path):
-                files.extend(_write_block_grids(block, grid_dir))
+                files.extend(
+                    _write_block_grids(block, grid_dir, project.external_grid_precision)
+                )
             files.append(_write_geometry(block, data_path, extents[block.id]))
 
     project_file = output_path / "snac_grid_project.json"
@@ -253,20 +255,18 @@ def _renumber_blocks(blocks: list[Block]) -> list[Block]:
 
 
 def _grid_dirs(source: str, grid_path: Path, data_path: Path) -> list[Path]:
-    if source == "data":
-        return [data_path]
     if source == "both":
         return [grid_path, data_path]
     return [grid_path]
 
 
-def _write_block_grids(block: Block, grid_dir: Path) -> list[Path]:
+def _write_block_grids(block: Block, grid_dir: Path, precision: str) -> list[Path]:
     files: list[Path] = []
     suffix = f"_b_{block.id:03d}"
     for idx, axis in enumerate(AXIS_NAMES):
         arrays = axis_grid_arrays(block.axes[axis].to_dict(), block.lmin[idx], block.lmax[idx], block.ng[idx])
         base = grid_dir / f"grid_{axis}{suffix}"
-        binary_payload(arrays).tofile(base.with_suffix(".bin"))
+        binary_payload(arrays, precision).tofile(base.with_suffix(".bin"))
         _write_grid_out(base.with_suffix(".out"), arrays)
         files.append(base.with_suffix(".bin"))
         files.append(base.with_suffix(".out"))
@@ -347,7 +347,7 @@ def _nml_strings(values: list[str]) -> str:
 def _float_token(value: float) -> str:
     if value == 0.0:
         return "0."
-    text = f"{value:.10g}"
+    text = f"{value:.17g}"
     if "e" not in text.lower() and "." not in text:
         text += "."
     return text

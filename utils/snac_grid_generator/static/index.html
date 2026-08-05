@@ -143,6 +143,11 @@
             <button class="button axis-view" data-axis-view="+z" aria-label="View from +Z" aria-pressed="false" title="View from +Z">+Z</button>
             <button class="button axis-view" data-axis-view="-z" aria-label="View from -Z" aria-pressed="false" title="View from -Z">-Z</button>
           </div>
+          <button id="focus-selection" class="button icon" title="Fit selected blocks"><i data-lucide="scan-search"></i></button>
+          <button id="hide-selected" class="button icon" title="Hide selected blocks"><i data-lucide="eye-off"></i></button>
+          <button id="isolate-selected" class="button icon" title="Isolate selected blocks"><i data-lucide="panel-top"></i></button>
+          <button id="show-all-blocks" class="button icon" title="Show all blocks"><i data-lucide="eye"></i></button>
+          <button id="toggle-clipping" class="button icon" title="Toggle clipping plane"><i data-lucide="slice"></i></button>
           <button id="tool-select" class="button icon active" title="Select blocks"><i data-lucide="mouse-pointer-2"></i></button>
           <button id="tool-move" class="button icon" title="Move selected block"><i data-lucide="move-3d"></i></button>
           <button id="tool-scale" class="button icon" title="Resize selected block"><i data-lucide="scaling"></i></button>
@@ -152,6 +157,15 @@
           <button id="toggle-spacing-jumps" class="button icon active" title="Toggle interface spacing quality"><i data-lucide="activity"></i></button>
           <button id="fit-view" class="button icon" title="Fit view"><i data-lucide="scan"></i></button>
           <button id="toggle-grid" class="button icon active" title="Toggle ground grid"><i data-lucide="grid-3x3"></i></button>
+        </div>
+        <div id="clip-tools" class="clip-tools" hidden>
+          <div id="clip-axis" class="clip-axis" role="group" aria-label="Clipping axis">
+            <button class="active" data-clip-axis="x" aria-pressed="true">X</button>
+            <button data-clip-axis="y" aria-pressed="false">Y</button>
+            <button data-clip-axis="z" aria-pressed="false">Z</button>
+          </div>
+          <input id="clip-position" type="range" min="0" max="1" step="0.001" value="0.5" aria-label="Clipping position" />
+          <button id="flip-clipping" class="button icon" title="Flip clipping direction"><i data-lucide="flip-horizontal-2"></i></button>
         </div>
       </section>
 
@@ -194,6 +208,13 @@
               <select id="grid-source">
                 <option value="grid">grid/</option>
                 <option value="both">grid/ + data/</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>SNaC precision</span>
+              <select id="grid-precision">
+                <option value="double">Double</option>
+                <option value="single">Single</option>
               </select>
             </label>
           </div>

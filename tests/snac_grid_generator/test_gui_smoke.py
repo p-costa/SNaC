@@ -88,6 +88,32 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
             page.wait_for_selector(".block-item")
             self.assertEqual(page.locator(".block-item").count(), 2)
             self._assert_canvas_is_nonblank(page)
+            self.assertEqual(page.locator("#grid-precision").input_value(), "double")
+            page.locator("#grid-precision").select_option("single")
+            page.locator("#grid-precision").select_option("double")
+
+            page.evaluate(
+                """() => {
+                  const nativeFetch = window.fetch.bind(window);
+                  let delayUpdate = true;
+                  window.fetch = (input, options) => {
+                    const url = typeof input === 'string' ? input : input.url;
+                    if (delayUpdate && url.endsWith('/api/update')) {
+                      delayUpdate = false;
+                      return new Promise((resolve, reject) => {
+                        setTimeout(() => nativeFetch(input, options).then(resolve, reject), 300);
+                      });
+                    }
+                    return nativeFetch(input, options);
+                  };
+                }"""
+            )
+            page.locator("#update-structure").click()
+            page.locator("#project-name").fill("edited-during-update")
+            self.expect(page.locator("#status")).to_contain_text(
+                "discarded because the project changed"
+            )
+            self.assertEqual(page.locator("#project-name").input_value(), "edited-during-update")
 
             self.assertEqual(page.locator("[data-axis-view]").count(), 6)
             for view in ("+x", "-x", "+y", "-y", "+z", "-z"):
@@ -99,6 +125,30 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
             page.locator("#fit-view").click()
             self.expect(page.locator("#scene")).to_have_attribute("data-projection", "perspective")
             self.expect(page.locator("#scene")).to_have_attribute("data-view", "3d")
+
+            page.locator("#focus-selection").click()
+            self.expect(page.locator("#scene")).to_have_attribute("data-framed-blocks", "1")
+            page.locator("#hide-selected").click()
+            self.expect(page.locator("#scene")).to_have_attribute("data-hidden-blocks", "1")
+            self.assertIn("hidden-block", page.locator(".block-item").first.get_attribute("class"))
+            self.assertTrue(page.locator("#show-all-blocks").is_enabled())
+            page.locator("#show-all-blocks").click()
+            self.expect(page.locator("#scene")).to_have_attribute("data-hidden-blocks", "")
+            page.locator("#isolate-selected").click()
+            self.expect(page.locator("#scene")).to_have_attribute("data-hidden-blocks", "2")
+            page.locator("#show-all-blocks").click()
+
+            page.locator("#toggle-clipping").click()
+            self.expect(page.locator("#scene")).to_have_attribute("data-clipping", "true")
+            self.assertTrue(page.locator("#clip-tools").is_visible())
+            page.locator('[data-clip-axis="y"]').click()
+            self.expect(page.locator("#scene")).to_have_attribute("data-clip-axis", "y")
+            page.locator("#clip-position").fill("0.25")
+            page.locator("#flip-clipping").click()
+            self.expect(page.locator("#scene")).to_have_attribute("data-clip-direction", "-1")
+            page.locator("#toggle-clipping").click()
+            self.expect(page.locator("#scene")).to_have_attribute("data-clipping", "false")
+            self.assertFalse(page.locator("#clip-tools").is_visible())
 
             page.get_by_label("Select 2: right", exact=True).check()
             page.get_by_role("button", name="Duplicate array", exact=True).click()

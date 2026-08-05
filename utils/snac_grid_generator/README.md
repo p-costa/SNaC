@@ -200,6 +200,11 @@ base-plus-remainder decomposition as `initmpi`, so they show the actual local
 subdomain cuts for the selected block.
 The `+X/-X`, `+Y/-Y`, and `+Z/-Z` buttons provide fitted orthographic views
 with pan and zoom; `Fit` returns to the free-orbit perspective view.
+`Fit selection` frames the checked blocks without changing the active view.
+Checked blocks can also be hidden or isolated, and `Show all` restores the full
+scene. The clipping tool exposes an X/Y/Z section plane with position and
+direction controls. These inspection settings affect only the viewport; they
+are not stored in the project or written to SNaC case files.
 The grid-line button toggles a sparse 3D view of the selected block's actual
 face coordinates, including imported and repaired explicit grids.
 After `Check` or `Update`, connected faces are outlined by their normal-spacing
@@ -234,6 +239,9 @@ The `Grid files` selector controls where those external grid files are copied.
 `grid/` writes only the startup files that SNaC looks for before falling back to
 `gt/gr`. `grid/ + data/` also duplicates those grid files under `data/`, matching
 the grid snapshots SNaC writes with saved output.
+`SNaC precision` must match the solver build: choose `Double` for the default
+build and `Single` when SNaC is compiled with `SINGLE_PRECISION=1`. Export
+rejects a precision that cannot keep every face coordinate distinct.
 
 Each export is fully staged and validated before publication. Existing
 generator-owned files are backed up during publication and restored if any
@@ -244,11 +252,11 @@ unmanaged file collision stops export and leaves the existing case untouched.
 
 The binary grid files follow `save_grid` in `src/initgrid.f90`: for each axis,
 the file contains the face coordinate, center coordinate, face spacing, and
-center spacing arrays for the block's `ng` entries. Export uses little-endian
-double precision. Import accepts little- or big-endian single or double
-precision and validates all four arrays against one another; invalid files are
-rejected instead of importing plausible face coordinates from a corrupted
-payload.
+center spacing arrays for the block's `ng` entries. Export uses the selected
+little-endian single or double precision. Import accepts little- or big-endian
+single or double precision and validates all four arrays against one another;
+invalid files are rejected instead of importing plausible face coordinates
+from a corrupted payload.
 
 You can also export from a saved project JSON:
 
@@ -262,8 +270,10 @@ otherwise the importer reconstructs the project from `blocks.nml`. Any
 `grid/grid_[xyz]_b_###.bin` files, or `data/` equivalents, replace the axis
 definition with their exact face coordinates. If one copy is invalid and the
 other is valid, the valid copy is imported with a warning. If both are valid but
-differ, `grid/` remains authoritative and the difference is reported. The same
-conversion is available headlessly:
+differ, `grid/` remains authoritative and the difference is reported. When
+`dns.nml` is present, its `nscal` value preserves editable scalar boundary rows
+even if `blocks.nml` relies on their defaults. The same conversion is available
+headlessly:
 
 ```sh
 python3 -m utils.snac_grid_generator.cli import path/to/case -o imported-project.json

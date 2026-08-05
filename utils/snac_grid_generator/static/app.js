@@ -82,6 +82,7 @@ const BOUNDARY_COLORS = { D: 0xe46868, F: 0x43c989, N: 0x76a9ff, mixed: 0xd6bf5b
 let project = null;
 let selectedId = 1;
 let selectedIds = new Set([1]);
+let hiddenBlockIds = new Set();
 let currentAxis = "x";
 let groundGridVisible = true;
 let boundaryColorsVisible = true;
@@ -110,6 +111,11 @@ let camera;
 let perspectiveCamera;
 let orthographicCamera;
 let orthographicViewSize = null;
+const clippingPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+let clippingEnabled = false;
+let clippingAxisIndex = 0;
+let clippingFraction = 0.5;
+let clippingDirection = 1;
 let renderer;
 let controls;
 let raycaster;
@@ -189,6 +195,15 @@ function bindElements() {
     "quality-summary",
     "scene",
     "fit-view",
+    "focus-selection",
+    "hide-selected",
+    "isolate-selected",
+    "show-all-blocks",
+    "toggle-clipping",
+    "clip-tools",
+    "clip-axis",
+    "clip-position",
+    "flip-clipping",
     "toggle-grid",
     "tool-select",
     "tool-move",
@@ -211,6 +226,7 @@ function bindElements() {
     "infer-connectivity",
     "write-external-grid",
     "grid-source",
+    "grid-precision",
     "boundary-table",
     "bc-preset",
     "bc-preset-face",
@@ -263,10 +279,15 @@ function bindStaticEvents() {
   els.writeExternalGrid.addEventListener("change", () => {
     project.writeExternalGrid = els.writeExternalGrid.checked;
     els.gridSource.disabled = !project.writeExternalGrid;
+    els.gridPrecision.disabled = !project.writeExternalGrid;
     markProjectDirty();
   });
   els.gridSource.addEventListener("change", () => {
     project.externalGridSource = els.gridSource.value;
+    markProjectDirty();
+  });
+  els.gridPrecision.addEventListener("change", () => {
+    project.externalGridPrecision = els.gridPrecision.value;
     markProjectDirty();
   });
   els.addBlock.addEventListener("click", addFreeBlock);
@@ -277,9 +298,26 @@ function bindStaticEvents() {
   els.snapBlock.addEventListener("click", () => applyGeometryOperation("snap"));
   els.removeBlock.addEventListener("click", removeSelectedBlock);
   els.fitView.addEventListener("click", fitView);
+  els.focusSelection.addEventListener("click", focusSelection);
+  els.hideSelected.addEventListener("click", hideSelectedBlocks);
+  els.isolateSelected.addEventListener("click", isolateSelectedBlocks);
+  els.showAllBlocks.addEventListener("click", showAllBlocks);
+  els.toggleClipping.addEventListener("click", toggleClipping);
   for (const button of document.querySelectorAll("[data-axis-view]")) {
     button.addEventListener("click", () => setAxisView(button.dataset.axisView));
   }
+  for (const button of els.clipAxis.querySelectorAll("button")) {
+    button.addEventListener("click", () => setClippingAxis(button.dataset.clipAxis));
+  }
+  els.clipPosition.addEventListener("input", () => {
+    clippingFraction = Number(els.clipPosition.value);
+    updateClippingPlane();
+  });
+  els.flipClipping.addEventListener("click", () => {
+    clippingDirection *= -1;
+    updateClippingPlane();
+    renderViewControls();
+  });
   els.toggleGrid.addEventListener("click", () => {
     groundGridVisible = !groundGridVisible;
     gridHelper.visible = groundGridVisible;
@@ -400,6 +438,7 @@ function initScene() {
   els.scene.dataset.view = "3d";
   renderer = new THREE.WebGLRenderer({ canvas: els.scene, antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.localClippingEnabled = true;
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
@@ -450,6 +489,9 @@ function renderAll() {
     block.axisLocks = normalizedAxisLocks(block.axisLocks);
   }
   project.blocks.sort((a, b) => a.id - b.id);
+  hiddenBlockIds = new Set(
+    [...hiddenBlockIds].filter((id) => project.blocks.some((block) => block.id === id))
+  );
   if (!selectedBlock()) selectedId = project.blocks[0]?.id ?? null;
   selectedIds = new Set([...selectedIds].filter((id) => project.blocks.some((block) => block.id === id)));
   els.projectName.value = project.name ?? "snac-grid";
@@ -460,6 +502,9 @@ function renderAll() {
   if (!["grid", "both"].includes(project.externalGridSource)) project.externalGridSource = "grid";
   els.gridSource.value = project.externalGridSource;
   els.gridSource.disabled = !project.writeExternalGrid;
+  if (!["single", "double"].includes(project.externalGridPrecision)) project.externalGridPrecision = "double";
+  els.gridPrecision.value = project.externalGridPrecision;
+  els.gridPrecision.disabled = !project.writeExternalGrid;
   els.addAdjacent.disabled = !selectedBlock();
   for (const button of [els.duplicateArray, els.mirrorBlocks, els.alignBlocks, els.snapBlock]) {
     button.disabled = !selectedBlock();
@@ -485,7 +530,11 @@ function renderBlockList() {
   }
   for (const block of project.blocks) {
     const item = document.createElement("div");
-    item.className = `block-item${block.id === selectedId ? " selected" : ""}`;
+    item.className = [
+      "block-item",
+      block.id === selectedId ? "selected" : "",
+      hiddenBlockIds.has(block.id) ? "hidden-block" : "",
+    ].filter(Boolean).join(" ");
     item.innerHTML = `
       <input type="checkbox" aria-label="Select ${escapeHtml(blockLabel(block))}" ${selectedIds.has(block.id) ? "checked" : ""} />
       <span class="swatch" style="background:#${COLORS[(block.id - 1) % COLORS.length].toString(16).padStart(6, "0")}"></span>
@@ -495,6 +544,7 @@ function renderBlockList() {
       if (event.target.checked) selectedIds.add(block.id);
       else selectedIds.delete(block.id);
       renderBlockList();
+      renderViewControls();
     });
     item.querySelector("button").addEventListener("click", () => {
       selectedId = block.id;
@@ -892,12 +942,14 @@ async function applyAxisToAlignedBlocks() {
   const block = selectedBlock();
   if (!block) return;
   setStatus(`Applying ${currentAxis.toUpperCase()} grid...`);
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/apply-axis", {
       project,
       sourceBlockId: block.id,
       axis: currentAxis,
     });
+    if (!projectResponseIsCurrent(requestProject, "Grid propagation")) return;
     project = payload.project;
     previewCache.clear();
     previewSequence += 1;
@@ -998,12 +1050,14 @@ async function previewGridRepair() {
     return;
   }
   setStatus("Checking grid congruence...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson(
       "/api/repair",
       { project, sourceBlockId: selectedId },
       { allowInvalid: true }
     );
+    if (!projectResponseIsCurrent(requestProject, "Grid repair")) return;
     if (!payload.ok) {
       pendingRepair = null;
       lastCheck = payload;
@@ -1059,8 +1113,10 @@ async function applyGridRepair() {
 
 async function balanceDecomposition() {
   setStatus("Balancing MPI decomposition...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/decompose", { project }, { allowInvalid: true });
+    if (!projectResponseIsCurrent(requestProject, "Decomposition")) return;
     decompositionResult = payload;
     if (!payload.ok) {
       renderDecompositionSummary();
@@ -1087,6 +1143,7 @@ async function applyBoundaryPreset() {
   const blockIds = selectedBlockIds();
   if (!blockIds.length) return;
   setStatus("Applying boundary preset...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/bc-preset", {
       project,
@@ -1096,6 +1153,7 @@ async function applyBoundaryPreset() {
       velocity: [els.bcPresetU.value, els.bcPresetV.value, els.bcPresetW.value].map(Number),
       pressure: Number(els.bcPresetP.value) || 0,
     });
+    if (!projectResponseIsCurrent(requestProject, "Boundary preset")) return;
     project = payload.project;
     markProjectDirty();
     renderAll();
@@ -1229,6 +1287,7 @@ function renderScene() {
     (activeDiagnostic?.locations ?? []).map((location) => location.blockId)
   );
   for (const block of project.blocks) {
+    if (hiddenBlockIds.has(block.id)) continue;
     const size = blockSize(block);
     const center = blockCenter(block);
     const color = COLORS[(block.id - 1) % COLORS.length];
@@ -1265,6 +1324,8 @@ function renderScene() {
   drawInterfaceSpacing();
   drawDiagnosticHighlight();
   updateAxesHelper();
+  updateClippingPlane();
+  applyClipping();
   attachSelectedTransform();
   renderViewControls();
 }
@@ -1274,6 +1335,7 @@ function drawDiagnosticHighlight() {
   const color = activeDiagnostic.severity === "error" ? 0xff6b6b : 0xf0c36a;
   for (const location of activeDiagnostic.locations ?? []) {
     if (!location.face) continue;
+    if (hiddenBlockIds.has(location.blockId)) continue;
     const block = project.blocks.find((item) => item.id === location.blockId);
     const face = FACE_ORDER.indexOf(location.face);
     if (!block || face < 0) continue;
@@ -1291,6 +1353,7 @@ function drawDiagnosticHighlight() {
 function drawInterfaceSpacing() {
   if (!spacingJumpsVisible) return;
   for (const metric of lastCheck?.interfaces ?? []) {
+    if (hiddenBlockIds.has(metric.blockId) || hiddenBlockIds.has(metric.neighborId)) continue;
     const block = project.blocks.find((item) => item.id === metric.blockId);
     if (!block) continue;
     const axisIndex = AXES.indexOf(metric.axis);
@@ -1307,7 +1370,7 @@ function drawInterfaceSpacing() {
 
 function drawBoundaryFaces() {
   const block = selectedBlock();
-  if (!block || !boundaryColorsVisible) return;
+  if (!block || hiddenBlockIds.has(block.id) || !boundaryColorsVisible) return;
   const size = blockSize(block);
   const center = blockCenter(block);
   for (let face = 0; face < 6; face += 1) {
@@ -1348,7 +1411,7 @@ function boundaryFaceColor(block, face) {
 function drawPartitionPlanes() {
   const block = selectedBlock();
   const preview = block ? previewCache.get(block.id) : null;
-  if (!block || !preview || !partitionPlanesVisible) return;
+  if (!block || hiddenBlockIds.has(block.id) || !preview || !partitionPlanesVisible) return;
   const scale = Math.max(...blockSize(block), 1.0);
   const material = new THREE.LineDashedMaterial({
     color: 0xd6bf5b,
@@ -1372,7 +1435,7 @@ function drawPartitionPlanes() {
 
 function updateAxesHelper() {
   clearDisposableGroup(axesGroup, false);
-  const box = projectBox(project.blocks);
+  const box = projectBox(visibleBlocks());
   const size = box.getSize(new THREE.Vector3());
   const origin = box.min.clone();
   if (!Number.isFinite(origin.x)) origin.set(0, 0, 0);
@@ -1395,7 +1458,7 @@ function updateAxesHelper() {
 
 function drawSelectedGrid() {
   const block = selectedBlock();
-  if (!block || !gridLinesVisible) return;
+  if (!block || hiddenBlockIds.has(block.id) || !gridLinesVisible) return;
   const preview = previewCache.get(block.id);
   if (!preview) return;
   const material = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.32 });
@@ -1409,6 +1472,104 @@ function drawSelectedGrid() {
       selectedGridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
     }
   }
+}
+
+function visibleBlocks() {
+  return project.blocks.filter((block) => !hiddenBlockIds.has(block.id));
+}
+
+function selectedVisibleBlocks() {
+  const ids = new Set(selectedBlockIds());
+  return project.blocks.filter((block) => ids.has(block.id) && !hiddenBlockIds.has(block.id));
+}
+
+function hideSelectedBlocks() {
+  const blockIds = selectedBlockIds();
+  if (!blockIds.length) return;
+  for (const blockId of blockIds) hiddenBlockIds.add(blockId);
+  refreshInspectionView(`Hidden ${blockIds.length} block${blockIds.length === 1 ? "" : "s"}`);
+}
+
+function isolateSelectedBlocks() {
+  const blockIds = new Set(selectedBlockIds());
+  if (!blockIds.size) return;
+  hiddenBlockIds = new Set(
+    project.blocks.map((block) => block.id).filter((blockId) => !blockIds.has(blockId))
+  );
+  refreshInspectionView(`Isolated ${blockIds.size} block${blockIds.size === 1 ? "" : "s"}`);
+}
+
+function showAllBlocks() {
+  if (!hiddenBlockIds.size) return;
+  hiddenBlockIds.clear();
+  refreshInspectionView("Showing all blocks");
+}
+
+function refreshInspectionView(message) {
+  renderBlockList();
+  renderScene();
+  setStatus(message);
+}
+
+function resetInspectionState() {
+  hiddenBlockIds.clear();
+  clippingEnabled = false;
+  clippingAxisIndex = 0;
+  clippingFraction = 0.5;
+  clippingDirection = 1;
+}
+
+function toggleClipping() {
+  clippingEnabled = !clippingEnabled;
+  els.clipTools.hidden = !clippingEnabled;
+  updateClippingPlane();
+  applyClipping();
+  renderViewControls();
+}
+
+function setClippingAxis(axis) {
+  const axisIndex = AXES.indexOf(axis);
+  if (axisIndex < 0) return;
+  clippingAxisIndex = axisIndex;
+  updateClippingPlane();
+  renderViewControls();
+}
+
+function updateClippingPlane() {
+  const box = projectBox(visibleBlocks());
+  const coordinate = box.min.getComponent(clippingAxisIndex)
+    + clippingFraction * (box.max.getComponent(clippingAxisIndex) - box.min.getComponent(clippingAxisIndex));
+  const normal = new THREE.Vector3().setComponent(clippingAxisIndex, clippingDirection);
+  clippingPlane.set(normal, -clippingDirection * coordinate);
+  updateInspectionDataset();
+}
+
+function applyClipping() {
+  const planes = clippingEnabled ? [clippingPlane] : null;
+  for (const group of [
+    blockGroup,
+    boundaryFaceGroup,
+    selectedGridGroup,
+    partitionGroup,
+    spacingJumpGroup,
+    diagnosticGroup,
+  ]) {
+    group.traverse((object) => {
+      if (!object.material) return;
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+        material.clippingPlanes = planes;
+        material.needsUpdate = true;
+      }
+    });
+  }
+  updateInspectionDataset();
+}
+
+function updateInspectionDataset() {
+  els.scene.dataset.clipping = String(clippingEnabled);
+  els.scene.dataset.clipAxis = AXES[clippingAxisIndex];
+  els.scene.dataset.clipDirection = String(clippingDirection);
+  els.scene.dataset.hiddenBlocks = [...hiddenBlockIds].sort((a, b) => a - b).join(",");
 }
 
 function renderSpacingPreview() {
@@ -1590,15 +1751,31 @@ function updateGeometryInputValues(block) {
 }
 
 function renderViewControls() {
-  if (!selectedBlock() && blockTool !== "select") blockTool = "select";
+  const selectedVisible = selectedVisibleBlocks();
+  if (!selectedVisible.length && blockTool !== "select") blockTool = "select";
   const toolButtons = {
     select: els.toolSelect,
     translate: els.toolMove,
     scale: els.toolScale,
   };
   for (const [tool, button] of Object.entries(toolButtons)) button.classList.toggle("active", blockTool === tool);
-  els.toolMove.disabled = !selectedBlock();
-  els.toolScale.disabled = !selectedBlock();
+  els.toolMove.disabled = !selectedVisible.length;
+  els.toolScale.disabled = !selectedVisible.length;
+  els.focusSelection.disabled = !selectedVisible.length;
+  els.hideSelected.disabled = !selectedVisible.length;
+  els.isolateSelected.disabled = !selectedBlockIds().length;
+  els.showAllBlocks.disabled = !hiddenBlockIds.size;
+  els.toggleClipping.classList.toggle("active", clippingEnabled);
+  els.toggleClipping.setAttribute("aria-pressed", String(clippingEnabled));
+  els.clipTools.hidden = !clippingEnabled;
+  els.clipPosition.value = String(clippingFraction);
+  for (const button of els.clipAxis.querySelectorAll("button")) {
+    const active = AXES[clippingAxisIndex] === button.dataset.clipAxis;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
+  els.flipClipping.classList.toggle("active", clippingDirection < 0);
+  els.flipClipping.setAttribute("aria-pressed", String(clippingDirection < 0));
   els.toggleBoundaries.classList.toggle("active", boundaryColorsVisible);
   els.togglePartitions.classList.toggle("active", partitionPlanesVisible);
   els.toggleGridLines.classList.toggle("active", gridLinesVisible);
@@ -1683,8 +1860,10 @@ async function applyGeometryOperation(operation) {
     payload.face = els.snapFace.value;
   }
   setStatus(`${operation[0].toUpperCase()}${operation.slice(1)} blocks...`);
+  const requestProject = projectRequestSnapshot();
   try {
     const result = await postJson("/api/geometry", payload);
+    if (!projectResponseIsCurrent(requestProject, "Geometry operation")) return;
     project = result.project;
     const changed = result.changedBlockIds ?? [];
     if (["duplicate", "mirror"].includes(operation) && changed.length) {
@@ -1715,6 +1894,7 @@ function resetProject() {
   project.blocks = [];
   selectedId = null;
   selectedIds.clear();
+  resetInspectionState();
   lastCheck = null;
   pendingRepair = null;
   decompositionResult = null;
@@ -1727,8 +1907,10 @@ function resetProject() {
 
 async function checkProject(options = {}) {
   if (!options.silent) setStatus("Checking grid...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/check", { project }, { allowInvalid: true });
+    if (!projectResponseIsCurrent(requestProject, "Grid check")) return false;
     lastCheck = payload;
     renderCheckResults();
     renderQualitySummary();
@@ -1752,8 +1934,10 @@ async function checkProject(options = {}) {
 
 async function updateStructure(options = {}) {
   if (!options.silent) setStatus("Updating structure...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/update", { project, sourceBlockId: selectedId }, { allowInvalid: true });
+    if (!projectResponseIsCurrent(requestProject, "Structure update")) return false;
     if (payload.project) {
       const oldSelectedId = selectedId;
       project = payload.project;
@@ -1783,8 +1967,13 @@ async function exportCase() {
     return;
   }
   setStatus("Writing files...");
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/export", { outputDir: els.outputDir.value, project });
+    if (!projectResponseIsCurrent(requestProject, "Export")) {
+      setStatus(`Wrote an earlier project state to ${payload.outputDir}; export again`);
+      return;
+    }
     commitHistory();
     clearAutosave();
     const warningText = payload.warnings?.length ? `, ${payload.warnings.length} warnings` : "";
@@ -1806,6 +1995,7 @@ async function importCase() {
     project = payload.project;
     selectedId = project.blocks[0]?.id ?? null;
     selectedIds = new Set(selectedId == null ? [] : [selectedId]);
+    resetInspectionState();
     lastCheck = null;
     pendingRepair = null;
     decompositionResult = null;
@@ -1934,6 +2124,7 @@ async function applySelectedLibraryItem() {
     project = payload.project;
     selectedId = project.blocks[0]?.id ?? null;
     selectedIds = new Set(selectedId == null ? [] : [selectedId]);
+    resetInspectionState();
     lastCheck = null;
     pendingRepair = null;
     decompositionResult = null;
@@ -2049,8 +2240,10 @@ function downloadProjectJson() {
 
 async function downloadCaseReport(format) {
   setStatus(`Building ${format === "json" ? "JSON" : "Markdown"} report...`);
+  const requestProject = projectRequestSnapshot();
   try {
     const payload = await postJson("/api/report", { project });
+    if (!projectResponseIsCurrent(requestProject, "Report")) return;
     const extension = format === "json" ? "json" : "md";
     const type = format === "json" ? "application/json" : "text/markdown";
     const content = format === "json"
@@ -2083,6 +2276,7 @@ async function openProjectJson(event) {
     project = payload.project;
     selectedId = project.blocks[0]?.id ?? null;
     selectedIds = new Set(selectedId == null ? [] : [selectedId]);
+    resetInspectionState();
     lastCheck = null;
     pendingRepair = null;
     decompositionResult = null;
@@ -2131,31 +2325,50 @@ function resizeRenderer() {
 }
 
 function fitView() {
-  const box = projectBox(project.blocks);
   activateCamera(perspectiveCamera, "3d");
   controls.enableRotate = true;
-  if (box.isEmpty()) {
-    controls.target.set(0, 0, 0);
-    camera.position.set(3.0, -4.5, 3.0);
-    controls.update();
+  framePerspective(
+    visibleBlocks(),
+    new THREE.Vector3(1.6, -2.2, 1.45),
+  );
+}
+
+function focusSelection() {
+  const blocks = selectedVisibleBlocks();
+  if (!blocks.length) {
+    setStatus("Select a visible block to fit");
     return;
   }
+  if (camera.isOrthographicCamera) {
+    setAxisView(els.scene.dataset.view, blocks);
+  } else {
+    framePerspective(blocks, camera.position.clone().sub(controls.target));
+  }
+  setStatus(`Fitted ${blocks.length} selected block${blocks.length === 1 ? "" : "s"}`);
+}
+
+function framePerspective(blocks, direction) {
+  const box = projectBox(blocks);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
-  const radius = Math.max(size.x, size.y, size.z, 1);
-  camera.position.copy(center.clone().add(new THREE.Vector3(radius * 1.6, -radius * 2.2, radius * 1.45)));
+  const radius = Math.max(size.x, size.y, size.z, 1e-9);
+  const viewDirection = direction.lengthSq() > 0
+    ? direction.clone().normalize()
+    : new THREE.Vector3(1.6, -2.2, 1.45).normalize();
+  camera.position.copy(center).addScaledVector(viewDirection, radius * 3.1);
   controls.target.copy(center);
   controls.update();
   gridHelper.position.copy(center);
   gridHelper.scale.setScalar(Math.max(1, radius / 5));
+  els.scene.dataset.framedBlocks = blocks.map((block) => block.id).join(",");
 }
 
-function setAxisView(view) {
+function setAxisView(view, blocks = visibleBlocks()) {
   const axisIndex = AXES.indexOf(view?.slice(1));
   const sign = view?.startsWith("-") ? -1 : 1;
   if (axisIndex < 0) return;
 
-  const box = projectBox(project.blocks);
+  const box = projectBox(blocks);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const direction = new THREE.Vector3().setComponent(axisIndex, sign);
@@ -2183,6 +2396,7 @@ function setAxisView(view) {
   controls.update();
   gridHelper.position.copy(center);
   gridHelper.scale.setScalar(Math.max(1, radius / 5));
+  els.scene.dataset.framedBlocks = blocks.map((block) => block.id).join(",");
 }
 
 function activateCamera(nextCamera, view) {
@@ -2292,11 +2506,21 @@ function formatBytes(value) {
 }
 
 function formatInputNumber(value) {
-  return Number(value.toPrecision(12)).toString();
+  return Number.isFinite(value) ? value.toString() : "";
 }
 
 function setStatus(message) {
   els.status.textContent = message;
+}
+
+function projectRequestSnapshot() {
+  return JSON.stringify(project);
+}
+
+function projectResponseIsCurrent(snapshot, operation) {
+  if (JSON.stringify(project) === snapshot) return true;
+  setStatus(`${operation} result discarded because the project changed`);
+  return false;
 }
 
 function clearCheckState() {
@@ -2409,6 +2633,7 @@ async function restoreRecovery() {
     project = payload.project;
     selectedId = project.blocks[0]?.id ?? null;
     selectedIds = new Set(selectedId == null ? [] : [selectedId]);
+    resetInspectionState();
     pendingRecovery = null;
     els.recoveryDialog.close();
     previewCache.clear();
