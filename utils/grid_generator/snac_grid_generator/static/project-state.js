@@ -43,11 +43,13 @@ export class SnapshotHistory {
   }
 }
 
+// Returns false when browser storage is unavailable or full.
 export function saveStoredProject(key, project) {
   try {
     localStorage.setItem(key, JSON.stringify({ savedAt: new Date().toISOString(), project }));
+    return true;
   } catch (_error) {
-    // Browser storage can be unavailable or full.
+    return false;
   }
 }
 
@@ -62,8 +64,23 @@ export function clearStoredProject(key) {
 export function loadStoredProject(key) {
   try {
     const value = JSON.parse(localStorage.getItem(key));
-    return value?.project ? value : null;
+    return value?.project ? { ...value, key } : null;
   } catch (_error) {
     return null;
   }
+}
+
+// Stored projects whose keys start with *prefix* or equal one of *extraKeys*,
+// newest first.
+export function listStoredProjects(prefix, extraKeys = []) {
+  let keys = [];
+  try {
+    keys = Object.keys(localStorage).filter((key) => key.startsWith(prefix) || extraKeys.includes(key));
+  } catch (_error) {
+    return [];
+  }
+  return keys
+    .map((key) => loadStoredProject(key))
+    .filter(Boolean)
+    .sort((a, b) => String(b.savedAt).localeCompare(String(a.savedAt)));
 }

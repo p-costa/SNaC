@@ -1,4 +1,6 @@
 export const AXES = ["x", "y", "z"];
+// Mirrors DEFAULT_MIN_LOCAL_CELLS in model.py.
+export const DEFAULT_MIN_LOCAL_CELLS = 4;
 export const FACE_ORDER = ["x-", "x+", "y-", "y+", "z-", "z+"];
 
 export function blockSize(block) {
@@ -9,9 +11,26 @@ export function blockCenter(block) {
   return block.lmin.map((value, index) => 0.5 * (value + block.lmax[index]));
 }
 
+// Legacy axis names, as in axis_format.py: older project files, autosaves, and
+// library items may still use them.
+const LEGACY_KINDS = { snac: "native", simple_ratio: "monotone", max_min: "symmetric" };
+const LEGACY_KEYS = { cell_ratio: "cellRatio", width_start: "widthStart", width_end: "widthEnd" };
+
+export function canonicalizeAxis(axis) {
+  if (!axis) return axis;
+  axis.kind = LEGACY_KINDS[axis.kind] ?? axis.kind;
+  for (const [legacy, key] of Object.entries(LEGACY_KEYS)) {
+    if (!(legacy in axis)) continue;
+    if (!(key in axis)) axis[key] = axis[legacy];
+    delete axis[legacy];
+  }
+  if (Array.isArray(axis.controls)) axis.controls = axis.controls.map((name) => LEGACY_KEYS[name] ?? name);
+  return axis;
+}
+
 export function ensureAxis(block, axis) {
   block.axes = block.axes || {};
-  block.axes[axis] = block.axes[axis] || defaultAxis();
+  block.axes[axis] = canonicalizeAxis(block.axes[axis] || defaultAxis());
   block.axes[axis].segments = block.axes[axis].segments || [defaultSegment()];
   for (const segment of block.axes[axis].segments) segment.continuous = Boolean(segment.continuous);
   block.axes[axis].profile = block.axes[axis].profile || "geometric";
@@ -20,7 +39,8 @@ export function ensureAxis(block, axis) {
 }
 
 export function isCellCountDerived(axis) {
-  return axis.kind === "explicit" || axis.kind === "max_min" || (axis.kind === "simple_ratio" && !axis.controls?.includes("n"));
+  const kind = LEGACY_KINDS[axis.kind] ?? axis.kind;
+  return kind === "explicit" || kind === "symmetric" || (kind === "monotone" && !axis.controls?.includes("n"));
 }
 
 export function rescaleExplicitFaces(block, axisIndex, oldMin, oldMax, newMin, newMax, sourceFaces = null) {
@@ -35,13 +55,13 @@ export function rescaleExplicitFaces(block, axisIndex, oldMin, oldMax, newMin, n
 
 export function defaultAxis() {
   return {
-    kind: "snac",
+    kind: "native",
     gt: 0,
     gr: 0,
     ratio: 1,
-    cell_ratio: 1,
-    width_start: 0.01,
-    width_end: 0.02,
+    cellRatio: 1,
+    widthStart: 0.01,
+    widthEnd: 0.02,
     controls: ["n", "ratio"],
     profile: "geometric",
     min: 0.01,
@@ -88,14 +108,24 @@ export function normalizedPeriodicAxes(project) {
   return AXES.map((_, index) => Boolean(values[index]));
 }
 
+export function normalizedFftAxis(project) {
+  const value = String(project.fftAxis ?? project.fft_axis ?? "").trim().toLowerCase();
+  // SNaC's FFT_AXIS build values 1 to 3 name the same axes.
+  const axis = { 1: "x", 2: "y", 3: "z" }[value] ?? value;
+  return AXES.includes(axis) ? axis : null;
+}
+
 export function normalizedDecomposition(project) {
   const value = project.decomposition ?? {};
   const targetRanks = Math.max(0, Math.round(Number(value.targetRanks ?? value.target_ranks) || 0));
   const mode = ["auto", "1d", "2d", "3d"].includes(value.mode) ? value.mode : "auto";
   const sourceAxes = Array.isArray(value.axes) ? value.axes : [true, true, true];
   const axes = AXES.map((_, index) => (index < sourceAxes.length ? Boolean(sourceAxes[index]) : true));
-  if (!axes.some(Boolean)) axes[0] = true;
-  const minLocalCells = Math.max(1, Math.round(Number(value.minLocalCells ?? value.min_local_cells) || 4));
+  // SNaC never splits the FFT axis, so it is never a partition axis.
+  const fftIndex = AXES.indexOf(normalizedFftAxis(project));
+  if (fftIndex >= 0) axes[fftIndex] = false;
+  if (!axes.some(Boolean)) axes.forEach((_, index) => { axes[index] = index !== fftIndex; });
+  const minLocalCells = Math.max(1, Math.round(Number(value.minLocalCells ?? value.min_local_cells) || DEFAULT_MIN_LOCAL_CELLS));
   const maxLocalAspect = Math.max(0, Number(value.maxLocalAspect ?? value.max_local_aspect) || 0);
   return { targetRanks, mode, axes, minLocalCells, maxLocalAspect };
 }

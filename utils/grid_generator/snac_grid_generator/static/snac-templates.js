@@ -1,4 +1,4 @@
-import { defaultBlock } from "./block-model.js";
+import { DEFAULT_MIN_LOCAL_CELLS, defaultBlock } from "./block-model.js";
 
 export function builtInAxisPresets() {
   return [
@@ -8,7 +8,7 @@ export function builtInAxisPresets() {
       ng: 32,
       coordinateSpace: "native",
       axis: {
-        kind: "simple_ratio",
+        kind: "monotone",
         profile: "geometric",
         controls: ["n", "ratio"],
         ratio: 1,
@@ -21,7 +21,7 @@ export function builtInAxisPresets() {
       ng: 64,
       coordinateSpace: "native",
       axis: {
-        kind: "simple_ratio",
+        kind: "monotone",
         profile: "tanh",
         controls: ["n", "ratio"],
         ratio: 8,
@@ -58,9 +58,14 @@ function template(id, name, project) {
   return { id, name, project };
 }
 
+// A new project with default settings and no blocks.
+export function emptyProject() {
+  return projectDefaults("snac-grid", []);
+}
+
 function projectDefaults(name, blocks) {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     name,
     nscal: 0,
     periodicAxes: [false, false, false],
@@ -68,13 +73,14 @@ function projectDefaults(name, blocks) {
       targetRanks: 0,
       mode: "auto",
       axes: [true, true, true],
-      minLocalCells: 4,
+      minLocalCells: DEFAULT_MIN_LOCAL_CELLS,
       maxLocalAspect: 0,
     },
     inferConnectivity: true,
     writeExternalGrid: true,
     externalGridSource: "grid",
     externalGridPrecision: "double",
+    fftAxis: null,
     blocks,
   };
 }

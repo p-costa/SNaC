@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Protocol, Sequence
 
+from .diagnostics import Diagnostic, error
 from .numeric import coordinates_close, geometry_tolerance
 
 AXIS_NAMES = ("x", "y", "z")
@@ -57,8 +58,11 @@ class Topology:
     """Connections and geometry diagnostics for a block collection."""
 
     connections: list[FaceConnection] = field(default_factory=list)
-    errors: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
+    issues: list[Diagnostic] = field(default_factory=list)
+
+    @property
+    def errors(self) -> tuple[str, ...]:
+        return tuple(issue.message for issue in self.issues if issue.severity == "error")
 
 
 def build_topology(
@@ -75,7 +79,9 @@ def build_topology(
         left = blocks[left_index]
         right = blocks[right_index]
         if volume_overlap(left, right):
-            topology.errors.append(f"blocks {left.id} and {right.id} overlap")
+            topology.issues.append(
+                error("block_overlap", f"blocks {left.id} and {right.id} overlap", left.id, right.id)
+            )
             continue
         for axis_index in range(3):
             scale = max(axis_extent(left, axis_index), axis_extent(right, axis_index))
@@ -336,9 +342,15 @@ def _add_periodic_contacts(
     for low_block in low_blocks:
         matches = [block for block in high_blocks if same_cross_section(low_block, block, axis_index)]
         if len(matches) != 1:
-            topology.errors.append(
-                f"periodic {axis}- face of block {low_block.id} has {len(matches)} matching "
-                "full faces on the opposite boundary"
+            topology.issues.append(
+                error(
+                    "periodic_mismatch",
+                    f"periodic {axis}- face of block {low_block.id} has {len(matches)} matching "
+                    "full faces on the opposite boundary",
+                    (low_block.id, f"{axis}-"),
+                    *((block.id, f"{axis}+") for block in matches),
+                    axis=axis,
+                )
             )
             continue
         high_block = matches[0]
@@ -355,8 +367,14 @@ def _add_periodic_contacts(
 
     for high_block in high_blocks:
         if high_block.id not in matched_high:
-            topology.errors.append(
-                f"periodic {axis}+ face of block {high_block.id} has no matching full face on the opposite boundary"
+            topology.issues.append(
+                error(
+                    "periodic_mismatch",
+                    f"periodic {axis}+ face of block {high_block.id} has no matching full face "
+                    "on the opposite boundary",
+                    (high_block.id, f"{axis}+"),
+                    axis=axis,
+                )
             )
 
 
@@ -380,8 +398,15 @@ def _add_face_contact(
             axis_index,
         )
     elif cross_section_overlap(lower_block, upper_block, axis_index):
-        topology.errors.append(
-            f"blocks {lower_block.id} and {upper_block.id} touch on a partial {AXIS_NAMES[axis_index]} face"
+        axis = AXIS_NAMES[axis_index]
+        topology.issues.append(
+            error(
+                "partial_face_contact",
+                f"blocks {lower_block.id} and {upper_block.id} touch on a partial {axis} face",
+                (lower_block.id, FACE_ORDER[FACE_INDEX[(axis_index, lower_side)]]),
+                (upper_block.id, FACE_ORDER[FACE_INDEX[(axis_index, upper_side)]]),
+                axis=axis,
+            )
         )
 
 
@@ -398,6 +423,15 @@ def _add_connection(
     for block_id, face in ((connection.a_id, connection.a_face), (connection.b_id, connection.b_face)):
         old = face_owner.get((block_id, face))
         if old is not None:
-            topology.errors.append(f"block {block_id} face {FACE_ORDER[face]} has multiple full-face neighbors")
+            neighbors = {old.a_id, old.b_id, connection.a_id, connection.b_id} - {block_id}
+            topology.issues.append(
+                error(
+                    "multiple_neighbors",
+                    f"block {block_id} face {FACE_ORDER[face]} has multiple full-face neighbors",
+                    (block_id, FACE_ORDER[face]),
+                    *sorted(neighbors),
+                    axis=AXIS_NAMES[axis_index],
+                )
+            )
         face_owner[(block_id, face)] = connection
     topology.connections.append(connection)

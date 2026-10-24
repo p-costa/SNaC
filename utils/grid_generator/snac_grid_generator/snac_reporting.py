@@ -10,7 +10,7 @@ from typing import Any
 from .model import PROJECT_SCHEMA_VERSION, Project
 from .quality import GridQualityReport, analyze_grid_quality
 from .topology import build_topology
-from .validation import CheckResult, check_project, copy_project
+from .validation import CheckResult, check_export_readiness, copy_project
 
 REPORT_SCHEMA_VERSION = 1
 
@@ -20,11 +20,16 @@ def build_case_report(
     *,
     validation: CheckResult | None = None,
 ) -> dict[str, Any]:
-    """Return deterministic validation, quality, and SNaC storage data."""
+    """Return deterministic validation, quality, and SNaC storage data.
+
+    Without an explicit *validation*, the project is checked as it would be
+    exported, including inferred friend boundaries.
+    """
 
     project = copy_project(project)
+    if validation is None:
+        project, validation = check_export_readiness(project)
     topology = build_topology(project.blocks, project.periodic_axes)
-    validation = validation or check_project(project, topology=topology)
     quality: GridQualityReport | None = None
     quality_error: str | None = None
     try:
@@ -49,6 +54,7 @@ def build_case_report(
             "blocks": len(project.blocks),
             "scalars": project.nscal,
             "gridPrecision": project.external_grid_precision,
+            "fftAxis": project.fft_axis,
         },
         "validation": validation.to_dict(),
         "quality": quality.to_dict() if quality is not None else None,

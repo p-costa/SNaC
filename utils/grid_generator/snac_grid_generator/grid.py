@@ -3,20 +3,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
+import json
 from math import erf, exp, isclose, log, pow, tanh
 from typing import Callable, Sequence
 
 import numpy as np
 
+from .axis_format import EXPLICIT, MONOTONE, MULTI, NATIVE, SYMMETRIC, canonical_axis
 from .numeric import geometry_tolerance
 from .snac_grid import SNAC_GRID_FUNCTIONS, native_faces
-
-AXIS_NAMES = ("x", "y", "z")
+from .topology import AXIS_NAMES  # noqa: F401  (re-exported as grid.AXIS_NAMES)
 
 GRID_FUNCTIONS = SNAC_GRID_FUNCTIONS
 
 _REL_TOL = 1.0e-11
 _RMAX = 1.0e5
+# The fits below depend only on a handful of scalars, and the same axis is fitted
+# many times per request (every project copy re-validates its blocks).
+_FIT_CACHE_SIZE = 4096
 
 
 @dataclass(frozen=True)
@@ -62,7 +67,16 @@ class MonotoneFit:
     ideal_n: float | None
 
 
+# Monotone controls by their solve_spacing names. Axis specifications name them
+# as in axis_format.MONOTONE_CONTROLS; _SOLVER_CONTROL maps one to the other.
 MONOTONE_CONTROLS = ("n", "ratio", "cell_ratio", "width_start", "width_end")
+_SOLVER_CONTROL = {
+    "n": "n",
+    "ratio": "ratio",
+    "cellRatio": "cell_ratio",
+    "widthStart": "width_start",
+    "widthEnd": "width_end",
+}
 
 
 def solve_spacing(
@@ -125,14 +139,42 @@ def solve_spacing(
     )
 
 
+_MONOTONE_KEYS = ("profile", "controls", "ratio", "side", "cellRatio", "widthStart", "widthEnd")
+_MIN_MAX_KEYS = ("min", "max", "side", "profile")
+
+
 def fit_monotone_spacing(axis: dict, length: float, n: int) -> MonotoneFit:
     """Resolve two user-selected controls for a monotone spacing profile."""
 
+    axis = canonical_axis(axis)
+    key = _axis_key(axis, _MONOTONE_KEYS)
+    if key is None:
+        return _fit_monotone_spacing(axis, length, n)
+    return _fit_monotone_spacing_cached(key, float(length), int(n))
+
+
+@lru_cache(maxsize=_FIT_CACHE_SIZE)
+def _fit_monotone_spacing_cached(key: str, length: float, n: int) -> MonotoneFit:
+    return _fit_monotone_spacing(json.loads(key), length, n)
+
+
+def _axis_key(axis: dict, keys: Sequence[str]) -> str | None:
+    """Return a hashable cache key for the axis fields a fit reads, if possible."""
+
+    try:
+        return json.dumps({name: axis[name] for name in keys if name in axis}, sort_keys=True)
+    except (TypeError, ValueError):
+        return None
+
+
+def _fit_monotone_spacing(axis: dict, length: float, n: int) -> MonotoneFit:
     length = _positive(length, "axis length")
     profile = str(axis.get("profile", "geometric")).lower()
     raw_controls = axis.get("controls")
     legacy = not isinstance(raw_controls, (list, tuple))
-    controls = tuple(dict.fromkeys(str(value) for value in (raw_controls or ("n", "ratio"))))
+    controls = tuple(
+        dict.fromkeys(_SOLVER_CONTROL.get(str(value), str(value)) for value in (raw_controls or ("n", "ratio")))
+    )
     if len(controls) != 2 or any(value not in MONOTONE_CONTROLS for value in controls):
         raise ValueError("monotone grading requires two distinct supported controls")
     if profile not in {"geometric", "tanh", "erf"}:
@@ -146,9 +188,9 @@ def fit_monotone_spacing(axis: dict, length: float, n: int) -> MonotoneFit:
     supplied = {
         "n": int(n),
         "ratio": ratio_value,
-        "cell_ratio": _positive(axis.get("cell_ratio", 1.0), "cell ratio"),
-        "width_start": _positive(axis.get("width_start", length / max(n, 1)), "lower spacing"),
-        "width_end": _positive(axis.get("width_end", length / max(n, 1)), "upper spacing"),
+        "cell_ratio": _positive(axis.get("cellRatio", 1.0), "cell ratio"),
+        "width_start": _positive(axis.get("widthStart", length / max(n, 1)), "lower spacing"),
+        "width_end": _positive(axis.get("widthEnd", length / max(n, 1)), "upper spacing"),
     }
 
     if profile == "geometric":
@@ -209,6 +251,19 @@ def fit_min_max_cell_count(axis: dict, length: float, *, max_cells: int = 1_000_
     targets exactly, the closest common scaling of the two targets is used.
     """
 
+    axis = canonical_axis(axis)
+    key = _axis_key(axis, _MIN_MAX_KEYS)
+    if key is None:
+        return _fit_min_max_cell_count(axis, length, max_cells)
+    return _fit_min_max_cell_count_cached(key, float(length), int(max_cells))
+
+
+@lru_cache(maxsize=_FIT_CACHE_SIZE)
+def _fit_min_max_cell_count_cached(key: str, length: float, max_cells: int) -> MinMaxFit:
+    return _fit_min_max_cell_count(json.loads(key), length, max_cells)
+
+
+def _fit_min_max_cell_count(axis: dict, length: float, max_cells: int) -> MinMaxFit:
     length = _positive(length, "axis length")
     target_min = _positive(axis.get("min", length), "min width")
     target_max = _positive(axis.get("max", length), "max width")
@@ -257,10 +312,11 @@ def axis_grid_arrays(axis: dict, lmin: float, lmax: float, n: int) -> GridArrays
     if lmax <= lmin:
         raise ValueError("axis lmax must be greater than lmin")
 
-    kind = axis.get("kind", "snac")
+    axis = canonical_axis(axis)
+    kind = axis.get("kind", NATIVE)
     length = float(lmax) - float(lmin)
 
-    if kind == "snac":
+    if kind == NATIVE:
         faces = native_faces(
             n=n,
             lmin=float(lmin),
@@ -268,18 +324,18 @@ def axis_grid_arrays(axis: dict, lmin: float, lmax: float, n: int) -> GridArrays
             gt=int(axis.get("gt", 0)),
             gr=float(axis.get("gr", 0.0)),
         )
-    elif kind == "multi":
+    elif kind == MULTI:
         segments = _segments_from_axis(axis, length)
         widths = _multi_grading_widths(length, n, segments, profile=str(axis.get("profile", "geometric")))
         faces = np.concatenate(([float(lmin)], float(lmin) + np.cumsum(widths)))
-    elif kind == "simple_ratio":
+    elif kind == MONOTONE:
         fit = fit_monotone_spacing(axis, length, n)
         widths = _profile_widths(length, fit.n, fit.ratio, str(axis.get("profile", "geometric")))
         faces = np.concatenate(([float(lmin)], float(lmin) + np.cumsum(widths)))
-    elif kind == "max_min":
+    elif kind == SYMMETRIC:
         widths = _max_min_widths(length, n, axis)
         faces = np.concatenate(([float(lmin)], float(lmin) + np.cumsum(widths)))
-    elif kind == "explicit":
+    elif kind == EXPLICIT:
         faces = np.asarray(axis.get("faces", []), dtype=float)
         if faces.size != n + 1:
             raise ValueError(f"explicit grid has {faces.size} faces, expected {n + 1}")
@@ -319,18 +375,19 @@ def axis_grid_diagnostics(axis: dict, lmin: float, lmax: float, n: int) -> dict:
         "segments": [],
     }
 
-    kind = str(axis.get("kind", "snac"))
+    axis = canonical_axis(axis)
+    kind = str(axis.get("kind", NATIVE))
     length = float(lmax) - float(lmin)
-    if kind == "simple_ratio":
+    if kind == MONOTONE:
         fit = fit_monotone_spacing(axis, length, n)
         result["cellRatio"] = fit.cell_ratio
         result["idealN"] = fit.ideal_n
         achieved = {
             "n": float(fit.n),
             "ratio": fit.ratio,
-            "cell_ratio": fit.cell_ratio,
-            "width_start": fit.width_start,
-            "width_end": fit.width_end,
+            "cellRatio": fit.cell_ratio,
+            "widthStart": fit.width_start,
+            "widthEnd": fit.width_end,
         }
         controls = axis.get("controls") or ("n", "ratio")
         residuals: dict[str, float] = {}
@@ -340,7 +397,7 @@ def axis_grid_diagnostics(axis: dict, lmin: float, lmax: float, n: int) -> dict:
             if value is not None and requested > 0.0:
                 residuals[str(control)] = float(value / requested - 1.0)
         result["residuals"] = residuals
-    elif kind == "multi":
+    elif kind == MULTI:
         segments = _segments_from_axis(axis, length)
         _, segment_data = _multi_grading_data(
             length,
@@ -429,8 +486,9 @@ def _derive(values: dict[str, float | int]) -> None:
 
 
 def _segments_from_axis(axis: dict, length: float) -> list[dict[str, float | bool]]:
-    kind = axis.get("kind", "snac")
-    if kind == "multi":
+    axis = canonical_axis(axis)
+    kind = axis.get("kind", NATIVE)
+    if kind == MULTI:
         segments = axis.get("segments") or []
         if not segments:
             return [{"length": 1.0, "cells": 1.0, "ratio": 1.0}]
@@ -443,7 +501,7 @@ def _segments_from_axis(axis: dict, length: float) -> list[dict[str, float | boo
             }
             for seg in segments
         ]
-    if kind == "max_min":
+    if kind == SYMMETRIC:
         min_width = _positive(axis.get("min", length), "min width")
         max_width = _positive(axis.get("max", length), "max width")
         if max_width < min_width:
@@ -600,6 +658,40 @@ def _profile_widths(length: float, n: int, ratio: float, profile: str) -> np.nda
     raise ValueError(f"unknown grid profile {profile!r}")
 
 
+def _profile_endpoint_widths(length: float, n: int, ratio: float, profile: str) -> tuple[float, float]:
+    """First and last cell widths of a monotone profile, without building the grid.
+
+    These equal ``_profile_widths(...)[0]`` and ``[-1]`` up to the round-off
+    correction that the full grid applies to its last width so that it sums to
+    the length exactly.
+    """
+
+    profile_key = profile.lower()
+    if profile_key == "geometric":
+        if n == 1:
+            return length, length
+        cell_ratio = pow(ratio, 1.0 / (n - 1))
+        first = _first_width_from_cell_ratio(length, n, cell_ratio)
+        return first, first * pow(cell_ratio, n - 1)
+    if profile_key in {"tanh", "erf"}:
+        if n == 1 or isclose(ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL):
+            return length / n, length / n
+        alpha = _solve_mapping_alpha(n, max(ratio, 1.0 / ratio), profile_key)
+        low, high = _mapped_endpoint_widths(alpha, n, profile_key)
+        low *= length
+        high *= length
+        return (high, low) if ratio < 1.0 else (low, high)
+    raise ValueError(f"unknown grid profile {profile!r}")
+
+
+def _mapped_endpoint_widths(alpha: float, n: int, profile: str) -> tuple[float, float]:
+    """Normalized first and last widths of a one-end mapping, as in the full grid."""
+
+    faces = [_map_one_end(alpha, value, profile) for value in (0.0, 1.0 / float(n), (n - 1) / float(n), 1.0)]
+    return faces[1] - faces[0], faces[3] - faces[2]
+
+
+@lru_cache(maxsize=_FIT_CACHE_SIZE)
 def _solve_profile_ratio_from_endpoint(
     length: float,
     n: int,
@@ -618,11 +710,10 @@ def _solve_profile_ratio_from_endpoint(
             raise ValueError("one cell requires its spacing to equal the axis length")
         return 1.0
 
-    index = 0 if endpoint == "width_start" else -1
+    index = 0 if endpoint == "width_start" else 1
 
     def error(log_ratio: float) -> float:
-        widths = _profile_widths(length, n, exp(log_ratio), profile)
-        return float(widths[index] - target)
+        return float(_profile_endpoint_widths(length, n, exp(log_ratio), profile)[index] - target)
 
     limit = log(_RMAX)
     try:
@@ -651,12 +742,12 @@ def _fit_profile_cell_count(
         targets[key] = _positive(value, key.replace("_", " "))
 
     primary = "width_start" if "width_start" in targets else "width_end"
-    index = 0 if primary == "width_start" else -1
+    index = 0 if primary == "width_start" else 1
     target = targets[primary]
     minimum_n = 1 if isclose(ratio, 1.0, rel_tol=0.0, abs_tol=_REL_TOL) else 2
 
     def width_for(n_value: int) -> float:
-        return float(_profile_widths(length, n_value, ratio, profile)[index])
+        return float(_profile_endpoint_widths(length, n_value, ratio, profile)[index])
 
     if width_for(minimum_n) < target:
         crossing = minimum_n
@@ -679,12 +770,12 @@ def _fit_profile_cell_count(
     candidates = range(max(minimum_n, crossing - 4), min(max_cells, crossing + 4) + 1)
 
     def score(n_value: int) -> float:
-        widths = _profile_widths(length, n_value, ratio, profile)
+        first, last = _profile_endpoint_widths(length, n_value, ratio, profile)
         errors = []
         if "width_start" in targets:
-            errors.append(abs(_log_ratio(float(widths[0]), targets["width_start"])))
+            errors.append(abs(_log_ratio(float(first), targets["width_start"])))
         if "width_end" in targets:
-            errors.append(abs(_log_ratio(float(widths[-1]), targets["width_end"])))
+            errors.append(abs(_log_ratio(float(last), targets["width_end"])))
         return max(errors)
 
     best = min(candidates, key=lambda value: (score(value), value))
@@ -774,17 +865,17 @@ def _mapped_ratio_widths(length: float, n: int, ratio: float, profile: str) -> n
     return widths
 
 
+@lru_cache(maxsize=_FIT_CACHE_SIZE)
 def _solve_mapping_alpha(n: int, ratio: float, profile: str) -> float:
     if ratio <= 1.0:
         return 0.0
 
     def ratio_for(alpha: float) -> float:
-        r0 = np.arange(0, n + 1, dtype=float) / float(n)
-        faces = np.array([_map_one_end(alpha, value, profile) for value in r0], dtype=float)
-        widths = np.diff(faces)
-        if widths[0] <= 0.0:
+        # Only the end widths matter; they are evaluated exactly as in the full grid.
+        first, last = _mapped_endpoint_widths(alpha, n, profile)
+        if first <= 0.0:
             return float("inf")
-        return float(widths[-1] / widths[0])
+        return float(last / first)
 
     high = 1.0
     while ratio_for(high) < ratio and high < 80.0:

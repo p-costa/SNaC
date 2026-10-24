@@ -39,9 +39,19 @@ class BinaryGrid:
     dtype: str
 
 
+# The geometric mappings divide by gr, so gr = 0 yields NaN in initgrid. These
+# values of gr reproduce a uniform grid instead.
+SNAC_GEOMETRIC_UNIFORM_GR = {4: 1.0, 5: 1.0, 6: 2.0, 7: 2.0}
+
+
 def native_faces(n: int, lmin: float, lmax: float, gt: int, gr: float) -> np.ndarray:
     """Evaluate a mapping from ``src/initgrid.f90`` at SNaC face positions."""
 
+    if gt in SNAC_GEOMETRIC_UNIFORM_GR and not gr > 0.0:
+        raise ValueError(
+            f"SNaC mapping function {gt} requires gr > 0 because initgrid divides by gr; "
+            f"gr = {SNAC_GEOMETRIC_UNIFORM_GR[gt]:g} gives a uniform grid"
+        )
     mapper = _SNAC_MAPPERS.get(gt, _gridpoint_cluster_two_end)
     r0 = np.arange(1, n + 1, dtype=float) / float(n)
     mapped = np.array([mapper(gr, value) for value in r0], dtype=float)
@@ -200,8 +210,6 @@ def _gridpoint_cluster_middle(alpha: float, r0: float) -> float:
 def _gridpoint_cluster_geometric_one_end(alpha: float, r0: float) -> float:
     power_value = 1.0 / 3.0
     if r0 == 1.0:
-        return r0
-    if alpha == 0.0:
         return r0
     return r0 * (((1.0 - r0**alpha) / (1.0 - r0) / alpha) ** power_value)
 

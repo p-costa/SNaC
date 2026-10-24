@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from .axis_format import EXPLICIT, MONOTONE, MULTI, NATIVE
 from .grid import AXIS_NAMES
 from .model import Block, Project
 
@@ -185,7 +186,7 @@ def _rescale_block_axis(block: Block, axis_index: int, new_min: float, new_max: 
     axis = block.axes[AXIS_NAMES[axis_index]]
     old_min = block.lmin[axis_index]
     old_max = block.lmax[axis_index]
-    if axis.kind == "explicit":
+    if axis.kind == EXPLICIT:
         scale = (new_max - new_min) / (old_max - old_min)
         axis.faces = [new_min + (value - old_min) * scale for value in axis.faces]
     block.lmin[axis_index] = new_min
@@ -198,17 +199,20 @@ def _mirror_block(block: Block, axis_index: int, plane: float) -> None:
     old_max = block.lmax[axis_index]
     block.lmin[axis_index] = 2.0 * plane - old_max
     block.lmax[axis_index] = 2.0 * plane - old_min
-    if axis.kind == "explicit":
+    if axis.kind == EXPLICIT:
         axis.faces = [2.0 * plane - value for value in reversed(axis.faces)]
-    elif axis.kind == "snac":
+    elif axis.kind == NATIVE:
         axis.gt = {1: 3, 3: 1, 4: 5, 5: 4}.get(axis.gt, axis.gt)
-    elif axis.kind == "simple_ratio":
+    elif axis.kind == MONOTONE:
         if axis.ratio <= 0.0 or axis.cell_ratio <= 0.0:
             raise ValueError("cannot mirror a non-positive grading ratio")
         axis.ratio = 1.0 / axis.ratio
         axis.cell_ratio = 1.0 / axis.cell_ratio
         axis.width_start, axis.width_end = axis.width_end, axis.width_start
-    elif axis.kind == "multi":
+        # The lower spacing becomes the upper one, so the controls swap too.
+        swapped = {"widthStart": "widthEnd", "widthEnd": "widthStart"}
+        axis.controls = [swapped.get(control, control) for control in axis.controls]
+    elif axis.kind == MULTI:
         old_segments = list(axis.segments)
         axis.segments = list(reversed(axis.segments))
         for index, segment in enumerate(axis.segments):

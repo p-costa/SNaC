@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from math import isfinite
 from typing import Any
 
+from .axis_format import EXPLICIT, MONOTONE, NATIVE, SYMMETRIC, canonical_axis
 from .grid import AXIS_NAMES, fit_min_max_cell_count, fit_monotone_spacing
 from .migrations import PROJECT_SCHEMA_VERSION, migrate_project_dict
 from .numeric import geometry_tolerance
@@ -40,9 +41,13 @@ class GradingSegment:
 
 @dataclass
 class AxisSpec:
-    """Grid controls for one local block axis."""
+    """Grid controls for one local block axis.
 
-    kind: str = "snac"
+    Attributes use Python names; ``to_dict`` writes the canonical file format
+    (see ``axis_format``), and ``from_dict`` also accepts legacy spellings.
+    """
+
+    kind: str = NATIVE
     gt: int = 0
     gr: float = 0.0
     ratio: float = 1.0
@@ -61,25 +66,27 @@ class AxisSpec:
     def from_dict(cls, data: dict[str, Any] | None) -> "AxisSpec":
         if not data:
             return cls()
-        kind = str(data.get("kind", "snac"))
+        data = canonical_axis(data)
+        kind = str(data.get("kind", NATIVE))
         side = str(data.get("side", "end"))
         ratio = float(data.get("ratio", 1.0))
-        width_start = float(data.get("width_start", data.get("widthStart", data.get("min", 0.01))))
-        width_end = float(data.get("width_end", data.get("widthEnd", data.get("max", 0.02))))
+        width_start = float(data.get("widthStart", data.get("min", 0.01)))
+        width_end = float(data.get("widthEnd", data.get("max", 0.02)))
         controls_data = data.get("controls")
 
-        if kind == "simple_ratio" and controls_data is None:
+        if kind == MONOTONE and controls_data is None:
             if side == "start":
                 ratio = 1.0 / ratio
             controls_data = ["n", "ratio"]
             side = "end"
-        elif kind == "max_min" and side in {"end", "start"}:
+        elif kind == SYMMETRIC and side in {"end", "start"}:
+            # One-sided symmetric grading was replaced by monotone spacing controls.
             minimum = float(data.get("min", 0.01))
             maximum = float(data.get("max", 0.02))
             width_start, width_end = (minimum, maximum) if side == "end" else (maximum, minimum)
             ratio = width_end / width_start
-            controls_data = ["width_start", "width_end"]
-            kind = "simple_ratio"
+            controls_data = ["widthStart", "widthEnd"]
+            kind = MONOTONE
             side = "end"
 
         return cls(
@@ -87,7 +94,7 @@ class AxisSpec:
             gt=int(data.get("gt", 0)),
             gr=float(data.get("gr", 0.0)),
             ratio=ratio,
-            cell_ratio=float(data.get("cell_ratio", data.get("cellRatio", 1.0))),
+            cell_ratio=float(data.get("cellRatio", 1.0)),
             width_start=width_start,
             width_end=width_end,
             controls=[str(value) for value in (controls_data or ["n", "ratio"])],
@@ -108,9 +115,9 @@ class AxisSpec:
             "gt": self.gt,
             "gr": self.gr,
             "ratio": self.ratio,
-            "cell_ratio": self.cell_ratio,
-            "width_start": self.width_start,
-            "width_end": self.width_end,
+            "cellRatio": self.cell_ratio,
+            "widthStart": self.width_start,
+            "widthEnd": self.width_end,
             "controls": self.controls,
             "profile": self.profile,
             "min": self.min,
@@ -121,6 +128,9 @@ class AxisSpec:
         }
 
 
+DEFAULT_MIN_LOCAL_CELLS = 4
+
+
 @dataclass
 class DecompositionSpec:
     """Project-level request for an automatic MPI decomposition."""
@@ -128,7 +138,7 @@ class DecompositionSpec:
     target_ranks: int = 0
     mode: str = "auto"
     axes: list[bool] = field(default_factory=lambda: [True, True, True])
-    min_local_cells: int = 4
+    min_local_cells: int = DEFAULT_MIN_LOCAL_CELLS
     max_local_aspect: float = 0.0
 
     @classmethod
@@ -138,7 +148,9 @@ class DecompositionSpec:
             target_ranks=max(0, int(data.get("targetRanks", data.get("target_ranks", 0)))),
             mode=str(data.get("mode", "auto")).lower(),
             axes=_bool_list(data.get("axes"), 3, True),
-            min_local_cells=int(data.get("minLocalCells", data.get("min_local_cells", 4))),
+            min_local_cells=int(
+                data.get("minLocalCells", data.get("min_local_cells", DEFAULT_MIN_LOCAL_CELLS))
+            ),
             max_local_aspect=float(data.get("maxLocalAspect", data.get("max_local_aspect", 0.0))),
         )
 
@@ -232,7 +244,7 @@ class Block:
         for index, axis in enumerate(AXIS_NAMES):
             self.axes.setdefault(axis, AxisSpec())
             length = self.lmax[index] - self.lmin[index]
-            if self.axes[axis].kind == "explicit":
+            if self.axes[axis].kind == EXPLICIT:
                 faces = self.axes[axis].faces
                 if len(faces) < 2 or not all(isfinite(value) for value in faces):
                     raise ValueError(f"block {self.id}: explicit {axis} grid requires finite face coordinates")
@@ -247,9 +259,9 @@ class Block:
                 ):
                     raise ValueError(f"block {self.id}: explicit {axis} grid must span the block extent")
                 self.ng[index] = len(faces) - 1
-            elif self.axes[axis].kind == "max_min":
+            elif self.axes[axis].kind == SYMMETRIC:
                 self.ng[index] = fit_min_max_cell_count(self.axes[axis].to_dict(), length).n
-            elif self.axes[axis].kind == "simple_ratio":
+            elif self.axes[axis].kind == MONOTONE:
                 self.ng[index] = fit_monotone_spacing(self.axes[axis].to_dict(), length, self.ng[index]).n
 
     def to_dict(self) -> dict[str, Any]:
@@ -286,6 +298,7 @@ class Project:
     write_external_grid: bool = True
     external_grid_source: str = "grid"
     external_grid_precision: str = "double"
+    fft_axis: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Project":
@@ -309,6 +322,7 @@ class Project:
             external_grid_precision=str(
                 data.get("externalGridPrecision", data.get("external_grid_precision", "double"))
             ).lower(),
+            fft_axis=_fft_axis(data.get("fftAxis", data.get("fft_axis"))),
         )
         project.validate()
         return project
@@ -322,6 +336,13 @@ class Project:
             raise ValueError("external grid source must be 'grid' or 'both'")
         if self.external_grid_precision not in {"single", "double"}:
             raise ValueError("external grid precision must be 'single' or 'double'")
+        self.fft_axis = _fft_axis(self.fft_axis)
+        fft_index = self.fft_axis_index
+        if fft_index is not None:
+            # SNaC never splits the FFT axis, so it is never a partition axis.
+            self.decomposition.axes[fft_index] = False
+            if not any(self.decomposition.axes):
+                self.decomposition.axes = [index != fft_index for index in range(3)]
         seen: set[int] = set()
         for block in self.blocks:
             block.cbcscal = _resize_string_rows(block.cbcscal, self.nscal, ["N"] * 6)
@@ -342,8 +363,31 @@ class Project:
             "writeExternalGrid": self.write_external_grid,
             "externalGridSource": self.external_grid_source,
             "externalGridPrecision": self.external_grid_precision,
+            "fftAxis": self.fft_axis,
             "blocks": [block.to_dict() for block in self.blocks],
         }
+
+    @property
+    def fft_axis_index(self) -> int | None:
+        """Index of the FFT-synthesis direction, or None without FFT acceleration."""
+
+        return None if self.fft_axis is None else AXIS_NAMES.index(self.fft_axis)
+
+
+def _fft_axis(value: Any) -> str | None:
+    """Normalize the FFT-synthesis axis to None or x, y, z.
+
+    The values 0 to 3 of SNaC's ``FFT_AXIS`` build option are accepted too.
+    """
+
+    text = "" if value is None else str(value).strip().lower()
+    if text in {"", "none", "0"}:
+        return None
+    if text in {"1", "2", "3"}:
+        return AXIS_NAMES[int(text) - 1]
+    if text not in AXIS_NAMES:
+        raise ValueError("FFT axis must be none, x, y, or z, or FFT_AXIS 0 to 3")
+    return text
 
 
 def _string_rows(data: Any, rows: int, default: list[str]) -> list[list[str]]:

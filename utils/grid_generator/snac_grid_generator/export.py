@@ -8,11 +8,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
+from .axis_format import NATIVE
 from .grid import AXIS_NAMES, axis_grid_arrays
 from .model import Block, Project
 from .snac_grid import binary_payload
 from .topology import infer_global_index_extents
-from .validation import check_project, infer_project_connectivity
+from .validation import check_export_readiness
 
 _MANIFEST_NAME = ".snac_grid_generator_manifest.json"
 _MANIFEST_VERSION = 1
@@ -35,22 +36,21 @@ class ExportResult:
 def export_project(project: Project | dict[str, Any], output_dir: str | Path) -> ExportResult:
     """Write ``blocks.nml`` and optional external grid files."""
 
-    if isinstance(project, dict):
-        project = Project.from_dict(project)
-    else:
-        project = Project.from_dict(project.to_dict())
-
-    warnings: list[str] = []
-    if project.infer_connectivity:
-        project, connectivity_check = infer_project_connectivity(project)
-        if connectivity_check.errors:
-            raise ValueError("; ".join(connectivity_check.errors))
-        warnings.extend(connectivity_check.warnings)
-
-    check = check_project(project)
+    project, check = check_export_readiness(project)
     if check.errors:
         raise ValueError("; ".join(check.errors))
-    warnings.extend(check.warnings)
+    warnings: list[str] = list(check.warnings)
+
+    # SNaC numbers blocks 1..N. Renumber once, before anything is written, so
+    # the namelist, the grid files, and the saved project JSON all agree.
+    project, id_map = _renumbered_project(project)
+    changed = [(old, new) for old, new in sorted(id_map.items()) if old != new]
+    if changed:
+        old_ids = [old for old, _ in changed]
+        new_ids = [new for _, new in changed]
+        warnings.append(
+            f"block IDs {old_ids} are written as {new_ids} because SNaC numbers blocks consecutively"
+        )
 
     output_path = Path(output_dir).expanduser().resolve()
     output_path.mkdir(parents=True, exist_ok=True)
@@ -84,7 +84,7 @@ def _write_project(project: Project, output_path: Path) -> tuple[list[Path], lis
         grid_path.mkdir(parents=True, exist_ok=True)
         data_path.mkdir(parents=True, exist_ok=True)
 
-    blocks = _renumber_blocks(project.blocks)
+    blocks = sorted(project.blocks, key=lambda item: item.id)
     extents = infer_global_index_extents(blocks)
     warnings: list[str] = []
     files: list[Path] = []
@@ -231,27 +231,27 @@ def _remove_empty_generated_directories(output_path: Path) -> None:
             path.rmdir()
 
 
-def _renumber_blocks(blocks: list[Block]) -> list[Block]:
-    id_map = {block.id: index for index, block in enumerate(sorted(blocks, key=lambda item: item.id), start=1)}
-    renumbered = [Block.from_dict(block.to_dict()) for block in sorted(blocks, key=lambda item: item.id)]
-    for index, block in enumerate(renumbered, start=1):
-        block.id = index
-        for face, cbc in enumerate(block.cbcpre):
-            if cbc == "F":
-                block.bcpre[face] = float(id_map.get(int(round(block.bcpre[face])), int(round(block.bcpre[face]))))
-        for component in range(3):
-            for face, cbc in enumerate(block.cbcvel[component]):
-                if cbc == "F":
-                    block.bcvel[component][face] = float(
-                        id_map.get(int(round(block.bcvel[component][face])), int(round(block.bcvel[component][face])))
-                    )
-        for iscal in range(len(block.cbcscal)):
-            for face, cbc in enumerate(block.cbcscal[iscal]):
-                if cbc == "F":
-                    block.bcscal[iscal][face] = float(
-                        id_map.get(int(round(block.bcscal[iscal][face])), int(round(block.bcscal[iscal][face])))
-                    )
-    return renumbered
+def _renumbered_project(project: Project) -> tuple[Project, dict[int, int]]:
+    """Return a copy whose block IDs are 1..N in ID order, with friends remapped."""
+
+    ordered = sorted(project.blocks, key=lambda item: item.id)
+    id_map = {block.id: index for index, block in enumerate(ordered, start=1)}
+    renumbered = Project.from_dict(project.to_dict())
+    renumbered.blocks = [Block.from_dict(block.to_dict()) for block in ordered]
+    for block in renumbered.blocks:
+        block.id = id_map[block.id]
+        rows = [
+            (block.cbcpre, block.bcpre),
+            *zip(block.cbcvel, block.bcvel),
+            *zip(block.cbcscal, block.bcscal),
+        ]
+        for codes, values in rows:
+            for face, code in enumerate(codes):
+                if code == "F":
+                    friend = int(round(values[face]))
+                    values[face] = float(id_map.get(friend, friend))
+    renumbered.validate()
+    return renumbered, id_map
 
 
 def _grid_dirs(source: str, grid_path: Path, data_path: Path) -> list[Path]:
@@ -298,8 +298,8 @@ def _write_geometry(block: Block, data_path: Path, extent: tuple[list[int], list
 def _format_blocks_nml(blocks: list[Block], nscal: int = 0) -> str:
     lines = ["&blocks", f"nblocks = {len(blocks)}"]
     for block in sorted(blocks, key=lambda item: item.id):
-        gt = [block.axes[axis].gt if block.axes[axis].kind == "snac" else 0 for axis in AXIS_NAMES]
-        gr = [block.axes[axis].gr if block.axes[axis].kind == "snac" else 0.0 for axis in AXIS_NAMES]
+        gt = [block.axes[axis].gt if block.axes[axis].kind == NATIVE else 0 for axis in AXIS_NAMES]
+        gr = [block.axes[axis].gr if block.axes[axis].kind == NATIVE else 0.0 for axis in AXIS_NAMES]
         ib = block.id
         lines.extend(
             [

@@ -14,7 +14,7 @@ from .export import export_project
 from .model import Project
 from .repair import repair_project_grids
 from .snac_reporting import build_case_report, render_case_report_markdown, write_case_report
-from .validation import check_project, update_project_structure
+from .validation import check_export_readiness, update_project_structure
 
 _WORKFLOW_COMMANDS = {"check", "decompose", "migrate", "repair", "update"}
 
@@ -107,7 +107,7 @@ def _workflow_main(command: str, argv: list[str]) -> int:
 
     project = _read_project(args.project)
     if command == "check":
-        result = check_project(project)
+        _, result = check_export_readiness(project)
         payload = result.to_dict()
     elif command == "migrate":
         result = None

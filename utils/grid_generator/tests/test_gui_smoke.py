@@ -10,10 +10,9 @@ import tempfile
 from threading import Thread
 import unittest
 
-from http.server import ThreadingHTTPServer
 
 from snac_grid_generator import Project, export_project
-from snac_grid_generator.server import _Handler
+from snac_grid_generator.server import GridServer, _Handler
 
 
 class _QuietHandler(_Handler):
@@ -59,7 +58,7 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
             headless=True,
             args=["--no-sandbox"],
         )
-        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), _QuietHandler)
+        cls.server = GridServer(("127.0.0.1", 0), _QuietHandler)
         cls.thread = Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         cls.url = f"http://127.0.0.1:{cls.server.server_port}/"
@@ -513,7 +512,7 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
         page.locator("#library-items").select_option("builtin:builtin-uniform-32")
         page.locator("#apply-library-item").click()
         self.expect(page.locator("#status")).to_contain_text("Applied Uniform 32")
-        self.assertEqual(page.locator("#grid-kind").input_value(), "simple_ratio")
+        self.assertEqual(page.locator("#grid-kind").input_value(), "monotone")
         page.locator("#library-name").fill("My uniform")
         page.locator("#save-library-item").click()
         self.expect(page.locator("#status")).to_contain_text("Saved My uniform")
@@ -522,7 +521,7 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
         self.expect(page.locator("#status")).to_contain_text("Renamed")
         page.locator("#apply-library-item").click()
         self.expect(page.locator("#status")).to_contain_text("Applied My grading")
-        self.assertEqual(page.locator("#grid-kind").input_value(), "simple_ratio")
+        self.assertEqual(page.locator("#grid-kind").input_value(), "monotone")
         self.assertEqual(page.locator('[data-field="ng"][data-index="0"]').input_value(), "32")
 
         page.get_by_role("button", name="Case templates", exact=True).click()
@@ -565,6 +564,277 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
 
         context.close()
         self.assertEqual(errors, [])
+
+    def test_check_is_read_only_and_editor_inputs_are_guarded(self) -> None:
+        context = self.browser.new_context(viewport={"width": 1440, "height": 900})
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # Two touching blocks whose shared faces are not yet marked as friends.
+            project_path = Path(tmp) / "unconnected.json"
+            project_path.write_text(
+                json.dumps(
+                    {
+                        "name": "unconnected",
+                        "blocks": [
+                            {"id": 1, "ng": [8, 8, 2], "lmin": [0, 0, 0], "lmax": [1, 1, 0.1]},
+                            {"id": 2, "ng": [8, 8, 2], "lmin": [1, 0, 0], "lmax": [2, 1, 0.1]},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            page.goto(self.url, wait_until="load")
+            page.wait_for_selector(".block-item")
+            page.locator("#open-json").set_input_files(str(project_path))
+            self.expect(page.locator("#status")).to_contain_text("Loaded")
+
+            page.locator("#check-project").click()
+            self.expect(page.locator("#status")).to_contain_text("Update applies the inferred friend boundaries")
+            self.assertEqual(self._download_project(page)["blocks"][0]["cbcpre"][1], "N")
+
+            page.locator("#update-structure").click()
+            self.expect(page.locator("#status")).to_contain_text("Structure updated")
+            self.assertEqual(self._download_project(page)["blocks"][0]["cbcpre"][1], "F")
+
+            # An empty or partial number keeps the last valid value and is restored on blur.
+            lmax_x = page.locator('#geometry-grid input[data-field="lmax"][data-index="0"]')
+            lmax_x.fill("")
+            self.assertEqual(self._download_project(page)["blocks"][0]["lmax"][0], 1.0)
+            lmax_x.blur()
+            self.assertEqual(lmax_x.input_value(), "1")
+
+            # The FFT axis is never partitioned.
+            page.locator("#fft-axis").select_option("z")
+            z_partition = page.locator('#decomposition-axes input[data-axis="2"]')
+            self.expect(z_partition).to_be_disabled()
+            self.expect(z_partition).not_to_be_checked()
+            saved = self._download_project(page)
+            self.assertEqual(saved["fftAxis"], "z")
+            self.assertEqual(saved["decomposition"]["axes"], [True, True, False])
+
+            # Geometric native functions start from their uniform gr instead of gr = 0.
+            page.locator("#grid-kind").select_option("native")
+            page.locator("#snac-gt").select_option("6")
+            self.assertEqual(page.locator("#snac-gr").input_value(), "2")
+            # ...and returning to a tanh function drops that automatic value again.
+            page.locator("#snac-gt").select_option("0")
+            self.assertEqual(page.locator("#snac-gr").input_value(), "0")
+
+            # The FFT axis never counts as an enabled partition axis.
+            page.locator('#decomposition-axes input[data-axis="0"]').uncheck()
+            page.locator('#decomposition-axes input[data-axis="1"]').click()
+            self.expect(page.locator("#status")).to_contain_text("Keep at least one partition axis enabled")
+            self.assertEqual(self._download_project(page)["decomposition"]["axes"], [False, True, False])
+
+            # Clearing other number fields keeps their last valid values.
+            page.locator("#grid-kind").select_option("monotone")
+            cells = page.locator('#axis-editor input[data-control="n"]')
+            self.expect(cells).to_have_value("8")
+            cells.fill("")
+            pressure = page.locator('#boundary-table input[data-kind="pre"][data-face="2"]')
+            pressure.fill("2.5")
+            pressure.fill("")
+            aspect = page.locator("#max-local-aspect")
+            aspect.fill("0.5")
+            saved = self._download_project(page)
+            self.assertEqual(saved["blocks"][0]["ng"][0], 8)
+            self.assertEqual(saved["blocks"][0]["bcpre"][2], 2.5)
+            self.assertEqual(saved["decomposition"]["maxLocalAspect"], 0)
+            cells.blur()
+            self.assertEqual(cells.input_value(), "8")
+
+        context.close()
+        self.assertEqual(errors, [])
+
+    def test_legacy_library_axis_preset_applies_with_canonical_names(self) -> None:
+        context = self.browser.new_context(viewport={"width": 1440, "height": 900})
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # A library saved before schema 4, with legacy axis kind and keys.
+            library_path = Path(tmp) / "legacy-library.json"
+            library_path.write_text(
+                json.dumps(
+                    {
+                        "schemaVersion": 1,
+                        "axisPresets": [
+                            {
+                                "id": "legacy-axis",
+                                "name": "Legacy monotone",
+                                "ng": 12,
+                                "coordinateSpace": "native",
+                                "axis": {
+                                    "kind": "simple_ratio",
+                                    "profile": "geometric",
+                                    "controls": ["n", "width_start"],
+                                    "width_start": 0.02,
+                                },
+                            }
+                        ],
+                        "projectTemplates": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            page.goto(self.url, wait_until="load")
+            page.wait_for_selector(".block-item")
+            page.locator("#open-library").click()
+            page.locator("#import-library").set_input_files(str(library_path))
+            self.expect(page.locator("#status")).to_contain_text("Imported 1 library item")
+            page.locator("#library-items").select_option("user:legacy-axis")
+            page.locator("#apply-library-item").click()
+            self.expect(page.locator("#status")).to_contain_text("Applied Legacy monotone")
+            page.locator("#close-library").click()
+            self.expect(page.locator("#grid-kind")).to_have_value("monotone")
+            axis = self._download_project(page)["blocks"][0]["axes"]["x"]
+
+        self.assertEqual(axis["kind"], "monotone")
+        self.assertEqual(axis["controls"], ["n", "widthStart"])
+        self.assertEqual(axis["widthStart"], 0.02)
+        self.assertNotIn("width_start", axis)
+        context.close()
+        self.assertEqual(errors, [])
+
+    def test_each_tab_keeps_its_own_autosave(self) -> None:
+        context = self.browser.new_context(viewport={"width": 1280, "height": 800})
+        errors: list[str] = []
+
+        def open_tab():
+            page = context.new_page()
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.goto(self.url, wait_until="load")
+            page.wait_for_selector(".block-item")
+            return page
+
+        alpha = open_tab()
+        alpha.locator("#project-name").fill("alpha-tab")
+        alpha.wait_for_timeout(700)  # autosave writes are batched
+
+        # Work in a tab that is still open is not offered to another tab.
+        beta = open_tab()
+        self.assertFalse(beta.locator("#recovery-dialog").is_visible())
+        beta.locator("#project-name").fill("beta-tab")
+        beta.wait_for_timeout(700)
+
+        # Reloading a tab offers that tab's own work, not the other tab's.
+        alpha.reload(wait_until="load")
+        self.expect(alpha.locator("#recovery-dialog")).to_be_visible()
+        self.expect(alpha.locator("#recovery-summary")).to_contain_text("alpha-tab")
+        alpha.locator("#restore-recovery").click()
+        self.expect(alpha.locator("#project-name")).to_have_value("alpha-tab")
+
+        # Work left by a closed tab is offered to the next new tab.
+        beta.close()
+        fresh = open_tab()
+        self.expect(fresh.locator("#recovery-dialog")).to_be_visible()
+        self.expect(fresh.locator("#recovery-summary")).to_contain_text("beta-tab")
+
+        context.close()
+        self.assertEqual(errors, [])
+
+    def test_issues_repair_choice_balancing_and_new_project(self) -> None:
+        context = self.browser.new_context(viewport={"width": 1440, "height": 900})
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            # A backward-facing step whose upper block was stretched along x, so
+            # its x grid no longer matches the lower block below it.
+            path = Path(tmp) / "step.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "name": "step",
+                        "fftAxis": "z",
+                        "periodicAxes": [False, False, True],
+                        "blocks": [
+                            {"id": 1, "name": "inlet", "ng": [32, 24, 32], "lmin": [0, 1, 0], "lmax": [2, 2, 2]},
+                            {
+                                "id": 2,
+                                "name": "upper",
+                                "ng": [96, 24, 32],
+                                "lmin": [2, 1, 0],
+                                "lmax": [10, 2, 2],
+                                "axes": {"x": {"kind": "monotone", "controls": ["n", "ratio"], "ratio": 4}},
+                            },
+                            {"id": 3, "name": "lower", "ng": [96, 24, 32], "lmin": [2, 0, 0], "lmax": [10, 1, 2]},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            page.goto(self.url, wait_until="load")
+            page.wait_for_selector(".block-item")
+            page.locator("#open-json").set_input_files(str(path))
+            self.expect(page.locator("#status")).to_contain_text("Loaded")
+
+        # A failing check opens the issues panel in the viewport.
+        page.locator("#check-project").click()
+        panel = page.locator("#issues-panel")
+        self.expect(panel).to_be_visible()
+        self.expect(page.locator("#issues-title")).to_have_text("1 error")
+        self.expect(page.locator("#export-case")).to_be_disabled()
+        self.assertIn("Fix the check errors", page.locator("#export-case").get_attribute("title"))
+        page.locator("#toggle-issues").click()
+        self.expect(page.locator("#check-results")).to_be_hidden()
+        page.locator("#toggle-issues").click()
+
+        # Clicking the issue frames the two affected blocks.
+        page.locator("#check-results .check-line.actionable").first.click()
+        self.expect(page.locator("#scene")).to_have_attribute("data-framed-blocks", "2,3")
+
+        # Repair offers both grids and keeps the one picked, here the stretched one.
+        page.locator("#repair-grids").click()
+        self.expect(page.locator("#repair-dialog")).to_be_visible()
+        options = page.locator('#repair-summary input[type="radio"]')
+        self.expect(options).to_have_count(2)
+        self.expect(page.locator("#repair-summary")).to_contain_text("monotone geometric, upper/lower ratio 4")
+        page.locator('#repair-summary label', has_text="2: upper").locator("input").check()
+        self.expect(page.locator("#repair-summary .repair-change")).to_contain_text("3: lower")
+        self.expect(page.locator("#repair-summary .repair-change")).to_contain_text("→ monotone geometric")
+        page.locator("#confirm-repair").click()
+        self.expect(page.locator("#status")).to_contain_text("Applied 1 grid repair")
+        self.assertEqual(self._download_project(page)["blocks"][2]["axes"]["x"]["kind"], "monotone")
+
+        # Six ranks balance poorly here, so better totals are offered.
+        page.locator("#target-ranks").fill("6")
+        page.locator("#balance-decomposition").click()
+        self.expect(page.locator("#decomposition-summary")).to_contain_text("Better balanced totals")
+        page.locator("#decomposition-summary .nearby-rank", has_text="7 ·").click()
+        self.expect(page.locator("#status")).to_contain_text("Balanced 7 MPI ranks")
+        self.expect(page.locator("#decomposition-summary")).to_contain_text("imbalance 1.0000")
+
+        # A new empty project resets the name; Undo brings the old project back.
+        page.locator("#reset-project").click()
+        self.expect(page.locator(".block-item")).to_have_count(0)
+        self.expect(page.locator("#project-name")).to_have_value("snac-grid")
+        page.locator("#undo-project").click()
+        self.expect(page.locator(".block-item")).to_have_count(3)
+        self.expect(page.locator("#project-name")).to_have_value("step")
+
+        # Adding a block that ends up out of view frames the model again.
+        page.locator("#adjacent-face").select_option("x+")
+        page.locator("#adjacent-size").fill("40")
+        page.locator("#add-adjacent").click()
+        self.expect(page.locator(".block-item")).to_have_count(4)
+        self.assertEqual(len(page.locator("#scene").get_attribute("data-framed-blocks").split(",")), 4)
+
+        context.close()
+        self.assertEqual(errors, [])
+
+    def _download_project(self, page) -> dict:
+        with page.expect_download() as download_info:
+            page.locator("#download-json").click()
+        return json.loads(Path(download_info.value.path()).read_text(encoding="utf-8"))
 
     def _post_api(self, payload: str, headers: dict[str, str]) -> tuple[int, str]:
         connection = HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
