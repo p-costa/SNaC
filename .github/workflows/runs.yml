@@ -16,7 +16,7 @@ jobs:
     - name: install python dependencies for performing the tests
       uses: actions/setup-python@v7
       with:
-        python-version: 3.8
+        python-version: "3.11"
     - name: install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -35,3 +35,22 @@ jobs:
         python -m unittest tests.snac_grid_generator.test_core tests.snac_grid_generator.test_gui_smoke
       env:
         SNAC_REQUIRE_BROWSER_TEST: "1"
+
+  grid-generator-oldest-python:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: install the oldest Python supported by the grid generator
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.8"
+    - name: install runtime dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r utils/snac_grid_generator/requirements.txt
+        pip install --no-deps .
+        snac-grid-generator --help
+    - name: run grid generator core tests
+      run: python -m unittest tests.snac_grid_generator.test_core
