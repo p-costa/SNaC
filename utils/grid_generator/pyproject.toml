@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "snac-grid-generator"
 version = "0.1.0"
 description = "Interactive multi-block grid generation for SNaC"
-readme = "utils/snac_grid_generator/README.md"
+readme = "README.md"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
 dependencies = [
@@ -15,15 +15,15 @@ dependencies = [
 ]
 
 [project.scripts]
-snac-grid-generator = "utils.snac_grid_generator.server:main"
+snac-grid-generator = "snac_grid_generator.server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["utils.snac_grid_generator*"]
+include = ["snac_grid_generator*"]
 namespaces = true
 
 [tool.setuptools.package-data]
-"utils.snac_grid_generator" = [
+"snac_grid_generator" = [
   "static/*.css",
   "static/*.html",
   "static/*.js",

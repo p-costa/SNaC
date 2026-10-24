@@ -158,7 +158,7 @@ When one of these files exists, SNaC loads that axis from disk. The binary layou
 
 The binary real precision must match the SNaC build. Use double-precision grid files for the default build and single-precision files when compiling with `SINGLE_PRECISION=1`.
 
-The GUI in `utils/snac_grid_generator` writes `blocks.nml` and these optional grid files. This lets a block mix SNaC-native mapping functions on some axes with generated multi-grading on others.
+The GUI in `utils/grid_generator` writes `blocks.nml` and these optional grid files. This lets a block mix SNaC-native mapping functions on some axes with generated multi-grading on others.
 
 ## Connectivity
 

@@ -70,12 +70,14 @@ Run the executable with `mpirun` with a number of tasks and shared threads compl
 Run the optional multi-block grid editor from the repository root with:
 
 ```bash
-python3 -m pip install .
+python3 -m pip install ./utils/grid_generator
 snac-grid-generator
 ```
 
 The launcher accepts the same `--host`, `--port`, `--no-open`, and
-`--allow-remote` options as `python3 -m utils.snac_grid_generator.server`.
+`--allow-remote` options as `python3 -m snac_grid_generator.server`. See
+[`utils/grid_generator/README.md`](utils/grid_generator/README.md) for the full
+documentation.
 
 The editor can draw and transform single or selected groups of blocks, configure SNaC-native or generated axis grids, apply common boundary presets, infer friend and periodic boundaries, check structured-grid constraints, and write `blocks.nml` plus optional binary axis grids. Its local grid library saves reusable axis gradings and complete case templates, including rescaling explicit coordinates to a new block extent. It autosaves locally and runs entirely from vendored static assets.
 
@@ -85,7 +87,7 @@ The MPI panel balances a prescribed total rank count exactly. `Auto`, `1D`, `2D`
 
 The balancing search also favors compact subdomains with lower communication area. The minimum cells per split and optional maximum local aspect are configurable hard limits. Its summary reports the minimum local edge and maximum local aspect ratio, and nearby feasible totals can be applied directly.
 
-The editor can import an existing case from `blocks.nml` and recover exact external grids from `grid/` or `data/` binaries. Sparse 3D grid lines show actual face coordinates, while checked interfaces are colored by their spacing jump. The quality panel reports grid, interface, and rank-balance metrics and downloads deterministic JSON or Markdown reports. Put the case directory in `Output` and use the folder-import button, or run `python3 -m utils.snac_grid_generator.cli import path/to/case -o imported-project.json`. The CLI also provides `check`, `update`, `repair`, `decompose`, `migrate`, and `report` commands with machine-readable diagnostics.
+The editor can import an existing case from `blocks.nml` and recover exact external grids from `grid/` or `data/` binaries. Sparse 3D grid lines show actual face coordinates, while checked interfaces are colored by their spacing jump. The quality panel reports grid, interface, and rank-balance metrics and downloads deterministic JSON or Markdown reports. Put the case directory in `Output` and use the folder-import button, or run `python3 -m snac_grid_generator.cli import path/to/case -o imported-project.json`. The CLI also provides `check`, `update`, `repair`, `decompose`, `migrate`, and `report` commands with machine-readable diagnostics.
 
 ### Visualizing field data
 

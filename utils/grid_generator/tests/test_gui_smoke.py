@@ -12,8 +12,8 @@ import unittest
 
 from http.server import ThreadingHTTPServer
 
-from utils.snac_grid_generator import Project, export_project
-from utils.snac_grid_generator.server import _Handler
+from snac_grid_generator import Project, export_project
+from snac_grid_generator.server import _Handler
 
 
 class _QuietHandler(_Handler):

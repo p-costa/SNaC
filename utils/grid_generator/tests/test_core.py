@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from utils.snac_grid_generator import (
+from snac_grid_generator import (
     MIN_LOCAL_CELLS,
     Project,
     align_blocks,
@@ -35,13 +35,15 @@ from utils.snac_grid_generator import (
     update_project_structure,
     write_case_report,
 )
-from utils.snac_grid_generator.snac_grid import binary_payload, read_grid_binary
-from utils.snac_grid_generator.cli import main as grid_cli_main
-from utils.snac_grid_generator.topology import (
+from snac_grid_generator.snac_grid import binary_payload, read_grid_binary
+from snac_grid_generator.cli import main as grid_cli_main
+from snac_grid_generator.topology import (
     FaceConnection,
     build_topology,
     infer_global_index_extents,
 )
+
+SNAC_ROOT = Path(__file__).resolve().parents[3]
 
 
 class GridGeneratorTests(unittest.TestCase):
@@ -465,7 +467,7 @@ class GridGeneratorTests(unittest.TestCase):
             self.assertEqual(startup_grid.stat().st_size, 16 * np.dtype("<f4").itemsize)
 
     def test_imports_an_existing_blocks_namelist(self) -> None:
-        result = import_case(Path("examples/__MULTI_BLOCK_GEOMETRY/L_channel"))
+        result = import_case(SNAC_ROOT / "examples/__MULTI_BLOCK_GEOMETRY/L_channel")
         project = result.project
         self.assertEqual(result.source, "blocks.nml")
         self.assertEqual(len(project.blocks), 3)
@@ -475,7 +477,7 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertFalse(project.write_external_grid)
         self.assertTrue(check_project(project).ok)
 
-        periodic = import_case(Path("tests/differentially_heated_cavity")).project
+        periodic = import_case(SNAC_ROOT / "tests/differentially_heated_cavity").project
         self.assertEqual(periodic.nscal, 1)
         self.assertEqual(periodic.periodic_axes, [False, True, False])
         self.assertTrue(check_project(periodic).ok)
