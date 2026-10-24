@@ -8,8 +8,9 @@ from pathlib import Path
 import sys
 from typing import Any, Callable
 
+from .balance import apply_balance_alternative
 from .case_import import import_case
-from .decomposition import optimize_project_decomposition
+from .decomposition import describe_project_decomposition, optimize_project_decomposition
 from .export import export_project
 from .model import Project
 from .repair import repair_project_grids
@@ -103,6 +104,18 @@ def _workflow_main(command: str, argv: list[str]) -> int:
         parser.add_argument("-o", "--output", type=Path, help="Write the resulting project JSON")
     if command in {"repair", "update"}:
         parser.add_argument("--source-block", type=int, help="Preferred source block id")
+    if command == "decompose":
+        parser.add_argument(
+            "--ng-tolerance",
+            type=float,
+            help="Largest relative cell-count change balance alternatives may use (default: the project's)",
+        )
+        parser.add_argument(
+            "--apply-alternative",
+            type=int,
+            metavar="K",
+            help="Apply the K-th listed cell-count alternative (1 is the smallest change)",
+        )
     args = parser.parse_args(argv)
 
     project = _read_project(args.project)
@@ -123,14 +136,51 @@ def _workflow_main(command: str, argv: list[str]) -> int:
             kwargs["source_block_id"] = args.source_block
         else:
             operation = optimize_project_decomposition
+            kwargs["alternatives"] = True
+            if args.ng_tolerance is not None:
+                project.decomposition.ng_tolerance = args.ng_tolerance
+                project.validate()
         project, result = operation(project, **kwargs)
         payload = {**result.to_dict(), "project": project.to_dict()}
+        if command == "decompose" and args.apply_alternative is not None:
+            alternatives = payload["alternatives"]
+            if not 1 <= args.apply_alternative <= len(alternatives):
+                raise ValueError(f"there are {len(alternatives)} alternatives; cannot apply {args.apply_alternative}")
+            project = apply_balance_alternative(project, alternatives[args.apply_alternative - 1])
+            payload = {
+                **describe_project_decomposition(project).to_dict(),
+                "project": project.to_dict(),
+                "applied": args.apply_alternative,
+            }
 
     if command != "check" and args.output and payload.get("ok", False):
         _write_project(args.output, project)
         payload["output"] = str(args.output)
     _print_diagnostics(command, payload, args.json)
     return 0 if payload.get("ok", False) else 1
+
+
+def _print_decomposition(payload: dict[str, Any]) -> None:
+    if payload.get("applied"):
+        print(f"Applied alternative {payload['applied']}.")
+    print(f"{payload['totalRanks']} MPI ranks, load imbalance {payload['imbalance']:.4f}")
+    alternatives = payload.get("alternatives") or []
+    if not alternatives:
+        return
+    names = {block["id"]: block.get("name") or str(block["id"]) for block in payload["project"]["blocks"]}
+    print(f"Cell-count changes within {payload['ngTolerance'] * 100:.3g}% that balance better:")
+    for index, alternative in enumerate(alternatives, start=1):
+        exact = ", exact division" if alternative["exact"] else ""
+        print(
+            f"  {index}. up to {alternative['maxChange'] * 100:.3g}%: imbalance {alternative['imbalance']:.4f}"
+            f"{exact}, total cells {alternative['cellChange'] * 100:+.1f}%"
+        )
+        for change in alternative["changes"]:
+            blocks = ", ".join(names.get(block_id, str(block_id)) for block_id in change["blockIds"])
+            print(f"       {change['axis']} of {blocks}: {change['from']} -> {change['to']}")
+    if not payload.get("alternativesOptimal", True):
+        print("  (search was bounded; better changes may exist)")
+    print("Apply one with --apply-alternative K.")
 
 
 def _read_project(path: Path) -> Project:
@@ -152,6 +202,8 @@ def _print_diagnostics(command: str, payload: dict[str, Any], as_json: bool) -> 
         print(f"warning: {warning}")
     for error in payload.get("errors", []):
         print(f"error: {error}")
+    if command == "decompose" and payload.get("ok", False):
+        _print_decomposition(payload)
     if payload.get("output"):
         print(f"Wrote {payload['output']}")
 

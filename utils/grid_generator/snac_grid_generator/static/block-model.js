@@ -1,6 +1,7 @@
 export const AXES = ["x", "y", "z"];
-// Mirrors DEFAULT_MIN_LOCAL_CELLS in model.py.
+// Mirror DEFAULT_MIN_LOCAL_CELLS and DEFAULT_NG_TOLERANCE in model.py.
 export const DEFAULT_MIN_LOCAL_CELLS = 4;
+export const DEFAULT_NG_TOLERANCE = 0.1;
 export const FACE_ORDER = ["x-", "x+", "y-", "y+", "z-", "z+"];
 
 export function blockSize(block) {
@@ -127,7 +128,9 @@ export function normalizedDecomposition(project) {
   if (!axes.some(Boolean)) axes.forEach((_, index) => { axes[index] = index !== fftIndex; });
   const minLocalCells = Math.max(1, Math.round(Number(value.minLocalCells ?? value.min_local_cells) || DEFAULT_MIN_LOCAL_CELLS));
   const maxLocalAspect = Math.max(0, Number(value.maxLocalAspect ?? value.max_local_aspect) || 0);
-  return { targetRanks, mode, axes, minLocalCells, maxLocalAspect };
+  const tolerance = Number(value.ngTolerance ?? value.ng_tolerance ?? DEFAULT_NG_TOLERANCE);
+  const ngTolerance = Number.isFinite(tolerance) ? Math.min(0.5, Math.max(0, tolerance)) : DEFAULT_NG_TOLERANCE;
+  return { targetRanks, mode, axes, minLocalCells, maxLocalAspect, ngTolerance };
 }
 
 export function normalizedAxisLocks(values) {

@@ -707,6 +707,42 @@ select {
   background: #25362f;
 }
 
+.balance-alternatives {
+  display: grid;
+  gap: 6px;
+}
+
+.balance-alternative {
+  display: grid;
+  gap: 2px;
+  padding: 6px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+
+.balance-alternative-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.balance-alternative-head .nearby-rank {
+  flex: none;
+  height: 24px;
+}
+
+.balance-change,
+.balance-note,
+.balance-fixed div {
+  padding-left: 2px;
+  font-size: 11px;
+}
+
+.balance-fixed summary {
+  cursor: pointer;
+}
+
 .axis-actions {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);

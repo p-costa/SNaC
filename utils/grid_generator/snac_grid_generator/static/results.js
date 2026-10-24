@@ -1,6 +1,6 @@
 // Check results, grid-quality summary, and MPI decomposition panels.
 
-import { balanceDecomposition } from "./actions.js";
+import { applyBalanceAlternative, balanceDecomposition } from "./actions.js";
 import { AXES, blockCenter } from "./block-model.js";
 import { frameBlocks } from "./camera.js";
 import { markProjectDirty, renderAll, setStatus } from "./core.js";
@@ -13,6 +13,7 @@ export function renderDecompositionControls() {
   els.targetRanks.value = spec.targetRanks;
   els.minLocalCells.value = spec.minLocalCells;
   els.maxLocalAspect.value = spec.maxLocalAspect;
+  els.ngTolerance.value = tolerancePercent(spec.ngTolerance);
   for (const button of els.decompositionMode.querySelectorAll("button")) {
     button.classList.toggle("active", button.dataset.mode === spec.mode);
   }
@@ -54,9 +55,13 @@ export function renderDecompositionSummary() {
         .map((block) => `<div>B${block.blockId}: ${block.dims.join(" × ")} · ${block.ranks} ranks</div>`)
         .join("")}
       ${better}
+      ${balanceAlternatives(result)}
     `;
   }
-  for (const button of els.decompositionSummary.querySelectorAll(".nearby-rank")) {
+  for (const button of els.decompositionSummary.querySelectorAll(".apply-alternative")) {
+    button.addEventListener("click", () => void applyBalanceAlternative(result.alternatives[Number(button.dataset.alternative)]));
+  }
+  for (const button of els.decompositionSummary.querySelectorAll(".nearby-rank[data-ranks]")) {
     button.addEventListener("click", () => {
       state.project.decomposition.targetRanks = Number(button.dataset.ranks);
       markProjectDirty();
@@ -64,6 +69,52 @@ export function renderDecompositionSummary() {
       void balanceDecomposition();
     });
   }
+}
+
+// The tolerance as a percentage for the input field, without float noise.
+export function tolerancePercent(value) {
+  return Number((Number(value ?? 0) * 100).toPrecision(6));
+}
+
+// Cell-count changes that balance better, offered after Balance; each one is
+// applied only when its button is pressed.
+function balanceAlternatives(result) {
+  const alternatives = result.alternatives ?? [];
+  const tolerance = Number(result.ngTolerance ?? 0);
+  if (result.applied) {
+    return `<div class="balance-note">Cell counts changed. Balance again to look for changes from the new counts.</div>`;
+  }
+  if (tolerance <= 0 || result.imbalance <= 1 + 1e-9) return "";
+  const names = new Map(state.project.blocks.map((block) => [block.id, block.name || `B${block.id}`]));
+  const blockNames = (ids) =>
+    ids.length === state.project.blocks.length && ids.length > 1 ? "all blocks" : ids.map((id) => names.get(id) ?? `B${id}`).join(", ");
+  const percent = (value) => `${Number((value * 100).toPrecision(3))}%`;
+  const limit = `${tolerancePercent(tolerance)}%`;
+  const fixed = result.fixedComponents ?? [];
+  const fixedList = fixed.length
+    ? `<details class="balance-fixed"><summary>Fixed cell counts (${fixed.length})</summary>${fixed
+        .map((item) => `<div>${item.axis} · ${escapeHtml(blockNames(item.blockIds))} · ${formatInteger(item.ng)} · ${escapeHtml(item.reason)}</div>`)
+        .join("")}</details>`
+    : "";
+  const bounded = result.alternativesOptimal === false ? `<div class="balance-note">Search was bounded; better changes may exist.</div>` : "";
+  if (!alternatives.length) {
+    return `<div class="balance-alternatives"><span>No cell-count change within ${limit} balances better.</span>${bounded}${fixedList}</div>`;
+  }
+  const rows = alternatives
+    .map((alternative, index) => {
+      const head = `≤${percent(alternative.maxChange)} · imbalance <strong>${formatNumber(alternative.imbalance)}</strong>${alternative.exact ? " · exact" : ""}`;
+      const changes = alternative.changes
+        .map((change) => `<div class="balance-change">${change.axis} · ${escapeHtml(blockNames(change.blockIds))}: ${change.from} → ${change.to}</div>`)
+        .join("");
+      const cellChange = `${alternative.cellChange >= 0 ? "+" : ""}${(alternative.cellChange * 100).toFixed(1)}%`;
+      const cells = `<div class="balance-change">total cells ${cellChange}</div>`;
+      return `<div class="balance-alternative">
+        <div class="balance-alternative-head"><span>${head}</span><button type="button" class="nearby-rank apply-alternative" data-alternative="${index}" title="Change these cell counts and use the matching decomposition">Apply</button></div>
+        ${changes}${cells}
+      </div>`;
+    })
+    .join("");
+  return `<div class="balance-alternatives"><span>Adjust cell counts (within ${limit})</span>${rows}${bounded}${fixedList}</div>`;
 }
 
 // Buttons that set the total rank count and balance again; items with an

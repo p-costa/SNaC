@@ -12,7 +12,6 @@ RUNDIR=$SNACDIR/run
 EXEC=snac
 MPIRUN_OPTIONS='--oversubscribe'
 if mpirun --version 2>&1 | grep -qi intel; then MPIRUN_OPTIONS=""; fi
-MPIRUN="mpirun -n 2 $MPIRUN_OPTIONS"
 CASES=$(mktemp -d)
 
 rm -rf $RUNDIR
@@ -21,14 +20,15 @@ cd $SNACDIR && make clean && make FFT_AXIS=3 -j run
 python "$TESTDIR/make_cases.py" "$CASES"
 
 # run_case <case> <expected exit: ok|error> [expected stderr message]
+# The number of MPI ranks is RANKS (default 2).
 run_case() {
   local case=$CASES/$1
   cp "$RUNDIR/$EXEC" "$TESTDIR/dns.nml" "$case/"
   mkdir -p "$case/data"
   cd "$case"
-  echo "Running SNaC on $1 ..."
+  echo "Running SNaC on $1 with ${RANKS:-2} ranks ..."
   set +e
-  ${MPIRUN} ./${EXEC} 1> log_file.log 2> err_log.log
+  mpirun -n "${RANKS:-2}" $MPIRUN_OPTIONS ./${EXEC} 1> log_file.log 2> err_log.log
   local status=$?
   set -e
   if [ "$2" = "ok" ] && [ $status -ne 0 ]; then
@@ -56,6 +56,8 @@ python "$TESTDIR/check_grid.py" "$CASES/valid"
 run_case stretched_fft error "grid spacing in the FFT direction must be uniform"
 run_case legacy_geometric ok
 run_case geometric_without_file error "geometric grid mappings (gt = 4 to 7) require gr > 0"
+RANKS=9 run_case balanced_step ok
+python "$TESTDIR/check_grid.py" "$CASES/balanced_step"
 
 rm -rf "$CASES" $RUNDIR
 echo "Passed!"
