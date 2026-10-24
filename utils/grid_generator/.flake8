@@ -1,4 +1,4 @@
 [flake8]
 max-line-length = 120
 extend-ignore = E203,W503
-exclude = utils/snac_grid_generator/static/vendor
+exclude = snac_grid_generator/static/vendor

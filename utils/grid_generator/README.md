@@ -23,35 +23,37 @@ model. It includes:
 - headless check, update, repair, and decomposition workflows;
 - structured-grid validation and transactional case writing.
 
-Python 3.8 or newer is supported. Install the tool from the repository root
-with:
+Python 3.8 or newer is supported. Install the tool from the SNaC repository
+root with:
 
 ```sh
-python3 -m pip install .
+python3 -m pip install ./utils/grid_generator
 snac-grid-generator
 ```
 
 The installed launcher includes the vendored browser assets and accepts
 `--host`, `--port`, `--no-open`, and `--allow-remote`. For development without
-installing the package, install `requirements.txt` and run the module directly.
+installing the package, install `requirements.txt` and run the modules directly
+from `utils/grid_generator`, where the commands below are run.
 
 Browser and lint tests use the separate test manifest, which requires Python
 3.11 or newer:
 
 ```sh
-python3 -m pip install -r utils/snac_grid_generator/requirements-test.txt
+python3 -m pip install -r requirements-test.txt
+python3 -m unittest tests.test_core tests.test_gui_smoke
 ```
 
 The grid-generator Python sources and tests have an enforced Flake8 baseline:
 
 ```sh
-python3 -m flake8 utils/snac_grid_generator tests/snac_grid_generator
+python3 -m flake8 snac_grid_generator tests
 ```
 
-Run the GUI from the repository root:
+Run the GUI without installing it:
 
 ```sh
-python3 -m utils.snac_grid_generator.server
+python3 -m snac_grid_generator.server
 ```
 
 The server prints the local URL. The GUI writes files through the Python backend
@@ -271,7 +273,7 @@ from a corrupted payload.
 You can also export from a saved project JSON:
 
 ```sh
-python3 -m utils.snac_grid_generator.cli generated/snac_grid_case/snac_grid_project.json -o generated/snac_grid_case
+python3 -m snac_grid_generator.cli generated/snac_grid_case/snac_grid_project.json -o generated/snac_grid_case
 ```
 
 To open an existing case in the GUI, put its directory in `Output` and use the
@@ -286,7 +288,7 @@ even if `blocks.nml` relies on their defaults. The same conversion is available
 headlessly:
 
 ```sh
-python3 -m utils.snac_grid_generator.cli import path/to/case -o imported-project.json
+python3 -m snac_grid_generator.cli import path/to/case -o imported-project.json
 ```
 
 The original export command remains valid; `export` may also be written
@@ -297,13 +299,13 @@ machine-readable diagnostics, and use `-o` on mutating commands to write the
 resulting project:
 
 ```sh
-python3 -m utils.snac_grid_generator.cli check project.json --json
-python3 -m utils.snac_grid_generator.cli update project.json -o updated.json
-python3 -m utils.snac_grid_generator.cli repair project.json -o repaired.json
-python3 -m utils.snac_grid_generator.cli decompose project.json -o decomposed.json
-python3 -m utils.snac_grid_generator.cli migrate old-project.json -o project.json
-python3 -m utils.snac_grid_generator.cli report project.json --format json -o grid-report.json
-python3 -m utils.snac_grid_generator.cli report project.json --format markdown -o grid-report.md
+python3 -m snac_grid_generator.cli check project.json --json
+python3 -m snac_grid_generator.cli update project.json -o updated.json
+python3 -m snac_grid_generator.cli repair project.json -o repaired.json
+python3 -m snac_grid_generator.cli decompose project.json -o decomposed.json
+python3 -m snac_grid_generator.cli migrate old-project.json -o project.json
+python3 -m snac_grid_generator.cli report project.json --format json -o grid-report.json
+python3 -m snac_grid_generator.cli report project.json --format markdown -o grid-report.md
 ```
 
 Without `-o`, `report` writes the selected representation to standard output.
