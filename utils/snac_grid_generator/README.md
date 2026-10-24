@@ -35,7 +35,8 @@ The installed launcher includes the vendored browser assets and accepts
 `--host`, `--port`, `--no-open`, and `--allow-remote`. For development without
 installing the package, install `requirements.txt` and run the module directly.
 
-Browser and lint tests use the separate test manifest:
+Browser and lint tests use the separate test manifest, which requires Python
+3.11 or newer:
 
 ```sh
 python3 -m pip install -r utils/snac_grid_generator/requirements-test.txt
