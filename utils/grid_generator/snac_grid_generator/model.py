@@ -129,6 +129,7 @@ class AxisSpec:
 
 
 DEFAULT_MIN_LOCAL_CELLS = 4
+DEFAULT_NG_TOLERANCE = 0.10
 
 
 @dataclass
@@ -140,6 +141,8 @@ class DecompositionSpec:
     axes: list[bool] = field(default_factory=lambda: [True, True, True])
     min_local_cells: int = DEFAULT_MIN_LOCAL_CELLS
     max_local_aspect: float = 0.0
+    # Largest relative change of a cell count that balancing may propose.
+    ng_tolerance: float = DEFAULT_NG_TOLERANCE
 
     @classmethod
     def from_dict(cls, data: dict[str, Any] | None) -> "DecompositionSpec":
@@ -152,6 +155,7 @@ class DecompositionSpec:
                 data.get("minLocalCells", data.get("min_local_cells", DEFAULT_MIN_LOCAL_CELLS))
             ),
             max_local_aspect=float(data.get("maxLocalAspect", data.get("max_local_aspect", 0.0))),
+            ng_tolerance=float(data.get("ngTolerance", data.get("ng_tolerance", DEFAULT_NG_TOLERANCE))),
         )
 
     def validate(self) -> None:
@@ -165,6 +169,8 @@ class DecompositionSpec:
             raise ValueError("minimum local cells must be at least 1")
         if self.max_local_aspect and self.max_local_aspect < 1.0:
             raise ValueError("maximum local aspect must be zero or at least 1")
+        if not 0.0 <= self.ng_tolerance <= 0.5:
+            raise ValueError("cell-count tolerance must be between 0 and 0.5")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -173,6 +179,7 @@ class DecompositionSpec:
             "axes": self.axes,
             "minLocalCells": self.min_local_cells,
             "maxLocalAspect": self.max_local_aspect,
+            "ngTolerance": self.ng_tolerance,
         }
 
 

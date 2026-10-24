@@ -181,6 +181,43 @@ def infer_global_index_extents(
     return extents
 
 
+def axis_components(
+    blocks: Sequence[RectilinearBlock],
+    connections: Sequence[FaceConnection],
+    axis_index: int,
+) -> list[set[int]]:
+    """Group blocks that must share one grid, and one MPI split, along an axis.
+
+    Blocks joined through faces normal to the other two axes share that axis's
+    grid lines (SNaC requires congruent faces), so each group has one cell
+    count and one partition count along the axis.
+    """
+
+    graph: dict[int, set[int]] = {block.id: set() for block in blocks}
+    for connection in connections:
+        if connection.axis_index == axis_index:
+            continue
+        graph[connection.a_id].add(connection.b_id)
+        graph[connection.b_id].add(connection.a_id)
+
+    result: list[set[int]] = []
+    unseen = set(graph)
+    while unseen:
+        seed = min(unseen)
+        component = {seed}
+        queue = [seed]
+        unseen.remove(seed)
+        while queue:
+            current = queue.pop(0)
+            for neighbor in graph[current]:
+                if neighbor in unseen:
+                    unseen.remove(neighbor)
+                    component.add(neighbor)
+                    queue.append(neighbor)
+        result.append(component)
+    return result
+
+
 def same_cross_section(
     a: RectilinearBlock,
     b: RectilinearBlock,
