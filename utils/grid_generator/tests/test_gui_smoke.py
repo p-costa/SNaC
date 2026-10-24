@@ -881,6 +881,14 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
                 self.assertLessEqual(abs(new - old), 0.1 * old)
         self.assertEqual([block["ng"][0] for block in saved["blocks"]], [30, 104, 104])
 
+        # Later proposals measure the tolerance from the original counts.
+        page.locator("#target-ranks").fill("6")
+        page.locator("#balance-decomposition").click()
+        self.expect(summary).to_contain_text("Adjust cell counts (within 10% of the original counts)")
+        self.expect(page.locator(".balance-alternative").first).to_contain_text("Original counts · imbalance 1.2857")
+        self.expect(summary).to_contain_text("upper, lower: 104 → 87 (original 96)")
+        page.locator("#target-ranks").fill("9")
+
         # A zero tolerance turns the proposals off.
         page.locator("#ng-tolerance").fill("0")
         page.locator("#balance-decomposition").click()

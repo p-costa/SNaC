@@ -156,9 +156,17 @@ axes, and the FFT axis stay fixed; the panel lists them with the reason.
 The proposals are the trade-off between the largest change and the load
 imbalance: walking by increasing change, each one removes at least a quarter of
 the remaining excess load, and the best balance within the tolerance is always
-listed. Each shows its imbalance, whether every split divides its cells exactly,
-the changed counts, and the change in total cells. `Apply` sets those counts and
-the matching partitions. For a backward-facing step (inlet 32x24x32,
+listed. A proposal changes as few counts as it can, giving up at most 0.5% of its
+imbalance and a tenth of its remaining excess load to do so. Each shows its
+imbalance, whether every split divides its cells exactly, the changed counts,
+and the change in total cells. `Apply` sets those counts and the matching
+partitions.
+
+Blocks remember their counts from before the first applied proposal
+(`ngOriginal`, with the applied counts in `ngBalanced`), and later proposals
+measure the tolerance from those original counts, so applying proposals for
+several rank counts never drifts further than the tolerance. Editing a count by
+hand makes it the original for that axis. For a backward-facing step (inlet 32x24x32,
 upper and lower 96x24x32, FFT along z) on 9 ranks, the exact decomposition has a
 load imbalance of 1.29; changes of at most 4.2%, 6.3%, 8.3%, and 9.4% reach 1.16,
 1.11, 1.07, and 1.06.

@@ -203,6 +203,10 @@ class Block:
     bcscal: list[list[float]] = field(default_factory=list)
     inflow: list[int] = field(default_factory=lambda: [0, 0, 0, 0, 0, 0])
     inivel: str = "zer"
+    # Cell counts before a balance proposal changed them, and the counts it
+    # set; balancing measures its tolerance from the original counts.
+    ng_original: list[int] | None = None
+    ng_balanced: list[int] | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Block":
@@ -225,9 +229,25 @@ class Block:
             bcscal=_float_rows(data.get("bcscal"), scalar_rows, [0.0] * 6),
             inflow=_int_list(data.get("inflow"), [0] * 6),
             inivel=str(data.get("inivel", "zer")),
+            ng_original=_optional_counts(data.get("ngOriginal")),
+            ng_balanced=_optional_counts(data.get("ngBalanced")),
         )
         block.validate()
         return block
+
+    def origin_ng(self) -> list[int]:
+        """Cell counts that balancing measures its tolerance from.
+
+        These are the counts before balance proposals changed them; an axis
+        whose count was edited since starts again from its current count.
+        """
+
+        if self.ng_original is None or self.ng_balanced is None:
+            return list(self.ng)
+        return [
+            original if current == balanced else current
+            for original, current, balanced in zip(self.ng_original, self.ng, self.ng_balanced)
+        ]
 
     def validate(self) -> None:
         if self.id < 1:
@@ -240,6 +260,11 @@ class Block:
             raise ValueError(f"block {self.id}: lmin/lmax must contain three coordinates")
         if len(self.axis_locks) != 3:
             raise ValueError(f"block {self.id}: axis locks must contain three flags")
+        if (self.ng_original is None) != (self.ng_balanced is None) or any(
+            counts is not None and (len(counts) != 3 or min(counts) < 1)
+            for counts in (self.ng_original, self.ng_balanced)
+        ):
+            raise ValueError(f"block {self.id}: ngOriginal and ngBalanced must both hold three positive cell counts")
         if not all(isfinite(value) for value in [*self.lmin, *self.lmax]):
             raise ValueError(f"block {self.id}: lmin/lmax coordinates must be finite")
         if any(high <= low for low, high in zip(self.lmin, self.lmax)):
@@ -289,6 +314,11 @@ class Block:
             "bcscal": self.bcscal,
             "inflow": self.inflow,
             "inivel": self.inivel,
+            **(
+                {"ngOriginal": self.ng_original, "ngBalanced": self.ng_balanced}
+                if self.ng_original is not None
+                else {}
+            ),
         }
 
 
@@ -433,6 +463,10 @@ def _float_list(data: Any, default: list[float]) -> list[float]:
     values = [float(value) for value in (data or [])[: len(default)]]
     values.extend(default[len(values) :])
     return values
+
+
+def _optional_counts(data: Any) -> list[int] | None:
+    return None if data is None else [int(value) for value in data]
 
 
 def _int_list(data: Any, default: list[int]) -> list[int]:

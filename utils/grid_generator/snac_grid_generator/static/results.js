@@ -82,14 +82,15 @@ function balanceAlternatives(result) {
   const alternatives = result.alternatives ?? [];
   const tolerance = Number(result.ngTolerance ?? 0);
   if (result.applied) {
-    return `<div class="balance-note">Cell counts changed. Balance again to look for changes from the new counts.</div>`;
+    return `<div class="balance-note">Cell counts changed. Balance again for further proposals.</div>`;
   }
   if (tolerance <= 0 || result.imbalance <= 1 + 1e-9) return "";
   const names = new Map(state.project.blocks.map((block) => [block.id, block.name || `B${block.id}`]));
   const blockNames = (ids) =>
     ids.length === state.project.blocks.length && ids.length > 1 ? "all blocks" : ids.map((id) => names.get(id) ?? `B${id}`).join(", ");
   const percent = (value) => `${Number((value * 100).toPrecision(3))}%`;
-  const limit = `${tolerancePercent(tolerance)}%`;
+  // After applied proposals, the tolerance is measured from the original counts.
+  const limit = `${tolerancePercent(tolerance)}%${result.originalCounts?.length ? " of the original counts" : ""}`;
   const fixed = result.fixedComponents ?? [];
   const fixedList = fixed.length
     ? `<details class="balance-fixed"><summary>Fixed cell counts (${fixed.length})</summary>${fixed
@@ -102,9 +103,13 @@ function balanceAlternatives(result) {
   }
   const rows = alternatives
     .map((alternative, index) => {
-      const head = `≤${percent(alternative.maxChange)} · imbalance <strong>${formatNumber(alternative.imbalance)}</strong>${alternative.exact ? " · exact" : ""}`;
+      const reach = alternative.maxChange > 1e-12 ? `≤${percent(alternative.maxChange)}` : "Original counts";
+      const head = `${reach} · imbalance <strong>${formatNumber(alternative.imbalance)}</strong>${alternative.exact ? " · exact" : ""}`;
       const changes = alternative.changes
-        .map((change) => `<div class="balance-change">${change.axis} · ${escapeHtml(blockNames(change.blockIds))}: ${change.from} → ${change.to}</div>`)
+        .map((change) => {
+          const original = change.original == null || change.original === change.to ? "" : ` (original ${change.original})`;
+          return `<div class="balance-change">${change.axis} · ${escapeHtml(blockNames(change.blockIds))}: ${change.from} → ${change.to}${original}</div>`;
+        })
         .join("");
       const cellChange = `${alternative.cellChange >= 0 ? "+" : ""}${(alternative.cellChange * 100).toFixed(1)}%`;
       const cells = `<div class="balance-change">total cells ${cellChange}</div>`;

@@ -11,10 +11,16 @@ and one partition count d. A block's largest local box is the product of
 ceil(n/d) over its axes (SNaC's initmpi gives remainder cells to the first
 ranks), so the imbalance is N * max(largest box) / sum(block cells).
 
+Changes are measured from each component's original count: the count before
+earlier proposals changed it (``Block.origin_ng``). Applying proposals one
+after another therefore never drifts beyond the tolerance.
+
 For fixed partitions, only the largest n with a given local extent ceil(n/d)
-can be optimal: it keeps the largest box and adds cells. Each component thus
+can balance best: it keeps the largest box and adds cells. Each component thus
 has few candidate counts, and a branch and bound over components finds the
-best counts within a change cap for each of a few promising partition sets.
+best counts within a change cap for each of a few promising partition sets. A
+second search then looks for the same balance, give or take a little, with
+fewer changed counts.
 """
 
 from __future__ import annotations
@@ -39,6 +45,10 @@ _EXCESS_CUT = 0.25
 # ... and lower the imbalance by at least this much.
 _MIN_GAIN = 0.01
 _MAX_ALTERNATIVES = 4
+# To change fewer counts, a proposal may give up this much of its imbalance
+# (relative), but never more than this fraction of its remaining excess load.
+_SIMPLER_SLACK = 0.005
+_SIMPLER_EXCESS = 0.1
 # Boundary cell widths may change as on a uniform grid, plus this slack.
 _WIDTH_SLACK = 1.05
 # Partition sets explored per rank count, best bound first.
@@ -46,10 +56,14 @@ MAX_PARTITION_SETS = 48
 
 
 @dataclass(frozen=True)
-class _Component:
+class CountComponent:
+    """Blocks that share one cell count along an axis."""
+
     axis: int
     block_ids: tuple[int, ...]
-    n0: int
+    current: int
+    # The count changes are measured from, and the window it allows.
+    origin: int
     low: int
     high: int
     reason: str | None = None
@@ -60,8 +74,12 @@ class _Component:
 
 
 @dataclass
-class _Solution:
+class BalancePoint:
+    """Cell counts per component and the partitions that balance them."""
+
     imbalance: float
+    # Largest relative difference from an original count, and the number of
+    # components whose count differs from the current one.
     change: float
     changed: int
     counts: tuple[int, ...]
@@ -78,10 +96,10 @@ class _Partition:
 class BalanceSearch:
     """Cell-count alternatives found for one rank count."""
 
-    points: list[_Solution] = field(default_factory=list)
+    points: list[BalancePoint] = field(default_factory=list)
     optimal: bool = True
     fixed_components: list[dict[str, Any]] = field(default_factory=list)
-    components: list[_Component] = field(default_factory=list)
+    components: list[CountComponent] = field(default_factory=list)
 
 
 class _Balancer:
@@ -104,7 +122,7 @@ class _Balancer:
         self.deadline = deadline
         self.nodes_left = node_limit
         self.truncated = False
-        self.components: list[_Component] = []
+        self.components: list[CountComponent] = []
         self.component_of: dict[int, list[int]] = {block_id: [0, 0, 0] for block_id in self.block_ids}
         for axis in range(3):
             for group in axis_components(project.blocks, connections, axis):
@@ -113,9 +131,9 @@ class _Balancer:
                     self.component_of[block_id][axis] = len(self.components)
                 self.components.append(self._component(axis, ids))
         self._widths_cache: dict[tuple[int, int], dict[int, tuple[float, float]] | None] = {}
-        self._classes_cache: dict[tuple[int, int, float], list[tuple[int, list[int]]]] = {}
+        self._classes_cache: dict[tuple[int, int, float | None], list[tuple[int, list[int]]]] = {}
         self._base_widths = {
-            index: self._grid_widths(component, component.n0)
+            index: self._grid_widths(component, component.origin)
             for index, component in enumerate(self.components)
             if component.free
         }
@@ -128,13 +146,15 @@ class _Balancer:
 
     # Components -------------------------------------------------------------
 
-    def _component(self, axis: int, ids: tuple[int, ...]) -> _Component:
+    def _component(self, axis: int, ids: tuple[int, ...]) -> CountComponent:
         blocks = [self.by_id[block_id] for block_id in ids]
         counts = {block.ng[axis] for block in blocks}
-        n0 = min(counts)
+        current = min(counts)
+        origins = {block.origin_ng()[axis] for block in blocks}
+        origin = origins.pop() if len(origins) == 1 else current
         tolerance = self.tolerance
-        low = max(1, ceil(n0 * (1.0 - tolerance) - 1.0e-9))
-        high = max(low, floor(n0 * (1.0 + tolerance) + 1.0e-9))
+        low = max(1, ceil(origin * (1.0 - tolerance) - 1.0e-9))
+        high = max(low, floor(origin * (1.0 + tolerance) + 1.0e-9))
         reason = None
         if axis == self.project.fft_axis_index:
             reason = "FFT axis"
@@ -144,18 +164,18 @@ class _Balancer:
             reason = "the grading sets the cell count"
         elif any(block.axis_locks[axis] for block in blocks):
             reason = "locked"
-        elif low == high:
+        elif low == high == current:
             reason = f"±{tolerance * 100:.3g}% allows no other count"
         if reason is not None:
-            low = high = n0
-        return _Component(axis, ids, n0, low, high, reason)
+            origin = low = high = current
+        return CountComponent(axis, ids, current, origin, low, high, reason)
 
     def fixed_components(self) -> list[dict[str, Any]]:
         return [
             {
                 "axis": AXIS_NAMES[component.axis],
                 "blockIds": list(component.block_ids),
-                "ng": component.n0,
+                "ng": component.current,
                 "reason": component.reason,
             }
             for component in self.components
@@ -163,9 +183,15 @@ class _Balancer:
         ]
 
     def windows(self) -> dict[int, tuple[tuple[int, int], ...]]:
+        """The lowest and highest count per block axis, current counts included."""
+
         return {
             block_id: tuple(
-                (self.components[index].low, self.components[index].high) for index in self.component_of[block_id]
+                (
+                    min(self.components[index].low, self.components[index].current),
+                    max(self.components[index].high, self.components[index].current),
+                )
+                for index in self.component_of[block_id]
             )
             for block_id in self.block_ids
         }
@@ -174,12 +200,14 @@ class _Balancer:
         values = {0.0}
         for component in self.components:
             if component.free:
-                values.update(abs(n - component.n0) / component.n0 for n in range(component.low, component.high + 1))
+                values.update(
+                    abs(n - component.origin) / component.origin for n in range(component.low, component.high + 1)
+                )
         return sorted(values)
 
     # Grid checks ------------------------------------------------------------
 
-    def _grid_widths(self, component: _Component, n: int) -> dict[int, tuple[float, float]] | None:
+    def _grid_widths(self, component: CountComponent, n: int) -> dict[int, tuple[float, float]] | None:
         """First and last cell widths per block, or None if the grids break."""
 
         axis = component.axis
@@ -213,7 +241,7 @@ class _Balancer:
             component = self.components[index]
             widths = self._grid_widths(component, n)
             base = self._base_widths.get(index)
-            if widths is not None and base is not None and n != component.n0:
+            if widths is not None and base is not None and n not in (component.origin, component.current):
                 # Boundary cells may scale as on a uniform grid; a grading whose
                 # end cells move much more than that changes character.
                 lowest = 1.0 / ((1.0 + self.tolerance) * _WIDTH_SLACK)
@@ -232,8 +260,8 @@ class _Balancer:
         b_index = self.component_of[connection.b_id][b_axis]
         if not (self.components[a_index].free or self.components[b_index].free):
             return
-        a_widths = self.widths(a_index, self.components[a_index].n0)
-        b_widths = self.widths(b_index, self.components[b_index].n0)
+        a_widths = self.widths(a_index, self.components[a_index].current)
+        b_widths = self.widths(b_index, self.components[b_index].current)
         if a_widths is None or b_widths is None:
             return
         a_width = a_widths[connection.a_id][a_side]
@@ -268,32 +296,53 @@ class _Balancer:
             if len(values) != 1:
                 return None
             splits[index] = values.pop()
-            if not component.free and splits[index] > 1 and component.n0 // splits[index] < self.min_local:
+            if not component.free and splits[index] > 1 and component.current // splits[index] < self.min_local:
                 return None
         return _Partition(dims, tuple(splits))
 
-    def classes(self, index: int, split: int, cap: float) -> list[tuple[int, list[int]]]:
-        """Candidate counts by local extent, largest count first in each."""
+    def classes(self, index: int, split: int, cap: float | None) -> list[tuple[int, list[int]]]:
+        """Candidate counts by local extent, largest count first in each.
+
+        *cap* bounds the relative difference from the original count; None
+        allows the current count only.
+        """
 
         component = self.components[index]
         if not component.free:
-            return [(ceil(component.n0 / split), [component.n0])]
+            return [(ceil(component.current / split), [component.current])]
         key = (index, split, cap)
         if key not in self._classes_cache:
+            if cap is None:
+                counts = [component.current]
+            else:
+                counts = [
+                    n
+                    for n in range(component.high, component.low - 1, -1)
+                    if abs(n - component.origin) <= cap * component.origin * (1.0 + 1.0e-12)
+                ]
             by_extent: dict[int, list[int]] = {}
-            for n in range(component.high, component.low - 1, -1):
-                if abs(n - component.n0) > cap * component.n0 * (1.0 + 1.0e-12):
-                    continue
-                if split > 1 and n // split < self.min_local:
-                    continue
-                by_extent.setdefault(-(-n // split), []).append(n)
+            for n in counts:
+                if split == 1 or n // split >= self.min_local:
+                    by_extent.setdefault(-(-n // split), []).append(n)
             self._classes_cache[key] = sorted(by_extent.items())
         return self._classes_cache[key]
 
     # Search -----------------------------------------------------------------
 
-    def solve(self, partitions: list[_Partition], cap: float) -> _Solution | None:
-        """The lowest imbalance with every change at most *cap*, then the smallest change."""
+    def solve(
+        self,
+        partitions: list[_Partition],
+        cap: float | None,
+        *,
+        limit: float | None = None,
+        fewest: bool = False,
+    ) -> BalancePoint | None:
+        """The best counts with every change at most *cap*.
+
+        Best means the lowest imbalance, then the smallest change, then the
+        fewest changed counts. With *fewest*, the fewest changed counts come
+        first. *limit* rejects imbalances above it.
+        """
 
         prepared = []
         for partition in partitions:
@@ -308,15 +357,16 @@ class _Balancer:
                 prod(classes[index][-1][1][0] for index in self.component_of[block_id]) for block_id in self.block_ids
             )
             bound = self.target * largest_box / most_cells
-            prepared.append((bound, partition, classes))
+            if limit is None or bound <= limit * (1.0 + _TIE):
+                prepared.append((bound, partition, classes))
         prepared.sort(key=lambda item: item[0])
-        best: _Solution | None = None
+        best: BalancePoint | None = None
         for bound, partition, classes in prepared:
-            if best is not None and bound > best.imbalance * (1.0 + _TIE):
+            if not fewest and best is not None and bound > best.imbalance * (1.0 + _TIE):
                 break
             if self._out_of_budget():
                 break
-            found = self._search(partition, classes, cap, best)
+            found = self._search(partition, classes, best, limit=limit, fewest=fewest)
             if found is not None:
                 best = found
         return best
@@ -331,9 +381,11 @@ class _Balancer:
         self,
         partition: _Partition,
         classes: list[list[tuple[int, list[int]]]],
-        cap: float,
-        incumbent: _Solution | None,
-    ) -> _Solution | None:
+        incumbent: BalancePoint | None,
+        *,
+        limit: float | None,
+        fewest: bool,
+    ) -> BalancePoint | None:
         components = self.components
         target = self.target
         free = [index for index, component in enumerate(components) if component.free]
@@ -344,30 +396,38 @@ class _Balancer:
         # Optimistic values for unassigned components: smallest extent, largest count.
         extent = [options[0][0] for options in classes]
         count = [options[-1][1][0] for options in classes]
+        keeps_current = {
+            index: any(components[index].current in values for _, values in classes[index]) for index in free
+        }
         assigned: list[int | None] = [
-            None if components[index].free else components[index].n0 for index in range(len(components))
+            None if components[index].free else components[index].current for index in range(len(components))
         ]
         box = {block_id: prod(extent[index] for index in self.component_of[block_id]) for block_id in self.block_ids}
         cells = {block_id: prod(count[index] for index in self.component_of[block_id]) for block_id in self.block_ids}
         total = sum(cells.values())
         best = incumbent
-        found: _Solution | None = None
+        found: BalancePoint | None = None
 
         def better(imbalance: float, change: float, changed: int) -> bool:
             if best is None:
                 return True
-            if imbalance < best.imbalance * (1.0 - _TIE):
-                return True
-            if imbalance > best.imbalance * (1.0 + _TIE):
-                return False
-            # Equal balance: prefer the smaller change, then fewer changed counts.
-            if change < best.change - _TIE:
-                return True
-            return abs(change - best.change) <= _TIE and changed < best.changed
+            if fewest and changed != best.changed:
+                return changed < best.changed
+            if abs(imbalance - best.imbalance) > _TIE * best.imbalance:
+                return imbalance < best.imbalance
+            if abs(change - best.change) > _TIE:
+                return change < best.change
+            return changed < best.changed
 
-        def hopeless(bound: float, change: float) -> bool:
+        def hopeless(bound: float, change: float, changed: int) -> bool:
+            """Whether no completion can beat the best solution so far."""
+
+            if limit is not None and bound > limit * (1.0 + _TIE):
+                return True
             if best is None:
                 return False
+            if fewest and changed != best.changed:
+                return changed > best.changed
             if bound > best.imbalance * (1.0 + _TIE):
                 return True
             return bound >= best.imbalance * (1.0 - _TIE) and change > best.change + _TIE
@@ -375,9 +435,11 @@ class _Balancer:
         def leaf(change: float, changed: int) -> None:
             nonlocal best, found
             imbalance = target * max(box.values()) / total
+            if limit is not None and imbalance > limit * (1.0 + _TIE):
+                return
             if not better(imbalance, change, changed) or not self._aspect_ok(partition, assigned):
                 return
-            best = found = _Solution(
+            best = found = BalancePoint(
                 imbalance=imbalance,
                 change=change,
                 changed=changed,
@@ -395,29 +457,43 @@ class _Balancer:
                 leaf(change, changed)
                 return True
             index = free[position]
+            component = components[index]
             # The largest count of an extent wins unless a constraint still to
             # be checked might reject it while accepting a smaller count.
             dominated = not self.max_aspect and all(
                 assigned[partner] is not None for partner in self.partners.get(index, ()) if partner != index
             )
-            members = components[index].block_ids
+            members = component.block_ids
             member_set = set(members)
             others = max((value for block_id, value in box.items() if block_id not in member_set), default=0)
             old_extent, old_count = extent[index], count[index]
-            n0 = components[index].n0
-            options = []
-            for local_extent, values in classes[index]:
-                n = values[0]
+
+            def bound_for(local_extent: int, n: int) -> float:
                 trial_total = total + sum(cells[block_id] // old_count * (n - old_count) for block_id in members)
                 trial_max = max(others, max(box[block_id] // old_extent * local_extent for block_id in members))
-                options.append((target * trial_max / trial_total, abs(n - n0) / n0, local_extent, values))
+                return target * trial_max / trial_total
+
+            options = []
+            for local_extent, values in classes[index]:
+                # When fewer changes matter, keeping the current count is its own option.
+                values = [n for n in values if not (fewest and n == component.current)]
+                if values:
+                    step = abs(values[0] - component.origin) / component.origin
+                    options.append((bound_for(local_extent, values[0]), step, local_extent, values))
             options.sort(key=lambda item: (item[0], item[1]))
-            for bound, _, local_extent, values in options:
-                if best is not None and bound > best.imbalance * (1.0 + _TIE):
+            unsorted = 0
+            if fewest and keeps_current[index]:
+                local_extent = -(-component.current // partition.splits[index])
+                options.insert(0, (bound_for(local_extent, component.current), 0.0, local_extent, [component.current]))
+                unsorted = 1
+            for order, (bound, _, local_extent, values) in enumerate(options):
+                if order >= unsorted and hopeless(bound, 0.0, changed):
+                    # Later options have larger bounds.
                     break
                 for n in values:
-                    step = abs(n - n0) / n0
-                    if hopeless(bound, max(change, step)) or self.widths(index, n) is None:
+                    step = abs(n - component.origin) / component.origin
+                    is_change = int(n != component.current)
+                    if hopeless(bound, max(change, step), changed + is_change) or self.widths(index, n) is None:
                         continue
                     assigned[index] = n
                     if not self.pairs_ok(index, assigned):
@@ -430,7 +506,7 @@ class _Balancer:
                     previous_total = total
                     total += sum(cells[block_id] - saved[block_id][1] for block_id in members)
                     extent[index], count[index] = local_extent, n
-                    keep_going = visit(position + 1, max(change, step), changed + (n != n0))
+                    keep_going = visit(position + 1, max(change, step), changed + is_change)
                     extent[index], count[index] = old_extent, old_count
                     total = previous_total
                     for block_id, (old_box, old_cells) in saved.items():
@@ -450,9 +526,7 @@ class _Balancer:
         if not self.max_aspect:
             return True
         for block_id in self.block_ids:
-            lengths = [
-                counts[index] / partition.splits[index] for index in self.component_of[block_id]
-            ]
+            lengths = [counts[index] / partition.splits[index] for index in self.component_of[block_id]]
             if max(lengths) / min(lengths) > self.max_aspect * (1.0 + 1.0e-12):
                 return False
         return True
@@ -463,6 +537,12 @@ def _count_follows_grading(block: Block, axis: int) -> bool:
     if spec.kind in {EXPLICIT, SYMMETRIC}:
         return True
     return spec.kind == MONOTONE and "n" not in spec.controls
+
+
+def _simpler_limit(imbalance: float) -> float:
+    """The imbalance a proposal may accept in exchange for fewer changed counts."""
+
+    return min(imbalance * (1.0 + _SIMPLER_SLACK), imbalance + _SIMPLER_EXCESS * (imbalance - 1.0))
 
 
 def search_balance_alternatives(
@@ -482,7 +562,8 @@ def search_balance_alternatives(
     partition sets as (bound, dims per block) and whether it had to leave some
     out. Walking by increasing change, a point is kept when it cuts the
     remaining excess load by at least a quarter; the best point overall is
-    always kept.
+    always kept. Each point then changes as few counts as it can while giving
+    up at most a little of its balance (``_simpler_limit``).
     """
 
     search = BalanceSearch()
@@ -506,15 +587,15 @@ def search_balance_alternatives(
         return search
 
     caps = balancer.caps()
-    cache: dict[float, _Solution | None] = {}
+    cache: dict[float | None, BalancePoint | None] = {}
 
-    def solve(cap: float) -> _Solution | None:
+    def solve(cap: float | None) -> BalancePoint | None:
         if cap not in cache:
             cache[cap] = balancer.solve(partitions, cap)
         return cache[cap]
 
-    def smallest_cap(level: float) -> _Solution | None:
-        """The solution at the smallest cap whose best imbalance reaches *level*."""
+    def smallest_cap(level: float) -> tuple[float, BalancePoint] | None:
+        """The smallest cap whose best imbalance reaches *level*, with that solution."""
 
         low, high = 0, len(caps) - 1
         top = solve(caps[high])
@@ -527,25 +608,34 @@ def search_balance_alternatives(
                 high = middle
             else:
                 low = middle + 1
-        return solve(caps[high])
+        return caps[high], solve(caps[high])
 
-    unchanged = solve(0.0)
-    start = min(reference_imbalance, unchanged.imbalance if unchanged else reference_imbalance)
+    def simplest(cap: float, point: BalancePoint, limit: float) -> BalancePoint:
+        simpler = balancer.solve(partitions, cap, limit=limit, fewest=True)
+        return simpler if simpler is not None and simpler.changed < point.changed else point
+
+    current = solve(None)
+    start = min(reference_imbalance, current.imbalance if current else reference_imbalance)
     best = solve(caps[-1])
-    points: list[_Solution] = []
+    points: list[BalancePoint] = []
+    reached_best = False
     if best is not None and best.imbalance <= start - _MIN_GAIN:
         level = start
         while len(points) < _MAX_ALTERNATIVES:
             goal = min(1.0 + (1.0 - _EXCESS_CUT) * (level - 1.0), level - _MIN_GAIN)
-            point = smallest_cap(goal)
-            if point is None or point.change == 0.0:
+            found = smallest_cap(goal)
+            if found is None or found[1].changed == 0:
                 break
+            cap, point = found
+            reached_best = reached_best or point.imbalance <= best.imbalance * (1.0 + _TIE)
+            point = simplest(cap, point, min(goal, _simpler_limit(point.imbalance)))
             points.append(point)
             level = point.imbalance
             if level <= 1.0 + _TIE:
                 break
-        if not any(abs(point.imbalance - best.imbalance) <= _TIE * best.imbalance for point in points):
-            overall = smallest_cap(best.imbalance) or best
+        if not reached_best:
+            cap, overall = smallest_cap(best.imbalance) or (caps[-1], best)
+            overall = simplest(cap, overall, _simpler_limit(overall.imbalance))
             points = points[: _MAX_ALTERNATIVES - 1] + [overall]
     search.points = [point for point in points if point.changed]
     search.optimal = search.optimal and not balancer.truncated
@@ -553,13 +643,19 @@ def search_balance_alternatives(
 
 
 def apply_balance_alternative(project: Project | dict[str, Any], alternative: dict[str, Any]) -> Project:
-    """Set the cell counts and partitions of one balance alternative."""
+    """Set the cell counts and partitions of one balance alternative.
+
+    Each block remembers its counts from before the first proposal it took
+    (``ngOriginal``) and the counts set now (``ngBalanced``), so later
+    proposals stay within the tolerance of the original counts.
+    """
 
     project = copy_project(project)
     by_id = {block.id: block for block in project.blocks}
     entries = alternative.get("blocks") if isinstance(alternative, dict) else None
     if not isinstance(entries, list) or not entries:
         raise ValueError("balance alternative must list the blocks it changes")
+    origins: dict[int, list[int]] = {}
     for entry in entries:
         block_id = int(entry.get("blockId", 0))
         if block_id not in by_id:
@@ -568,6 +664,7 @@ def apply_balance_alternative(project: Project | dict[str, Any], alternative: di
         dims = [int(value) for value in entry.get("dims", [])]
         if len(ng) != 3 or len(dims) != 3 or min(ng + dims) < 1:
             raise ValueError(f"balance alternative for block {block_id} needs three positive ng and dims")
+        origins[block_id] = by_id[block_id].origin_ng()
         by_id[block_id].ng = ng
         by_id[block_id].dims = dims
     project.validate()
@@ -575,4 +672,9 @@ def apply_balance_alternative(project: Project | dict[str, Any], alternative: di
         block = by_id[int(entry["blockId"])]
         if block.ng != [int(value) for value in entry["ng"]]:
             raise ValueError(f"block {block.id}: its grading does not allow the proposed cell counts")
+        origin = origins[block.id]
+        if block.ng == origin:
+            block.ng_original = block.ng_balanced = None
+        else:
+            block.ng_original, block.ng_balanced = origin, list(block.ng)
     return project

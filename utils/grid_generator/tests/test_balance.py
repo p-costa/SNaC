@@ -21,6 +21,7 @@ from snac_grid_generator import (
     optimize_project_decomposition,
     update_project_structure,
 )
+from snac_grid_generator.balance import _simpler_limit
 from snac_grid_generator.cli import main as grid_cli_main
 from snac_grid_generator.topology import FACE_INFO, axis_components, build_topology
 
@@ -90,7 +91,8 @@ class BalanceAlternativeTests(unittest.TestCase):
         expected = {
             6: (1.2857, [(0.0938, 1.2488)]),
             7: (1.0, []),
-            9: (1.2857, [(0.0417, 1.1640), (0.0625, 1.1117), (0.0833, 1.0707), (0.0938, 1.0557)]),
+            # The best, 1.0557, changes four counts; 1.0590 needs only three.
+            9: (1.2857, [(0.0417, 1.1640), (0.0625, 1.1117), (0.0833, 1.0707), (0.0938, 1.0590)]),
             12: (1.0714, [(0.0104, 1.0270), (0.0625, 1.0093), (0.0938, 1.0047)]),
         }
         for ranks, (baseline, points) in expected.items():
@@ -199,6 +201,44 @@ class BalanceAlternativeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must list the blocks"):
             apply_balance_alternative(decomposed, {})
 
+    def test_repeated_proposals_stay_near_the_original_counts(self) -> None:
+        original = step_project(6)
+        decomposed, result = balance(step_project(9))
+        applied = apply_balance_alternative(decomposed, result.alternatives[2])
+        upper = applied.blocks[1]
+        self.assertEqual((upper.ng, upper.ng_original, upper.ng_balanced), ([104, 22, 32], [96, 24, 32], [104, 22, 32]))
+        reloaded = Project.from_dict(json.loads(json.dumps(applied.to_dict())))
+        self.assertEqual(reloaded.blocks[1].origin_ng(), [96, 24, 32])
+
+        # Balancing six ranks now measures every change from the original counts.
+        applied.decomposition.target_ranks = 6
+        _, result = balance(applied)
+        self.assertIn(
+            {"axis": "x", "blockIds": [2, 3], "original": 96, "current": 104},
+            result.original_counts,
+        )
+        self.assertTrue(result.alternatives)
+        for alternative in result.alternatives:
+            self.assertLessEqual(alternative["maxChange"], 0.1)
+            for block, entry in zip(original.blocks, alternative["blocks"]):
+                for count, new in zip(block.ng, entry["ng"]):
+                    self.assertLessEqual(abs(new - count), 0.1 * count)
+        change = next(item for item in result.alternatives[0]["changes"] if item["blockIds"] == [2, 3])
+        self.assertEqual((change["from"], change["original"]), (104, 96))
+
+        # Returning to the original counts forgets them; editing a count by
+        # hand makes it the original for that axis.
+        restored = apply_balance_alternative(
+            applied,
+            {"blocks": [{"blockId": b.id, "ng": b.ng, "dims": [1, 1, 1]} for b in original.blocks]},
+        )
+        self.assertTrue(all(block.ng_original is None for block in restored.blocks))
+        self.assertNotIn("ngOriginal", restored.to_dict()["blocks"][0])
+        applied.blocks[1].ng[0] = 120
+        self.assertEqual(applied.blocks[1].origin_ng(), [120, 24, 32])
+        with self.assertRaisesRegex(ValueError, "ngOriginal and ngBalanced"):
+            Project.from_dict({"blocks": [{"id": 1, "ngOriginal": [8, 8, 8]}]})
+
     def test_alternatives_match_a_brute_force_search(self) -> None:
         rng = random.Random(20261024)
         checked = 0
@@ -210,14 +250,29 @@ class BalanceAlternativeTests(unittest.TestCase):
                 continue
             checked += 1
             with self.subTest(case=case, kind=kind, ranks=project.decomposition.target_ranks):
-                reference = min(result.imbalance, _brute_force(project, 0.0))
-                best = _brute_force(project, project.decomposition.ng_tolerance)
-                found = min((item["imbalance"] for item in result.alternatives), default=None)
-                if best <= reference - 0.01:
-                    self.assertIsNotNone(found)
-                    self.assertAlmostEqual(found, best, places=12)
-                else:
+                solutions = _brute_force(project, project.decomposition.ng_tolerance)
+                reference = min([result.imbalance] + [item[0] for item in solutions if item[2] == 0])
+                best = min(item[0] for item in solutions)
+                if best > reference - 0.01:
                     self.assertEqual(result.alternatives, [])
+                    continue
+                # The best balance, give or take what fewer changes may cost.
+                allowed = _simpler_limit(best) * (1 + 1e-12)
+                found = min(item["imbalance"] for item in result.alternatives)
+                self.assertGreaterEqual(found, best - 1e-12)
+                self.assertLessEqual(found, allowed)
+                # Among proposals that reach it within the smallest change that
+                # does, one changes as few counts as any solution can.
+                cap = min(item[1] for item in solutions if item[0] <= best * (1 + 1e-12)) + 1e-12
+                fewest = min(item[2] for item in solutions if item[1] <= cap and item[0] <= allowed)
+                self.assertEqual(
+                    min(
+                        len(item["changes"])
+                        for item in result.alternatives
+                        if item["imbalance"] <= allowed and item["maxChange"] <= cap
+                    ),
+                    fewest,
+                )
                 _assert_valid_alternatives(self, decomposed, result)
         self.assertGreater(checked, 40)
 
@@ -314,8 +369,8 @@ def _random_layout(rng: random.Random, kind: str, ranks: int) -> Project:
     )
 
 
-def _brute_force(project: Project, tolerance: float) -> float:
-    """The lowest imbalance over every partition and every cell count within *tolerance*.
+def _brute_force(project: Project, tolerance: float) -> list[tuple[float, float, int]]:
+    """Every partition and cell count within *tolerance*, as (imbalance, change, changed counts).
 
     Only for uniform grids, whose interface spacing is length / count.
     """
@@ -359,7 +414,7 @@ def _brute_force(project: Project, tolerance: float) -> float:
         for a, la, b, lb in pairs
     ]
     ids = [block.id for block in project.blocks]
-    best = float("inf")
+    solutions = []
     split_choices = [
         list(range(1, max(counts) // minimum + 1)) or [1] if splittable[axis] else [1] for axis, counts in groups
     ]
@@ -385,8 +440,10 @@ def _brute_force(project: Project, tolerance: float) -> float:
             largest = max(
                 prod(-(-counts[group_of[(i, a)]] // splits[group_of[(i, a)]]) for a in range(3)) for i in ids
             )
-            best = min(best, ranks * largest / sum(prod(counts[group_of[(i, a)]] for a in range(3)) for i in ids))
-    return best
+            imbalance = ranks * largest / sum(prod(counts[group_of[(i, a)]] for a in range(3)) for i in ids)
+            change = max(abs(n - n0) / n0 for n, n0 in zip(counts, base))
+            solutions.append((imbalance, change, sum(n != n0 for n, n0 in zip(counts, base))))
+    return solutions
 
 
 def _assert_valid_alternatives(test: unittest.TestCase, project: Project, result) -> None:

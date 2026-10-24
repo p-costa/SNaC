@@ -9,7 +9,7 @@ from math import ceil, floor, gcd, log, prod
 from time import monotonic
 from typing import Any
 
-from .balance import MAX_PARTITION_SETS, BalanceSearch, search_balance_alternatives
+from .balance import MAX_PARTITION_SETS, BalancePoint, BalanceSearch, search_balance_alternatives
 from .diagnostics import error, warning
 from .grid import AXIS_NAMES
 from .model import DEFAULT_MIN_LOCAL_CELLS, Block, Project
@@ -82,6 +82,8 @@ class DecompositionResult(CheckResult):
     alternatives: list[dict[str, Any]] = field(default_factory=list)
     alternatives_optimal: bool = True
     fixed_components: list[dict[str, Any]] = field(default_factory=list)
+    # Counts that earlier proposals changed; the tolerance is measured from these.
+    original_counts: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -106,6 +108,7 @@ class DecompositionResult(CheckResult):
             "alternatives": self.alternatives,
             "alternativesOptimal": self.alternatives_optimal,
             "fixedComponents": self.fixed_components,
+            "originalCounts": self.original_counts,
         }
 
 
@@ -309,6 +312,16 @@ def _add_balance_alternatives(
     )
     result.fixed_components = search.fixed_components
     result.alternatives_optimal = search.optimal
+    result.original_counts = [
+        {
+            "axis": AXIS_NAMES[component.axis],
+            "blockIds": list(component.block_ids),
+            "original": component.origin,
+            "current": component.current,
+        }
+        for component in search.components
+        if component.origin != component.current
+    ]
     if not search.points:
         return
     base_errors = set(check_project(project, topology=topology).errors)
@@ -328,7 +341,7 @@ def _balance_alternative(
     project: Project,
     topology: Topology,
     search: BalanceSearch,
-    point: Any,
+    point: BalancePoint,
     base_errors: set[str],
     deadline: float,
 ) -> dict[str, Any] | None:
@@ -340,15 +353,16 @@ def _balance_alternative(
     for component, count in zip(search.components, point.counts):
         for block_id in component.block_ids:
             by_id[block_id].ng[component.axis] = count
-        if count != component.n0:
-            changes.append(
-                {
-                    "axis": AXIS_NAMES[component.axis],
-                    "blockIds": list(component.block_ids),
-                    "from": component.n0,
-                    "to": count,
-                }
-            )
+        if count != component.current:
+            change = {
+                "axis": AXIS_NAMES[component.axis],
+                "blockIds": list(component.block_ids),
+                "from": component.current,
+                "to": count,
+            }
+            if component.origin != component.current:
+                change["original"] = component.origin
+            changes.append(change)
     proposed = {block.id: list(block.ng) for block in candidate.blocks}
     try:
         candidate.validate()
@@ -400,7 +414,8 @@ def _balance_alternative(
     new_cells = sum(prod(block.ng) for block in candidate.blocks)
     return {
         "imbalance": metrics.imbalance,
-        "maxChange": max(abs(change["to"] - change["from"]) / change["from"] for change in changes),
+        # Measured from the original counts, as the tolerance is.
+        "maxChange": point.change,
         "exact": all(block.ng[axis] % block.dims[axis] == 0 for block in candidate.blocks for axis in range(3)),
         "totalCells": new_cells,
         "cellChange": new_cells / old_cells - 1.0,

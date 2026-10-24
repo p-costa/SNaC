@@ -168,16 +168,21 @@ def _print_decomposition(payload: dict[str, Any]) -> None:
     if not alternatives:
         return
     names = {block["id"]: block.get("name") or str(block["id"]) for block in payload["project"]["blocks"]}
-    print(f"Cell-count changes within {payload['ngTolerance'] * 100:.3g}% that balance better:")
+    of_original = " of the original counts" if payload.get("originalCounts") else ""
+    print(f"Cell-count changes within {payload['ngTolerance'] * 100:.3g}%{of_original} that balance better:")
     for index, alternative in enumerate(alternatives, start=1):
         exact = ", exact division" if alternative["exact"] else ""
+        largest = alternative["maxChange"]
+        reach = f"up to {largest * 100:.3g}%" if largest > 1e-12 else "original counts"
         print(
-            f"  {index}. up to {alternative['maxChange'] * 100:.3g}%: imbalance {alternative['imbalance']:.4f}"
+            f"  {index}. {reach}: imbalance {alternative['imbalance']:.4f}"
             f"{exact}, total cells {alternative['cellChange'] * 100:+.1f}%"
         )
         for change in alternative["changes"]:
             blocks = ", ".join(names.get(block_id, str(block_id)) for block_id in change["blockIds"])
-            print(f"       {change['axis']} of {blocks}: {change['from']} -> {change['to']}")
+            shown = change.get("original", change["to"]) != change["to"]
+            original = f" (original {change['original']})" if shown else ""
+            print(f"       {change['axis']} of {blocks}: {change['from']} -> {change['to']}{original}")
     if not payload.get("alternativesOptimal", True):
         print("  (search was bounded; better changes may exist)")
     print("Apply one with --apply-alternative K.")
