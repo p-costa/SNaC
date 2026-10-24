@@ -95,28 +95,33 @@ module mod_initgrid
     logical , intent(in   )                   :: is_periodic
     real(rp), intent(inout), dimension(lo-1:) :: grid_f,grid_c
     integer                                   :: lo_min,hi_max
-    integer                                   :: shift
+    integer                                   :: shift,toff
     type(MPI_REQUEST), dimension(4)           :: requests
     integer                                   :: nrequests
     !
     call MPI_ALLREDUCE(lo,lo_min,1,MPI_INTEGER,MPI_MIN,MPI_COMM_WORLD)
     call MPI_ALLREDUCE(hi,hi_max,1,MPI_INTEGER,MPI_MAX,MPI_COMM_WORLD)
+    !
+    ! the tags are global indices; blocks below or left of block #1 have negative
+    ! indices, so offset them by the same amount on every rank to keep them >= 0
+    !
+    toff = 1-lo_min
     nrequests = 0
     shift = 0
     if(lo == lo_g) then
       if(is_periodic.and.lo == lo_min) shift = hi_max-lo_min + 1
-      call MPI_ISEND(grid_f(lo  ),1,MPI_REAL_RP,nb(0),lo_g+shift, &
+      call MPI_ISEND(grid_f(lo  ),1,MPI_REAL_RP,nb(0),lo_g+shift+toff, &
                      MPI_COMM_WORLD,requests(nrequests+1))
-      call MPI_IRECV(grid_f(lo-1),1,MPI_REAL_RP,nb(0),lo_g-1    , &
+      call MPI_IRECV(grid_f(lo-1),1,MPI_REAL_RP,nb(0),lo_g-1    +toff, &
                      MPI_COMM_WORLD,requests(nrequests+2))
       nrequests = nrequests + 2
     end if
     shift = 0
     if(hi == hi_g) then
       if(is_periodic.and.hi == hi_max) shift = hi_max-lo_min + 1
-      call MPI_ISEND(grid_f(hi  ),1,MPI_REAL_RP,nb(1),hi_g-shift, &
+      call MPI_ISEND(grid_f(hi  ),1,MPI_REAL_RP,nb(1),hi_g-shift+toff, &
                      MPI_COMM_WORLD,requests(nrequests+1))
-      call MPI_IRECV(grid_f(hi+1),1,MPI_REAL_RP,nb(1),hi_g+1    , &
+      call MPI_IRECV(grid_f(hi+1),1,MPI_REAL_RP,nb(1),hi_g+1    +toff, &
                      MPI_COMM_WORLD,requests(nrequests+2))
       nrequests = nrequests + 2
     end if
