@@ -2,7 +2,7 @@
 
 import { postJson } from "./api.js";
 import { describeAxis } from "./axis-text.js";
-import { AXES, defaultBlock, nextBlockId, rescaleExplicitFaces, resetFriendBoundaries } from "./block-model.js";
+import { AXES, copyBlock, defaultBlock, nextBlockId, rescaleExplicitFaces } from "./block-model.js";
 import { keepModelInView } from "./camera.js";
 import {
   loadProject,
@@ -251,10 +251,8 @@ export async function applyBoundaryPreset() {
 
 export function addFreeBlock() {
   const source = selectedBlock() ?? state.project.blocks[0];
-  const copy = source ? structuredClone(source) : defaultBlock(nextBlockId(state.project.blocks));
-  copy.id = nextBlockId(state.project.blocks);
-  copy.name = `block-${copy.id}`;
-  copy.axisLocks = [false, false, false];
+  const blocks = state.project.blocks;
+  const copy = copyBlock(source ?? defaultBlock(nextBlockId(blocks)), blocks, state.project.nscal);
   if (source) {
     const oldMin = copy.lmin[0];
     const oldMax = copy.lmax[0];
@@ -263,7 +261,6 @@ export function addFreeBlock() {
     copy.lmax[0] += width;
     rescaleExplicitFaces(copy, 0, oldMin, oldMax, copy.lmin[0], copy.lmax[0]);
   }
-  resetFriendBoundaries(copy, state.project.nscal);
   state.project.blocks.push(copy);
   state.selectedId = copy.id;
   state.selectedIds = new Set([copy.id]);
@@ -279,10 +276,7 @@ export function addAdjacentBlock() {
   const axis = AXES.indexOf(face[0]);
   const sign = face[1] === "+" ? 1 : -1;
   const thickness = positiveNumber(els.adjacentSize.value, source.lmax[axis] - source.lmin[axis]);
-  const copy = structuredClone(source);
-  copy.id = nextBlockId(state.project.blocks);
-  copy.name = `block-${copy.id}`;
-  copy.axisLocks = [false, false, false];
+  const copy = copyBlock(source, state.project.blocks, state.project.nscal);
   const oldMin = copy.lmin[axis];
   const oldMax = copy.lmax[axis];
   if (sign > 0) {
@@ -293,7 +287,6 @@ export function addAdjacentBlock() {
     copy.lmin[axis] = source.lmin[axis] - thickness;
   }
   rescaleExplicitFaces(copy, axis, oldMin, oldMax, copy.lmin[axis], copy.lmax[axis]);
-  resetFriendBoundaries(copy, state.project.nscal);
   state.project.blocks.push(copy);
   state.selectedId = copy.id;
   state.selectedIds = new Set([copy.id]);

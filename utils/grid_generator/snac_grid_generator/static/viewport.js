@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { renderBlockList, selectBlock } from "./block-list.js";
-import { AXES, FACE_ORDER, blockCenter, blockSize, ensureAxis, rescaleExplicitFaces } from "./block-model.js";
+import { AXES, FACE_ORDER, blockCenter, blockSize, copyBlock, ensureAxis, rescaleExplicitFaces } from "./block-model.js";
 import { handleCameraChange, resizeRenderer } from "./camera.js";
 import { markProjectDirty, renderAll, setStatus } from "./core.js";
 import { commitHistory } from "./history.js";
@@ -19,6 +19,7 @@ import {
 } from "./scene-helpers.js";
 import {
   COLORS,
+  blockLabel,
   els,
   previewCache,
   selectedBlock,
@@ -33,6 +34,12 @@ export const NOTICEABLE_SPACING_JUMP = 1.5;
 export const BOUNDARY_COLORS = { D: 0xe46868, F: 0x43c989, N: 0x76a9ff, mixed: 0xd6bf5b };
 
 export const clippingPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
+
+// Shift snaps a dragged face to another block's face within this many pixels.
+const SNAP_PIXELS = 10;
+const SNAP_COLOR = 0x5ce1e6;
+// A drag never shrinks a block below this fraction of its size when the drag started.
+const MIN_DRAG_FRACTION = 1e-3;
 
 export function initScene() {
   ui.scene = new THREE.Scene();
@@ -59,6 +66,7 @@ export function initScene() {
   ui.spacingJumpGroup = new THREE.Group();
   ui.diagnosticGroup = new THREE.Group();
   ui.partitionGroup = new THREE.Group();
+  ui.snapGroup = new THREE.Group();
   ui.axesGroup = new THREE.Group();
   ui.gridHelper = new THREE.GridHelper(10, 20, 0x46515c, 0x252b32);
   ui.gridHelper.rotation.x = Math.PI / 2;
@@ -70,6 +78,7 @@ export function initScene() {
   ui.scene.add(ui.spacingJumpGroup);
   ui.scene.add(ui.diagnosticGroup);
   ui.scene.add(ui.partitionGroup);
+  ui.scene.add(ui.snapGroup);
 
   ui.transformControls = new TransformControls(ui.camera, ui.renderer.domElement);
   ui.transformControls.setSpace("world");
@@ -77,6 +86,13 @@ export function initScene() {
   ui.transformControls.addEventListener("dragging-changed", handleTransformDragging);
   ui.transformControls.addEventListener("objectChange", handleTransformObjectChange);
   ui.scene.add(ui.transformControls.getHelper ? ui.transformControls.getHelper() : ui.transformControls);
+  // Capture listeners run before the transform controls see the same pointer event.
+  for (const type of ["pointerdown", "pointermove"]) {
+    ui.renderer.domElement.addEventListener(type, trackTransformModifiers, { capture: true });
+  }
+  window.addEventListener("keydown", trackTransformModifiers);
+  window.addEventListener("keyup", trackTransformModifiers);
+  window.addEventListener("blur", () => trackTransformModifiers({ type: "blur", altKey: false, shiftKey: false }));
 
   const ambient = new THREE.HemisphereLight(0xffffff, 0x1a2028, 1.9);
   const key = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -428,16 +444,33 @@ export function handleTransformDragging(event) {
     if (!ui.selectedBlockMesh) return;
     commitHistory();
     ui.isTransformDragging = true;
+    const mesh = ui.selectedBlockMesh;
+    const block = selectedBlock();
     ui.transformDrag = {
-      blockId: ui.selectedBlockMesh.userData.blockId,
-      baseSize: [...ui.selectedBlockMesh.userData.baseSize],
-      baseLmin: [...selectedBlock().lmin],
-      baseLmax: [...selectedBlock().lmax],
+      blockId: mesh.userData.blockId,
+      mode: ui.transformControls.mode,
+      axis: ui.transformControls.axis ?? "",
+      // The handle grabbed on each axis decides which face a one-sided resize moves.
+      side: ui.transformControls.pointStart.toArray().map((value) => (value < 0 ? -1 : 1)),
+      baseSize: [...mesh.userData.baseSize],
+      baseCenter: mesh.position.toArray(),
+      baseLmin: [...block.lmin],
+      baseLmax: [...block.lmax],
       baseFaces: AXES.map((axis) => {
-        const spec = ensureAxis(selectedBlock(), axis);
+        const spec = ensureAxis(block, axis);
         return spec.kind === "explicit" ? [...spec.faces] : null;
       }),
+      travel: [0, 0, 0],
+      ratio: [1, 1, 1],
+      offset: [0, 0, 0],
+      ghost: null,
     };
+    if (ui.transformDrag.mode === "translate") {
+      // Alt-dragging leaves a copy behind; the ghost shows where while Alt is held.
+      ui.transformDrag.ghost = mesh.clone();
+      ui.transformDrag.ghost.visible = false;
+      ui.blockGroup.add(ui.transformDrag.ghost);
+    }
     ui.controls.enabled = false;
     ui.boundaryFaceGroup.visible = false;
     ui.gridLineGroup.visible = false;
@@ -447,45 +480,204 @@ export function handleTransformDragging(event) {
 
   ui.controls.enabled = true;
   if (!ui.isTransformDragging || !ui.transformDrag) return;
-  const blockId = ui.transformDrag.blockId;
+  const drag = ui.transformDrag;
   ui.isTransformDragging = false;
   ui.transformDrag = null;
+  drawSnapGuides(null, []);
+  const copy = drag.mode === "translate" && ui.transformModifiers.alt ? duplicateDraggedBlock(drag) : null;
   commitHistory();
   window.setTimeout(() => {
     renderAll();
-    schedulePreview(blockId, 0);
+    schedulePreview(drag.blockId, 0);
+    if (!copy) return;
+    schedulePreview(copy.id, 0);
+    const source = state.project.blocks.find((block) => block.id === drag.blockId);
+    if (source) setStatus(`Duplicated ${blockLabel(source)} as ${blockLabel(copy)}`);
   }, 0);
 }
 
 export function handleTransformObjectChange() {
   const mesh = ui.transformControls.object;
-  if (!ui.isTransformDragging || !ui.transformDrag || !mesh) return;
-  const block = state.project.blocks.find((item) => item.id === ui.transformDrag.blockId);
-  if (!block) return;
-  const center = mesh.position.toArray();
-  const size = ui.transformDrag.baseSize.map((value, index) => Math.max(1.0e-9, value * Math.abs(mesh.scale.getComponent(index))));
-  block.lmin = center.map((value, index) => value - 0.5 * size[index]);
-  block.lmax = center.map((value, index) => value + 0.5 * size[index]);
+  const drag = ui.transformDrag;
+  if (!ui.isTransformDragging || !drag || !mesh) return;
+  const controls = ui.transformControls;
+  // How far the pointer moved along each axis, in world units.
+  drag.travel = controls.pointEnd.toArray().map((value, index) => value - controls.pointStart.getComponent(index));
+  drag.ratio = mesh.scale.toArray();
+  drag.offset = mesh.position.toArray().map((value, index) => value - drag.baseCenter[index]);
+  applyTransformDrag();
+}
+
+// Alt and Shift change a drag in progress as soon as they are pressed or released.
+function trackTransformModifiers(event) {
+  const modifiers = { alt: event.altKey, shift: event.shiftKey };
+  const changed = modifiers.alt !== ui.transformModifiers.alt || modifiers.shift !== ui.transformModifiers.shift;
+  ui.transformModifiers = modifiers;
+  if (!ui.isTransformDragging) return;
+  // Keeps a lone Alt from opening the browser menu bar on Windows and Linux.
+  if (event.key === "Alt") event.preventDefault?.();
+  if (changed && !event.type.startsWith("pointer")) applyTransformDrag();
+}
+
+// Applies the drag to the block: the gizmo reports the pointer motion, and the
+// modifiers decide which faces follow it.
+function applyTransformDrag() {
+  const drag = ui.transformDrag;
+  const mesh = ui.transformControls.object;
+  const block = state.project.blocks.find((item) => item.id === drag?.blockId);
+  if (!drag || !mesh || !block) return;
+  const { alt, shift } = ui.transformModifiers;
+  const bounds = drag.mode === "scale" ? resizedBounds(drag, alt) : movedBounds(drag);
+  const snaps = shift ? snapBounds(drag, bounds, alt) : [];
+  block.lmin = bounds.map(([lower]) => lower);
+  block.lmax = bounds.map(([, upper]) => upper);
   for (let index = 0; index < 3; index += 1) {
     rescaleExplicitFaces(
       block,
       index,
-      ui.transformDrag.baseLmin[index],
-      ui.transformDrag.baseLmax[index],
+      drag.baseLmin[index],
+      drag.baseLmax[index],
       block.lmin[index],
       block.lmax[index],
-      ui.transformDrag.baseFaces[index]
+      drag.baseFaces[index]
     );
+    // Draw the block where it now is, not where the gizmo alone would put it.
+    mesh.position.setComponent(index, 0.5 * (block.lmin[index] + block.lmax[index]));
+    mesh.scale.setComponent(index, (block.lmax[index] - block.lmin[index]) / drag.baseSize[index]);
   }
+  if (drag.ghost) drag.ghost.visible = alt;
+  drawSnapGuides(block, snaps);
   updateGeometryInputValues(block);
-  if (!ui.transformDrag.dirty) {
+  if (!drag.dirty) {
     // Clearing check, repair, and decomposition state once per drag is enough.
     markProjectDirty(block.id);
-    ui.transformDrag.dirty = true;
+    drag.dirty = true;
   } else {
     previewCache.delete(block.id);
   }
   renderBlockList();
+}
+
+// Resizing moves the grabbed face with the pointer, or with Alt both faces of
+// that axis symmetrically. The centre handle always scales about the centre.
+function resizedBounds(drag, symmetric) {
+  return AXES.map((axis, index) => {
+    const lower = drag.baseLmin[index];
+    const upper = drag.baseLmax[index];
+    const minimum = MIN_DRAG_FRACTION * (upper - lower);
+    if (drag.axis === "XYZ") {
+      const center = 0.5 * (lower + upper);
+      const half = 0.5 * Math.max(minimum, (upper - lower) * Math.abs(drag.ratio[index]));
+      return [center - half, center + half];
+    }
+    if (!dragsAxis(drag, index)) return [lower, upper];
+    const growth = drag.travel[index] * drag.side[index];
+    if (symmetric) return limitBounds(lower - growth, upper + growth, minimum, 0);
+    return drag.side[index] > 0
+      ? limitBounds(lower, upper + growth, minimum, 1)
+      : limitBounds(lower - growth, upper, minimum, -1);
+  });
+}
+
+function movedBounds(drag) {
+  return AXES.map((axis, index) => [drag.baseLmin[index] + drag.offset[index], drag.baseLmax[index] + drag.offset[index]]);
+}
+
+// Keeps a block at least `minimum` wide, holding the face that is not moving.
+function limitBounds(lower, upper, minimum, movingSide) {
+  if (upper - lower >= minimum) return [lower, upper];
+  if (movingSide > 0) return [lower, lower + minimum];
+  if (movingSide < 0) return [upper - minimum, upper];
+  const center = 0.5 * (lower + upper);
+  return [center - 0.5 * minimum, center + 0.5 * minimum];
+}
+
+function dragsAxis(drag, index) {
+  return drag.axis.includes(AXES[index].toUpperCase());
+}
+
+// Moves the dragged faces onto the nearest face of another visible block (or of
+// the original when Alt-dragging a copy) within SNAP_PIXELS.
+function snapBounds(drag, bounds, alt) {
+  if (drag.mode === "scale" && drag.axis === "XYZ") return [];
+  const center = new THREE.Vector3(...bounds.map(([lower, upper]) => 0.5 * (lower + upper)));
+  const tolerance = SNAP_PIXELS * worldUnitsPerPixel(center);
+  const snaps = [];
+  for (let index = 0; index < 3; index += 1) {
+    if (!dragsAxis(drag, index)) continue;
+    const [lower, upper] = bounds[index];
+    const moving = drag.mode === "translate" || alt ? [-1, 1] : [drag.side[index]];
+    let best = null;
+    for (const target of snapTargets(drag, index, alt)) {
+      for (const side of moving) {
+        const shift = target.value - (side < 0 ? lower : upper);
+        if (Math.abs(shift) <= tolerance && (!best || Math.abs(shift) < Math.abs(best.shift))) best = { ...target, side, shift };
+      }
+    }
+    if (!best) continue;
+    let snapped;
+    if (drag.mode === "translate") snapped = [lower + best.shift, upper + best.shift];
+    else if (alt) snapped = best.side < 0 ? [lower + best.shift, upper - best.shift] : [lower - best.shift, upper + best.shift];
+    else snapped = best.side < 0 ? [lower + best.shift, upper] : [lower, upper + best.shift];
+    if (snapped[1] - snapped[0] < MIN_DRAG_FRACTION * (drag.baseLmax[index] - drag.baseLmin[index])) continue;
+    bounds[index] = snapped;
+    snaps.push({ index, value: best.value, target: best.target });
+  }
+  return snaps;
+}
+
+function snapTargets(drag, index, alt) {
+  const targets = state.project.blocks.filter((block) => block.id !== drag.blockId && !ui.hiddenBlockIds.has(block.id));
+  if (drag.mode === "translate" && alt) targets.push({ lmin: drag.baseLmin, lmax: drag.baseLmax });
+  return targets.flatMap((target) => [
+    { value: target.lmin[index], target },
+    { value: target.lmax[index], target },
+  ]);
+}
+
+function worldUnitsPerPixel(point) {
+  const height = Math.max(1, ui.renderer.domElement.clientHeight);
+  if (ui.camera.isOrthographicCamera) return (ui.camera.top - ui.camera.bottom) / ui.camera.zoom / height;
+  const distance = ui.camera.position.distanceTo(point);
+  return (2 * distance * Math.tan(THREE.MathUtils.degToRad(ui.camera.fov) / 2)) / height;
+}
+
+// Outlines each snapped plane across both the dragged block and the block snapped to.
+function drawSnapGuides(block, snaps) {
+  clearDisposableGroup(ui.snapGroup);
+  for (const { index, value, target } of snaps) {
+    const span = {
+      lmin: block.lmin.map((lower, axis) => Math.min(lower, target.lmin[axis])),
+      lmax: block.lmax.map((upper, axis) => Math.max(upper, target.lmax[axis])),
+    };
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(planeOutlinePoints(span, index, value)),
+      // Transparent so that it draws after, and over, the translucent blocks.
+      new THREE.LineBasicMaterial({ color: SNAP_COLOR, transparent: true, opacity: 1, depthTest: false })
+    );
+    line.renderOrder = 9;
+    ui.snapGroup.add(line);
+  }
+  els.scene.dataset.snapFaces = snaps.map(({ index, value }) => `${AXES[index]}=${value}`).join(",");
+}
+
+// Ends an Alt-drag of the Move tool: the copy keeps the new position and the
+// original goes back to where the drag started.
+function duplicateDraggedBlock(drag) {
+  const block = state.project.blocks.find((item) => item.id === drag.blockId);
+  const moved = block && block.lmin.some((value, index) => value !== drag.baseLmin[index]);
+  if (!moved) return null;
+  const copy = copyBlock(block, state.project.blocks, state.project.nscal);
+  block.lmin = [...drag.baseLmin];
+  block.lmax = [...drag.baseLmax];
+  drag.baseFaces.forEach((faces, index) => {
+    if (faces) ensureAxis(block, AXES[index]).faces = [...faces];
+  });
+  state.project.blocks.push(copy);
+  state.selectedId = copy.id;
+  state.selectedIds = new Set([copy.id]);
+  markProjectDirty(copy.id);
+  return copy;
 }
 
 export function renderViewControls() {

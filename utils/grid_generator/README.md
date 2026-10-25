@@ -306,8 +306,16 @@ reordered with their drag handles without changing IDs or friend references,
 and the renumber action then assigns sequential IDs and names from the current
 list order while remapping every `F` friend reference.
 
-The select, move, and resize viewport tools edit block bounds directly. A move
-or resize invalidates the last structural check and refreshes the grid preview;
+The select, move, and resize viewport tools edit block bounds directly. A resize
+handle moves the face on its side of the block with the pointer and keeps the
+opposite face in place; holding `Alt` (`Option` on macOS) moves both faces of
+that axis symmetrically, and the centre handle scales about the centre.
+`Alt`-dragging with the move tool leaves the block in place and moves a copy.
+Holding `Shift` while moving or resizing snaps the dragged faces to faces of the
+other visible blocks within 10 pixels (and to the original when moving a copy)
+and outlines the face snapped to. Both keys also take effect when pressed during
+a drag, which helps on desktops that use `Alt`-drag to move windows. A move or
+resize invalidates the last structural check and refreshes the grid preview;
 clicking the active move or resize tool again returns to selection mode.
 Undo and redo retain up to 100 coalesced project edits, including decomposition
 diagnostics; reset can be undone, while opening another project starts a fresh
