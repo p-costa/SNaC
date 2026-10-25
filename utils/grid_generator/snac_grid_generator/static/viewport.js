@@ -527,7 +527,8 @@ function applyTransformDrag() {
   const block = state.project.blocks.find((item) => item.id === drag?.blockId);
   if (!drag || !mesh || !block) return;
   const { alt, shift } = ui.transformModifiers;
-  const bounds = drag.mode === "scale" ? resizedBounds(drag, alt) : movedBounds(drag);
+  const step = dragStep(drag);
+  const bounds = drag.mode === "scale" ? resizedBounds(drag, alt, step) : movedBounds(drag, step);
   const snaps = shift ? snapBounds(drag, bounds, alt) : [];
   block.lmin = bounds.map(([lower]) => lower);
   block.lmax = bounds.map(([, upper]) => upper);
@@ -560,27 +561,45 @@ function applyTransformDrag() {
 
 // Resizing moves the grabbed face with the pointer, or with Alt both faces of
 // that axis symmetrically. The centre handle always scales about the centre.
-function resizedBounds(drag, symmetric) {
+function resizedBounds(drag, symmetric, step) {
   return AXES.map((axis, index) => {
     const lower = drag.baseLmin[index];
     const upper = drag.baseLmax[index];
     const minimum = MIN_DRAG_FRACTION * (upper - lower);
     if (drag.axis === "XYZ") {
       const center = 0.5 * (lower + upper);
-      const half = 0.5 * Math.max(minimum, (upper - lower) * Math.abs(drag.ratio[index]));
-      return [center - half, center + half];
+      const half = Math.max(0.5 * minimum, roundToStep(0.5 * (upper - lower) * Math.abs(drag.ratio[index]), step));
+      return [shiftedFace(center, -half), shiftedFace(center, half)];
     }
     if (!dragsAxis(drag, index)) return [lower, upper];
-    const growth = drag.travel[index] * drag.side[index];
-    if (symmetric) return limitBounds(lower - growth, upper + growth, minimum, 0);
+    const growth = roundToStep(drag.travel[index] * drag.side[index], step);
+    if (symmetric) return limitBounds(shiftedFace(lower, -growth), shiftedFace(upper, growth), minimum, 0);
     return drag.side[index] > 0
-      ? limitBounds(lower, upper + growth, minimum, 1)
-      : limitBounds(lower - growth, upper, minimum, -1);
+      ? limitBounds(lower, shiftedFace(upper, growth), minimum, 1)
+      : limitBounds(shiftedFace(lower, -growth), upper, minimum, -1);
   });
 }
 
-function movedBounds(drag) {
-  return AXES.map((axis, index) => [drag.baseLmin[index] + drag.offset[index], drag.baseLmax[index] + drag.offset[index]]);
+function movedBounds(drag, step) {
+  return AXES.map((axis, index) => {
+    const offset = roundToStep(drag.offset[index], step);
+    return [shiftedFace(drag.baseLmin[index], offset), shiftedFace(drag.baseLmax[index], offset)];
+  });
+}
+
+// Drags move faces in steps of the largest power of ten below one pixel, so a
+// face dragged from a round coordinate lands on a round coordinate.
+function dragStep(drag) {
+  return 10 ** Math.floor(Math.log10(worldUnitsPerPixel(new THREE.Vector3(...drag.baseCenter))));
+}
+
+function roundToStep(value, step) {
+  return Number((Math.round(value / step) * step).toPrecision(14));
+}
+
+// Drops the floating-point noise of the sum, such as 1.0819999999999999 for 1 + 0.082.
+function shiftedFace(face, shift) {
+  return Number((face + shift).toPrecision(14));
 }
 
 // Keeps a block at least `minimum` wide, holding the face that is not moving.

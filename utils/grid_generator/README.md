@@ -314,8 +314,10 @@ that axis symmetrically, and the centre handle scales about the centre.
 Holding `Shift` while moving or resizing snaps the dragged faces to faces of the
 other visible blocks within 10 pixels (and to the original when moving a copy)
 and outlines the face snapped to. Both keys also take effect when pressed during
-a drag, which helps on desktops that use `Alt`-drag to move windows. A move or
-resize invalidates the last structural check and refreshes the grid preview;
+a drag, which helps on desktops that use `Alt`-drag to move windows. Dragged
+faces move in steps of the largest power of ten below one pixel, so a face
+dragged from a round coordinate lands on a round coordinate. A move or resize
+invalidates the last structural check and refreshes the grid preview;
 clicking the active move or resize tool again returns to selection mode.
 Undo and redo retain up to 100 coalesced project edits, including decomposition
 diagnostics; reset can be undone, while opening another project starts a fresh

@@ -956,10 +956,12 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
             self.expect(page.locator('#geometry-grid input[data-field="lmax"][data-index="0"]')).to_have_value("1")
 
         page.locator("#tool-scale").click()
-        # A resize handle moves its own face with the pointer.
+        # A resize handle moves its own face with the pointer, in steps of the
+        # largest power of ten below a pixel (0.001 at this zoom).
         (lower, upper), _ = drag(resize_handle, 60)
         self.assertEqual(lower, 0)
         self.assertGreater(upper, 1)
+        self.assertEqual(upper, round(upper, 3))
         growth = upper - 1
         undo()
         (lower, upper), _ = drag(-resize_handle, -60)
@@ -974,7 +976,7 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
             undo()
         # Shift snaps the face to the neighbour within 10 pixels.
         (lower, upper), _ = drag(resize_handle, 5)
-        self.assertAlmostEqual(upper, 1 + growth / 12, places=6)
+        self.assertGreater(upper, 1)
         undo()
         (lower, upper), snapped = drag(resize_handle, 5, keys=("Shift",))
         self.assertEqual((lower, upper, snapped), (0, 1, "x=1"))
