@@ -56,6 +56,7 @@ from .snac_reporting import (
 from .validation import (
     CheckResult,
     apply_axis_to_aligned_blocks,
+    check_export_readiness,
     check_project,
     infer_project_connectivity,
     interface_spacing_metrics,
@@ -97,6 +98,7 @@ __all__ = [
     "apply_bc_preset",
     "axis_grid_arrays",
     "axis_grid_diagnostics",
+    "check_export_readiness",
     "check_project",
     "build_case_report",
     "duplicate_blocks",

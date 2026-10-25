@@ -8,8 +8,9 @@ from math import ceil, floor, gcd, log, prod
 from time import monotonic
 from typing import Any
 
+from .diagnostics import error, warning
 from .grid import AXIS_NAMES
-from .model import Block, Project
+from .model import DEFAULT_MIN_LOCAL_CELLS, Block, Project
 from .topology import FaceConnection, build_topology
 from .validation import (
     CheckResult,
@@ -17,10 +18,12 @@ from .validation import (
     copy_project,
 )
 
-MIN_LOCAL_CELLS = 4
+MIN_LOCAL_CELLS = DEFAULT_MIN_LOCAL_CELLS  # public alias of the project default
 _SHAPE_WEIGHT = 0.08
 _COMMUNICATION_WEIGHT = 0.02
 _SPREAD_WEIGHT = 0.02
+# Above this load imbalance, nearby rank totals that balance clearly better are suggested.
+_SUGGEST_BETTER_ABOVE = 1.05
 
 
 @dataclass(frozen=True)
@@ -67,6 +70,7 @@ class DecompositionResult(CheckResult):
     optimal: bool = True
     searched_nodes: int = 0
     nearby_ranks: list[int] = field(default_factory=list)
+    better_ranks: list[dict[str, float | int]] = field(default_factory=list)
     blocks: list[BlockDecomposition] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -86,6 +90,7 @@ class DecompositionResult(CheckResult):
             "optimal": self.optimal,
             "searchedNodes": self.searched_nodes,
             "nearbyRanks": self.nearby_ranks,
+            "betterRanks": self.better_ranks,
             "blocks": [block.to_dict() for block in self.blocks],
         }
 
@@ -123,23 +128,22 @@ def optimize_project_decomposition(
     max_local_aspect = project.decomposition.max_local_aspect
     result = DecompositionResult(target_ranks=target)
     topology = build_topology(project.blocks, project.periodic_axes)
-    result.errors.extend(topology.errors)
-    result.warnings.extend(topology.warnings)
-    result.errors.extend(connected_component_errors(project.blocks, topology.connections))
-    if result.errors:
+    result.add(*topology.issues)
+    result.add(*connected_component_errors(project.blocks, topology.connections))
+    if not result.ok:
         return project, result
     if not project.blocks:
-        result.errors.append("cannot decompose a project with no blocks")
+        result.add(error("decomposition", "cannot decompose a project with no blocks"))
         return project, result
     if target < len(project.blocks):
-        result.errors.append(
-            f"target MPI ranks must be at least the number of blocks ({len(project.blocks)})"
+        result.add(
+            error("decomposition", f"target MPI ranks must be at least the number of blocks ({len(project.blocks)})")
         )
         return project, result
 
     active_sets = _active_axis_sets(project, target)
     if not active_sets:
-        result.errors.append("the decomposition mode and allowed axes do not define a valid search")
+        result.add(error("decomposition", "the decomposition mode and allowed axes do not define a valid search"))
         return project, result
 
     deadline = monotonic() + max(0.05, time_limit)
@@ -173,9 +177,11 @@ def optimize_project_decomposition(
     if best is None or best.candidates is None:
         result.optimal = not any_truncated
         if any_truncated:
-            result.errors.append("decomposition search limit reached before finding an exact solution")
+            result.add(error("decomposition", "decomposition search limit reached before finding an exact solution"))
         else:
-            result.errors.append(f"no exact {project.decomposition.mode} decomposition uses {target} MPI ranks")
+            result.add(
+                error("decomposition", f"no exact {project.decomposition.mode} decomposition uses {target} MPI ranks")
+            )
             result.nearby_ranks = _nearby_decomposition_counts(
                 project,
                 topology.connections,
@@ -186,19 +192,36 @@ def optimize_project_decomposition(
 
     result.optimal = not any_truncated
     if any_truncated:
-        result.warnings.append("decomposition search was bounded; the result is valid but may not be globally optimal")
+        result.add(
+            warning(
+                "decomposition",
+                "decomposition search was bounded; the result is valid but may not be globally optimal",
+            )
+        )
     by_id = {block.id: block for block in project.blocks}
     for block_id, candidate in best.candidates.items():
         by_id[block_id].dims = list(candidate.dims)
     project.validate()
     _fill_decomposition_result(result, project.blocks, topology.connections, best.candidates, best_axes)
+    if result.imbalance > _SUGGEST_BETTER_ABOVE:
+        result.better_ranks = _better_balanced_counts(
+            project,
+            topology.connections,
+            target,
+            result.imbalance,
+            deadline=monotonic() + min(1.5, max(0.2, time_limit / 2.0)),
+        )
     return project, result
 
 
 def _active_axis_sets(project: Project, target: int) -> list[tuple[int, ...]]:
     if target == len(project.blocks):
         return [()]
-    allowed = tuple(index for index, enabled in enumerate(project.decomposition.axes) if enabled)
+    allowed = tuple(
+        index
+        for index, enabled in enumerate(project.decomposition.axes)
+        if enabled and index != project.fft_axis_index
+    )
     mode = project.decomposition.mode
     sizes = range(len(allowed), 0, -1) if mode == "auto" else (int(mode[0]),)
     return [axes for size in sizes for axes in combinations(allowed, size)]
@@ -498,6 +521,48 @@ def _fill_decomposition_result(
         )
         for block_id, candidate in sorted(candidates.items())
     ]
+
+
+def _better_balanced_counts(
+    project: Project,
+    connections: list[FaceConnection],
+    target: int,
+    imbalance: float,
+    *,
+    deadline: float,
+) -> list[dict[str, float | int]]:
+    """Nearby rank totals whose best decomposition at least halves the excess load.
+
+    The interface constraints can make an exact rank count balance poorly while
+    a total one or two ranks away balances well; these are the suggestions.
+    """
+
+    excess = imbalance - 1.0
+    found: list[dict[str, float | int]] = []
+    maximum_offset = min(16, max(4, target // 10))
+    for offset in range(1, maximum_offset + 1):
+        for trial in (target - offset, target + offset):
+            if trial < len(project.blocks) or monotonic() >= deadline:
+                continue
+            best: float | None = None
+            for active_axes in _active_axis_sets(project, trial):
+                outcome = _search_decomposition(
+                    project.blocks,
+                    connections,
+                    trial,
+                    active_axes,
+                    min_local_cells=project.decomposition.min_local_cells,
+                    max_local_aspect=project.decomposition.max_local_aspect,
+                    node_limit=20_000,
+                    deadline=deadline,
+                )
+                if outcome.score is not None and (best is None or outcome.score[1] < best):
+                    best = outcome.score[1]
+            if best is not None and best - 1.0 <= 0.5 * excess and imbalance - best >= 0.05:
+                found.append({"ranks": trial, "imbalance": best})
+        if len(found) >= 3:
+            break
+    return sorted(found, key=lambda item: (abs(int(item["ranks"]) - target), int(item["ranks"])))[:3]
 
 
 def _nearby_decomposition_counts(

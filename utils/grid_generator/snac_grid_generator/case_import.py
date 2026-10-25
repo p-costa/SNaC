@@ -10,10 +10,11 @@ from typing import Any
 
 import numpy as np
 
-from .grid import AXIS_NAMES
+from .axis_format import EXPLICIT, NATIVE
+from .grid import AXIS_NAMES, axis_grid_arrays
 from .model import AxisSpec, Project
 from .numeric import coordinates_close, geometry_tolerance
-from .snac_grid import read_grid_binary
+from .snac_grid import BinaryGrid, read_grid_binary
 from .topology import axis_extent
 
 
@@ -67,7 +68,9 @@ def import_case(case_dir: str | Path) -> ImportResult:
         raise ValueError(f"no snac_grid_project.json or blocks.nml found in {case_path}")
 
     warnings: list[str] = []
-    imported_sources, imported_precisions = _load_external_grids(project, case_path, warnings)
+    imported_sources, imported_precisions = _load_external_grids(
+        project, case_path, warnings, saved_grading=source == project_path.name
+    )
     if imported_sources:
         project.write_external_grid = True
         project.external_grid_source = "both" if imported_sources == {"grid", "data"} else "grid"
@@ -115,7 +118,7 @@ def _project_from_blocks_nml(path: Path, *, nscal: int | None = None) -> Project
                 "lmin": lmin,
                 "lmax": lmax,
                 "axes": {
-                    axis: AxisSpec(kind="snac", gt=gt[index], gr=gr[index]).to_dict()
+                    axis: AxisSpec(kind=NATIVE, gt=gt[index], gr=gr[index]).to_dict()
                     for index, axis in enumerate(AXIS_NAMES)
                 },
                 "cbcvel": [
@@ -310,18 +313,36 @@ def _load_external_grids(
     project: Project,
     case_dir: Path,
     warnings: list[str],
+    *,
+    saved_grading: bool,
 ) -> tuple[set[str], set[str]]:
+    """Use the grid files in grid/ or data/ as the blocks' axis grids.
+
+    An axis keeps its grading when that grading reproduces the file, so imported
+    projects stay editable. Otherwise the file's coordinates are imported as an
+    explicit grid; with a saved project grading (*saved_grading*), that
+    replacement is reported.
+    """
+
     sources: set[str] = set()
     precisions: set[str] = set()
+    # Grid files are numbered 1..N in block-ID order, as in blocks.nml. Older
+    # exports could save a project JSON with gaps in its IDs next to those files.
+    file_numbers = {
+        block.id: number
+        for number, block in enumerate(sorted(project.blocks, key=lambda item: item.id), start=1)
+    }
+    renumbered_matches = False
     for block in project.blocks:
         for axis_index, axis in enumerate(AXIS_NAMES):
             candidates = [
-                (source, case_dir / source / f"grid_{axis}_b_{block.id:03d}.bin")
+                (source, case_dir / source / f"grid_{axis}_b_{file_numbers[block.id]:03d}.bin")
                 for source in ("grid", "data")
             ]
             available = [(source, path) for source, path in candidates if path.is_file()]
             if not available:
                 continue
+            renumbered_matches = renumbered_matches or file_numbers[block.id] != block.id
             decoded = []
             failures = []
             for source, path in available:
@@ -353,7 +374,13 @@ def _load_external_grids(
 
             source, _, selected = decoded[0]
             precisions.add("single" if selected.dtype.endswith("f4") else "double")
-            block.axes[axis] = AxisSpec(kind="explicit", faces=selected.faces.tolist())
+            if not _grading_reproduces(block, axis_index, selected):
+                if saved_grading and block.axes[axis].kind != EXPLICIT:
+                    warnings.append(
+                        f"block {block.id} {axis}: {source}/ grid differs from the saved grading; "
+                        "imported its coordinates"
+                    )
+                block.axes[axis] = AxisSpec(kind=EXPLICIT, faces=selected.faces.tolist())
             for other_source, _, other in decoded[1:]:
                 tolerance = geometry_tolerance(
                     block.lmin[axis_index],
@@ -365,7 +392,34 @@ def _load_external_grids(
                         f"block {block.id} {axis}: {source}/ and {other_source}/ grids differ; "
                         f"imported {source}/"
                     )
+    if renumbered_matches:
+        warnings.append(
+            f"project block IDs {sorted(file_numbers)} are not consecutive; "
+            "grid files were matched to blocks in ID order"
+        )
     return sources, precisions
+
+
+def _grading_reproduces(block, axis_index: int, grid: BinaryGrid) -> bool:
+    """Whether a block's own axis grading produces the faces stored in a grid file."""
+
+    axis = AXIS_NAMES[axis_index]
+    try:
+        faces = axis_grid_arrays(
+            block.axes[axis].to_dict(),
+            block.lmin[axis_index],
+            block.lmax[axis_index],
+            block.ng[axis_index],
+        ).faces[:-1]
+    except ValueError:
+        return False
+    if faces.shape != grid.faces.shape:
+        return False
+    # The file stores the generated faces rounded to its precision.
+    lower, upper = block.lmin[axis_index], block.lmax[axis_index]
+    scale = max(abs(lower), abs(upper), upper - lower)
+    tolerance = 8.0 * float(np.finfo(np.dtype(grid.dtype)).eps) * scale
+    return float(np.max(np.abs(faces - grid.faces))) <= tolerance
 
 
 def _infer_periodic_axes(project: Project) -> list[bool]:

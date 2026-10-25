@@ -38,7 +38,7 @@ select {
 .toolbar {
   height: 58px;
   display: grid;
-  grid-template-columns: auto minmax(150px, 220px) minmax(74px, 90px) minmax(200px, 1fr) auto auto auto auto auto auto auto auto auto minmax(120px, 260px);
+  grid-template-columns: auto minmax(150px, 220px) minmax(74px, 90px) minmax(200px, 1fr) auto auto auto auto auto auto auto auto auto;
   gap: 10px;
   align-items: center;
   padding: 8px 12px;
@@ -314,13 +314,97 @@ select {
   display: none;
 }
 
+/* Check issues and status messages appear over the bottom-left of the
+   viewport, where they have room and stay in view while editing. */
+.viewport-feedback {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  width: min(560px, calc(100% - 24px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.viewport-feedback > * {
+  pointer-events: auto;
+}
+
+.issues-panel {
+  width: 100%;
+  max-height: min(45vh, 360px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(23, 28, 34, 0.96);
+}
+
+.issues-panel[hidden] {
+  display: none;
+}
+
+.issues-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 10px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: 600 12px/1.3 inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.issues-panel.has-errors .issues-head {
+  color: #ff9b9b;
+}
+
+.issues-head svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.15s;
+}
+
+.issues-panel.collapsed .issues-head svg {
+  transform: rotate(-90deg);
+}
+
+.issues-panel.collapsed .check-results {
+  display: none;
+}
+
+.issues-panel .check-results {
+  margin-top: 0;
+  padding: 0 8px 8px;
+  overflow: auto;
+}
+
+/* Status messages wrap to at most three lines. */
 .status {
-  min-width: 0;
-  color: var(--muted);
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(29, 34, 40, 0.94);
   font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.status:empty {
+  display: none;
+}
+
+.viewport-shell:has(.clip-tools:not([hidden])) .viewport-feedback {
+  bottom: 68px;
 }
 
 .block-list {
@@ -773,6 +857,47 @@ dialog::backdrop {
   border-bottom: 1px solid var(--line);
 }
 
+.repair-choice {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.repair-choice legend {
+  padding: 0 4px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.repair-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: start;
+  cursor: pointer;
+}
+
+.repair-option input {
+  margin-top: 3px;
+}
+
+.repair-option strong {
+  color: var(--text);
+}
+
+.repair-option.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.repair-changes {
+  display: grid;
+  gap: 7px;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
@@ -1079,9 +1204,17 @@ dialog::backdrop {
   color: #ff9b9b;
 }
 
-@media (max-width: 1450px) and (min-width: 981px) {
+/* Laptop widths: narrower fields, but the four main actions keep their labels. */
+@media (max-width: 1450px) and (min-width: 1100px) {
   .toolbar {
-    grid-template-columns: auto minmax(130px, 180px) 70px minmax(150px, 1fr) repeat(7, 34px) auto 34px minmax(100px, 180px);
+    grid-template-columns: auto minmax(120px, 170px) 64px minmax(120px, 1fr) repeat(4, auto) repeat(3, 34px) auto 34px;
+  }
+}
+
+/* Narrow desktop windows: every toolbar action shows only its icon. */
+@media (max-width: 1099px) and (min-width: 981px) {
+  .toolbar {
+    grid-template-columns: auto minmax(110px, 160px) 64px minmax(120px, 1fr) repeat(7, 34px) auto 34px;
   }
 
   .toolbar > .button {
@@ -1106,9 +1239,20 @@ dialog::backdrop {
 
   .field-project,
   .field-small,
-  .field-output,
-  .status {
+  .field-output {
     grid-column: 1 / -1;
+  }
+
+  /* The viewport is far down the page here, so keep messages on screen. */
+  .viewport-feedback {
+    position: fixed;
+    right: 12px;
+    width: auto;
+    z-index: 20;
+  }
+
+  .issues-panel {
+    max-height: 40vh;
   }
 
   .workspace {

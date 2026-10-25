@@ -4,9 +4,9 @@ module mod_sanity
   use mod_types
   implicit none
   private
-  public test_sanity
+  public test_sanity,test_sanity_grid_mapping
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
-  public test_sanity_fft
+  public test_sanity_fft,test_sanity_fft_grid
 #endif
   contains
   subroutine test_sanity(ng,dims,gr,stop_type,cbcvel,cbcpre,periods,inflow_type)
@@ -29,6 +29,24 @@ module mod_sanity
     call chk_dims(ng,dims,passed);        if(.not.passed) call abortit
     call chk_inflow(periods,inflow_type,passed); if(.not.passed) call abortit
   end subroutine test_sanity
+  subroutine test_sanity_grid_mapping(gt,gr,from_file)
+    !
+    ! the geometric mappings (gt = 4 to 7) divide by gr, so an axis built by
+    ! initgrid needs gr > 0; an axis read from a grid file in grid/ does not
+    !
+    implicit none
+    integer , intent(in), dimension(3) :: gt
+    real(rp), intent(in), dimension(3) :: gr
+    logical , intent(in), dimension(3) :: from_file
+    logical :: passed
+    passed = all(from_file(:) .or. gt(:) < 4 .or. gt(:) > 7 .or. gr(:) > 0._rp)
+    call MPI_ALLREDUCE(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
+    if(.not.passed) then
+      call write_error('geometric grid mappings (gt = 4 to 7) require gr > 0 unless the axis is read from grid/;')
+      call write_error('gr = 1 (gt = 4, 5) or gr = 2 (gt = 6, 7) gives a uniform grid.')
+      call abortit
+    end if
+  end subroutine test_sanity_grid_mapping
 #if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
   subroutine test_sanity_fft(dims,ng,lmin,lmax,gr)
     integer , intent(in ) :: dims,ng
@@ -36,6 +54,25 @@ module mod_sanity
     logical :: passed
     call chk_grid_fft(dims,ng,lmin,lmax,gr,passed); if(.not.passed) call abortit
   end subroutine test_sanity_fft
+  subroutine test_sanity_fft_grid(drf,lmin,lmax)
+    !
+    ! checks the grid spacing actually used along the FFT direction, which an
+    ! external grid file in grid/ may set after the gr-based checks above
+    !
+    implicit none
+    real(rp), intent(in), dimension(:) :: drf
+    real(rp), intent(in) :: lmin,lmax
+    logical  :: passed
+    real(rp) :: dl,tol
+    dl  = (lmax-lmin)/size(drf)
+    tol = sqrt(epsilon(1._rp))*dl + 16._rp*epsilon(1._rp)*max(abs(lmin),abs(lmax))
+    passed = all(abs(drf(:)-dl) <= tol)
+    call MPI_ALLREDUCE(MPI_IN_PLACE,passed,1,MPI_LOGICAL,MPI_LAND,MPI_COMM_WORLD)
+    if(.not.passed) then
+      call write_error('the grid spacing in the FFT direction must be uniform; check the grid files in grid/.')
+      call abortit
+    end if
+  end subroutine test_sanity_fft_grid
 #endif
   !
   subroutine chk_stop_type(stop_type,passed)

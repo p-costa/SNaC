@@ -17,6 +17,7 @@ model. It includes:
 - previewed grid-congruence repair with per-axis authority locks;
 - existing-case import from `blocks.nml`, project JSON, and binary grids;
 - exact-rank MPI decomposition balancing in automatic, 1D, 2D, or 3D mode;
+- FFT-axis checks that match SNaC's `FFT_AXIS` build option;
 - array, mirror, align, and face-snap tools for multi-block selections;
 - common SNaC velocity/pressure boundary presets;
 - autosave recovery and project-schema migration;
@@ -50,6 +51,12 @@ The grid-generator Python sources and tests have an enforced Flake8 baseline:
 python3 -m flake8 snac_grid_generator tests
 ```
 
+`tests/grid_generator_cases` in the SNaC repository runs the solver on
+generated cases. It builds SNaC with `FFT_AXIS=3` and checks that a valid case
+runs with exactly the generated grids, and that a stretched FFT-direction grid
+and a geometric mapping without `gr` are rejected. Like the other solver tests,
+it rebuilds SNaC in the repository's `build/` and `run/` folders.
+
 Run the GUI without installing it:
 
 ```sh
@@ -69,21 +76,29 @@ loopback address by default. A non-loopback `--host` requires the explicit
 so remote mode is intended only for a trusted network. Import and output paths
 may reference any location accessible to the user running the process.
 
-The reset button clears the project to zero blocks. That state can be saved as
+The reset button starts a new empty project with default settings; Undo brings
+the previous project back. An empty project can be saved as
 project JSON, but `Check` and `Write` reject it because SNaC requires at least
 one block.
 
 The toolbar `Check` action validates the block layout, friend boundary
 connectivity, transverse grid compatibility, and MPI partition compatibility.
-The `Update` action infers full-face friend (`F`) boundaries and propagates MPI
-partition counts across connected blocks where SNaC requires the neighboring
-subdomains to line up. Export runs the same structured-grid checks and refuses
-to write files when they fail. Large normal-spacing jumps across block
-interfaces are reported as warnings.
+It never changes the project: it checks the case exactly as `Write` would write
+it, inferring friend boundaries on a copy when inference is enabled, and its
+status says when `Update` would apply different friend boundaries. The `Update`
+action infers full-face friend (`F`) boundaries and propagates MPI partition
+counts across connected blocks where SNaC requires the neighboring subdomains to
+line up. Export runs the same structured-grid checks and refuses to write files
+when they fail. Large normal-spacing jumps across block interfaces are reported
+as warnings. The headless `check` and `report` commands use the same rules.
 
-Check messages that identify blocks or faces are buttons. Selecting one checks
-all affected blocks, switches to the relevant axis, centers the viewport target,
-and outlines affected faces in red or amber.
+Check results appear in a collapsible issues panel at the bottom of the 3D view,
+above the status line; when errors block writing, the Write button says so.
+Messages that identify blocks or faces are buttons. Selecting one checks all
+affected blocks, switches to the relevant axis, frames those blocks, and
+outlines affected faces in red or amber. Each check creates its diagnostic
+with these blocks, faces, axis, and a stable code attached, so messages can be
+reworded without affecting navigation.
 
 The selected axis can be copied to every face-connected block with the same
 extent in that axis using `Apply to aligned blocks`. For example, a Y grid can
@@ -92,7 +107,9 @@ copied through a face normal to the selected axis, because those blocks occupy
 different intervals of that axis.
 
 `Repair` checks all connected tangential grids together and previews the changes
-needed to make them congruent. It also matches normal spacing when an interface
+needed to make them congruent. For every set of connected blocks whose grids
+disagree, the preview lists the competing grids in words, so you choose which
+one to keep, and describes each block's grid before and after the change. It also matches normal spacing when an interface
 jump exceeds the warning threshold. By default the selected block is
 authoritative; the lock button beside an axis makes that axis authoritative
 regardless of the selection. Conflicting locked grids are reported and left
@@ -103,14 +120,25 @@ block extent. External-grid writing is enabled when those coordinates are needed
 The MPI panel finds a decomposition whose per-block rank counts add exactly to
 the requested total. `Auto` compares permitted dimensionalities, while `1D`,
 `2D`, and `3D` require that number of active partition axes. The X/Y/Z switches
-can exclude directions, notably an FFT-synthesis direction, which SNaC requires
-to remain undistributed. The optimizer balances cell load while favoring compact
+exclude directions from partitioning.
+
+`FFT axis` should match SNaC's `FFT_AXIS` build option; project files may give
+it as `x`, `y`, `z`, or the build values `1` to `3`. The FFT axis is never
+partitioned, whatever the X/Y/Z switches say, and checks mirror SNaC's FFT sanity
+checks: one MPI partition along that axis, and the same cell count and extent in
+every block. They also require the achieved grid along that axis to be uniform.
+SNaC's own `gr = 0` check runs before grid files are loaded, so the solver also
+checks the spacing it actually uses.
+
+The optimizer balances cell load while favoring compact
 local domains and lower communication area. The minimum number of cells along
 each split direction and an optional maximum local partition aspect are project
 settings. A maximum aspect of zero disables that hard limit. The result shows each block's dimensions, cells-per-rank
 imbalance, minimum local edge, and worst local aspect ratio. If no exact solution
 exists, the current dimensions remain unchanged and nearby feasible totals are
-offered as buttons that can be balanced immediately. Setting the target to zero
+offered as buttons that can be balanced immediately. When the exact solution
+balances poorly, because interface constraints leave few choices, nearby totals
+that balance clearly better are offered the same way. Setting the target to zero
 disables this additional export check.
 
 The Grid quality panel is populated by `Check` and `Update`. It reports total
@@ -131,7 +159,16 @@ byte-identical reports.
 ## Grading Modes
 
 `Native SNaC` exposes the mapping functions implemented by `initgrid`. These
-grids can be represented directly by `gt` and `gr` in `blocks.nml`.
+grids can be represented directly by `gt` and `gr` in `blocks.nml`. The
+geometric functions 4 to 7 divide by `gr`, so they require `gr > 0`; selecting
+one starts from its uniform value, `gr = 1` for functions 4 and 5 and `gr = 2`
+for functions 6 and 7, and returning to functions 0 to 3 resets that value.
+
+Project files name the modes `native`, `monotone`, `symmetric`, `multi`, and
+`explicit`, and use camelCase axis keys such as `widthStart` and `cellRatio`,
+like the rest of the project JSON. Files written before schema 4 used
+`snac`, `simple_ratio`, `max_min`, and snake_case keys; those spellings are
+still accepted everywhere, including in grid library files.
 
 `Monotone grading` creates a one-way geometric, tanh, or erf profile. The block
 length is fixed by its geometry, and any two independent controls can define
@@ -206,11 +243,16 @@ The `+X/-X`, `+Y/-Y`, and `+Z/-Z` buttons provide fitted orthographic views
 with pan, zoom, and free rotation. Rotating keeps the orthographic projection
 but leaves the exact axis view; `Fit` returns to the free-orbit perspective view.
 `Fit selection` frames the checked blocks without changing the active view.
+After adding, duplicating, mirroring, aligning, or snapping blocks, or editing a
+block's extent, the view is framed again if the model left it or became small,
+keeping the current viewing direction.
 Checked blocks can also be hidden or isolated, and `Show all` restores the full
 scene. The clipping tool exposes an X/Y/Z section plane with position and
 direction controls. These inspection settings affect only the viewport; they
 are not stored in the project or written to SNaC case files.
 The grid-line menu shows no grids, the selected blocks, or all visible blocks.
+Grid previews are requested in batches, so showing all grid lines stays quick
+for projects with hundreds of blocks.
 It draws a sparse 3D view of each block's actual face coordinates, including
 imported and repaired explicit grids.
 After `Check` or `Update`, connected faces are outlined by their normal-spacing
@@ -232,8 +274,14 @@ or resize invalidates the last structural check and refreshes the grid preview;
 clicking the active move or resize tool again returns to selection mode.
 Undo and redo retain up to 100 coalesced project edits, including decomposition
 diagnostics; reset can be undone, while opening another project starts a fresh
-history. Project edits are autosaved in browser storage. On the next launch the
-GUI offers to restore or discard the saved session.
+history. Project edits are autosaved in browser storage, separately for each
+browser tab. Reloading a tab offers to restore that tab's work; a new tab offers
+the most recent work left by a tab that was closed. If browser storage is full
+or unavailable, the status line says so.
+
+Messages appear in the status line at the bottom of the 3D view, or at the
+bottom of the window on narrow screens. Number fields ignore empty or partial
+input while typing and show the last valid value again when they lose focus.
 
 For an exported case, the important files are:
 
@@ -254,6 +302,12 @@ the grid snapshots SNaC writes with saved output.
 `SNaC precision` must match the solver build: choose `Double` for the default
 build and `Single` when SNaC is compiled with `SINGLE_PRECISION=1`. Export
 rejects a precision that cannot keep every face coordinate distinct.
+
+SNaC numbers blocks consecutively, so export writes blocks 1 to N in ID order
+and remaps friend references. The saved `snac_grid_project.json` uses the same
+numbering as `blocks.nml` and the grid files, and export reports any IDs it
+renumbered. Import matches grid files to blocks in ID order, so cases saved by
+earlier versions with gaps in their IDs still load.
 
 Each export is fully staged and validated before publication. Existing
 generator-owned files are backed up during publication and restored if any
@@ -278,9 +332,11 @@ python3 -m snac_grid_generator.cli generated/snac_grid_case/snac_grid_project.js
 
 To open an existing case in the GUI, put its directory in `Output` and use the
 folder-import button. `snac_grid_project.json` is preferred when present;
-otherwise the importer reconstructs the project from `blocks.nml`. Any
-`grid/grid_[xyz]_b_###.bin` files, or `data/` equivalents, replace the axis
-definition with their exact face coordinates. If one copy is invalid and the
+otherwise the importer reconstructs the project from `blocks.nml`. Each axis
+with a `grid/grid_[xyz]_b_###.bin` file, or a `data/` equivalent, keeps its
+grading when that grading reproduces the file, so a reopened case stays
+editable; otherwise the file's exact face coordinates replace it, and a replaced
+saved grading is reported. If one copy is invalid and the
 other is valid, the valid copy is imported with a warning. If both are valid but
 differ, `grid/` remains authoritative and the difference is reported. When
 `dns.nml` is present, its `nscal` value preserves editable scalar boundary rows
@@ -317,9 +373,17 @@ format-neutral modules. `topology.py` owns face connectivity and deterministic
 global-index reconstruction, independent of block IDs. SNaC's native `gt/gr`
 mappings and binary layout live in `snac_grid.py`; SNaC boundary presets live in
 `snac_bc.py`; and case import/export and report rendering remain in the SNaC
-adapters. The browser entry point coordinates focused modules for project
-history, API transport, block geometry, scene helpers, and SNaC-specific
-constants. The GUI's pinned
+adapters. Validation messages are structured `Diagnostic` objects created
+where each check runs (`diagnostics.py`).
+
+In the browser, `app.js` only binds elements and events. Shared editor state and
+selection helpers live in `state.js`, with project state in `state` and the
+three.js scene and display settings in `ui`. The remaining modules own one area
+each: `core.js` (rendering and dirty state), `block-list.js`, `inspector.js`,
+`previews.js`, `results.js`, `viewport.js`, `camera.js`, `actions.js` (server
+operations), `library-ui.js`, `history.js` (undo and autosave), and `format.js`.
+Pure helpers stay in `block-model.js`, `library.js`, `project-state.js`,
+`scene-helpers.js`, `api.js`, and the SNaC constant modules. The GUI's pinned
 Three.js r164 and Lucide 0.468.0 assets are vendored under `static/vendor`, so
 the editor does not require a CDN connection. Update Three.js core and both
 control modules together, retain each upstream license, record the new versions
@@ -328,9 +392,12 @@ here, and run the complete browser smoke test after an asset update.
 ## SNaC Reader Hook
 
 SNaC still generates grids from `gt/gr` by default. If a generated file such as
-`grid/grid_x_b_001.bin` exists, the updated solver loads that axis from disk after
-the normal `initgrid` call. This allows mixed usage: a block can use native SNaC
-mapping on one axis and externally generated multi-grading on another axis.
+`grid/grid_x_b_001.bin` exists, the solver reads that axis from the file instead
+of calling `initgrid` for it. This allows mixed usage: a block can use native
+SNaC mapping on one axis and externally generated multi-grading on another axis.
+The geometric mappings' `gr > 0` requirement applies only to axes built by
+`initgrid`, so cases that older generator versions wrote with `gt = 4` to `7`,
+`gr = 0`, and a grid file still run.
 
 The GUI can infer friend (`F`) boundaries for full-face-congruent neighboring
 blocks. Connected blocks must still obey SNaC's existing constraints: matching

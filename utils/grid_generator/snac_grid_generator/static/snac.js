@@ -21,3 +21,6 @@ export const SNAC_GRID_FUNCTIONS = [
   "Geometric both ends",
   "Geometric middle",
 ];
+
+// initgrid's geometric functions divide by gr; these values give a uniform grid.
+export const SNAC_GEOMETRIC_UNIFORM_GR = { 4: 1, 5: 1, 6: 2, 7: 2 };

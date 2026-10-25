@@ -23,6 +23,7 @@ from .snac_bc import apply_bc_preset
 from .snac_reporting import build_case_report, render_case_report_markdown
 from .validation import (
     apply_axis_to_aligned_blocks,
+    check_export_readiness,
     update_project_structure,
 )
 
@@ -42,6 +43,19 @@ _SECURITY_HEADERS = {
 }
 
 
+class GridServer(ThreadingHTTPServer):
+    """The GUI's HTTP server.
+
+    The browser requests every ES module of the editor at once, and each request
+    opens its own HTTP/1.0 connection. The socketserver default backlog of five
+    pending connections then overflows, and the operating system resets some of
+    them, leaving a blank page. A larger backlog keeps every module request.
+    """
+
+    request_queue_size = 128
+    daemon_threads = True
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the SNaC multi-block grid GUI.")
     parser.add_argument("--host", default="127.0.0.1", help="Bind address")
@@ -56,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.allow_remote and not _is_loopback_host(args.host):
         parser.error("non-loopback --host requires --allow-remote")
 
-    server = ThreadingHTTPServer((args.host, args.port), _Handler)
+    server = GridServer((args.host, args.port), _Handler)
     server.allow_remote = args.allow_remote
     url = f"http://{args.host}:{server.server_port}/"
     print(f"SNaC grid generator listening on {url}", flush=True)
@@ -142,13 +156,16 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json({"ok": True, "project": project.to_dict(), "changedBlockIds": changed})
                 return
             if path == "/api/check":
-                report = build_case_report(project)
+                # Read-only: check what export would write, without changing the project.
+                prepared, validation = check_export_readiness(project)
+                report = build_case_report(prepared, validation=validation)
                 self._send_json(
                     {
                         **report["validation"],
                         "quality": report["quality"],
                         "qualityError": report.get("qualityError"),
                         "storage": report["storage"],
+                        "connectivityStale": _boundary_rows(prepared) != _boundary_rows(project),
                     }
                 )
                 return
@@ -187,6 +204,7 @@ class _Handler(BaseHTTPRequestHandler):
                 project, result = repair_project_grids(
                     project,
                     int(source_block_id) if source_block_id else None,
+                    sources=payload.get("sources") or None,
                 )
                 self._send_json({**result.to_dict(), "project": project.to_dict()})
                 return
@@ -195,28 +213,15 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json({**result.to_dict(), "project": project.to_dict()})
                 return
             if path == "/api/preview":
-                block_id = int(payload.get("blockId", 0))
-                block = next((item for item in project.blocks if item.id == block_id), None)
-                if block is None:
-                    raise ValueError(f"block {block_id} does not exist")
-                axes = {}
-                for index, name in enumerate(AXIS_NAMES):
-                    arrays = axis_grid_arrays(
-                        block.axes[name].to_dict(),
-                        block.lmin[index],
-                        block.lmax[index],
-                        block.ng[index],
-                    )
-                    axes[name] = {
-                        "faces": arrays.faces[:-1].tolist(),
-                        **axis_grid_diagnostics(
-                            block.axes[name].to_dict(),
-                            block.lmin[index],
-                            block.lmax[index],
-                            block.ng[index],
-                        ),
-                    }
-                self._send_json({"ok": True, "blockId": block.id, "ng": block.ng, "axes": axes})
+                if "blockIds" in payload:
+                    block_ids = [int(value) for value in payload.get("blockIds") or []]
+                    self._send_json({"ok": True, "previews": block_previews(project, block_ids)})
+                    return
+                # Single-block form, kept for scripts written against earlier versions.
+                preview = block_previews(project, [int(payload.get("blockId", 0))])[0]
+                if "error" in preview:
+                    raise ValueError(preview["error"])
+                self._send_json({"ok": True, **preview})
                 return
             output_dir = payload.get("outputDir") or "generated/snac_grid_case"
             result = export_project(project, output_dir)
@@ -320,6 +325,43 @@ def _is_loopback_host(host: str) -> bool:
         return False
 
 
+def block_previews(project: Project, block_ids: list[int]) -> list[dict]:
+    """Achieved face coordinates and spacing diagnostics for each requested block.
+
+    A block whose grid cannot be built gets an ``error`` entry instead, so one
+    invalid block does not hide the previews of the others.
+    """
+
+    by_id = {block.id: block for block in project.blocks}
+    previews = []
+    for block_id in block_ids:
+        block = by_id.get(block_id)
+        if block is None:
+            previews.append({"blockId": block_id, "error": f"block {block_id} does not exist"})
+            continue
+        try:
+            axes = {}
+            for index, name in enumerate(AXIS_NAMES):
+                spec = block.axes[name].to_dict()
+                arrays = axis_grid_arrays(spec, block.lmin[index], block.lmax[index], block.ng[index])
+                axes[name] = {
+                    "faces": arrays.faces[:-1].tolist(),
+                    **axis_grid_diagnostics(spec, block.lmin[index], block.lmax[index], block.ng[index]),
+                }
+        except ValueError as exc:
+            previews.append({"blockId": block.id, "error": f"block {block.id}: {exc}"})
+            continue
+        previews.append({"blockId": block.id, "ng": block.ng, "axes": axes})
+    return previews
+
+
+def _boundary_rows(project: Project) -> list[tuple]:
+    return [
+        (block.id, block.cbcvel, block.cbcpre, block.bcvel, block.bcpre, block.cbcscal, block.bcscal)
+        for block in project.blocks
+    ]
+
+
 def _apply_geometry_operation(project: Project, payload: dict) -> tuple[Project, list[int]]:
     operation = str(payload.get("operation", ""))
     block_ids = payload.get("blockIds", [])
@@ -370,7 +412,7 @@ def _sample_project() -> Project:
                     "lmin": [0.0, 0.0, 0.0],
                     "lmax": [1.0, 1.0, 0.1],
                     "axes": {
-                        "x": {"kind": "snac", "gt": 0, "gr": 0.0},
+                        "x": {"kind": "native", "gt": 0, "gr": 0.0},
                         "y": {
                             "kind": "multi",
                             "segments": [
@@ -379,7 +421,7 @@ def _sample_project() -> Project:
                                 {"length": 20, "cells": 30, "ratio": 0.25},
                             ],
                         },
-                        "z": {"kind": "snac", "gt": 0, "gr": 0.0},
+                        "z": {"kind": "native", "gt": 0, "gr": 0.0},
                     },
                     "inivel": "zer",
                 },
@@ -391,7 +433,7 @@ def _sample_project() -> Project:
                     "lmin": [1.0, 0.0, 0.0],
                     "lmax": [2.0, 1.0, 0.1],
                     "axes": {
-                        "x": {"kind": "simple_ratio", "ratio": 1.5},
+                        "x": {"kind": "monotone", "ratio": 1.5},
                         "y": {
                             "kind": "multi",
                             "segments": [
@@ -400,7 +442,7 @@ def _sample_project() -> Project:
                                 {"length": 20, "cells": 30, "ratio": 0.25},
                             ],
                         },
-                        "z": {"kind": "snac", "gt": 0, "gr": 0.0},
+                        "z": {"kind": "native", "gt": 0, "gr": 0.0},
                     },
                     "inivel": "zer",
                 },

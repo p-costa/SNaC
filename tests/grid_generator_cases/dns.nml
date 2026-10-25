@@ -1,0 +1,9 @@
+&dns
+cfl = .95, dtmax = 1.0e5, dt_f = -1.
+visci = 100.
+nstep = 5, time_max = 100., tw_max = 0.1
+stop_type(1:3) = T, F, F
+restart = F, is_overwrite_save = T, nsaves_max = 0
+icheck = 1, iout0d = 1, iout1d = 100, iout2d = 100, iout3d = 100, isave = 100
+bforce(1:3) = 0., 0., 0.
+/

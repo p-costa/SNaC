@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-from .diagnostics import Diagnostic, diagnostics_for_messages
+from .diagnostics import Diagnostic, error, warning
 from .grid import AXIS_NAMES, axis_grid_arrays
 from .model import AxisSpec, Block, Project
 from .numeric import coordinates_close, geometry_tolerance
@@ -29,30 +29,47 @@ SPACING_JUMP_WARNING_RATIO = 3.0
 
 @dataclass
 class CheckResult:
-    """Validation result returned by the GUI API."""
+    """Validation result returned by the GUI API.
 
-    errors: list[str] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
+    ``issues`` holds structured diagnostics in the order they were found;
+    ``errors`` and ``warnings`` are read-only views of their messages.
+    """
+
+    issues: list[Diagnostic] = field(default_factory=list)
     interfaces: list[dict[str, Any]] = field(default_factory=list)
 
     @property
+    def errors(self) -> tuple[str, ...]:
+        return tuple(issue.message for issue in self.issues if issue.severity == "error")
+
+    @property
+    def warnings(self) -> tuple[str, ...]:
+        return tuple(issue.message for issue in self.issues if issue.severity == "warning")
+
+    @property
     def ok(self) -> bool:
-        return not self.errors
+        return not any(issue.severity == "error" for issue in self.issues)
 
     @property
     def diagnostics(self) -> list[Diagnostic]:
-        return diagnostics_for_messages(self.errors, self.warnings, self.interfaces)
+        """Errors first, then warnings, each in the order they were found."""
+
+        return [issue for issue in self.issues if issue.severity == "error"] + [
+            issue for issue in self.issues if issue.severity != "error"
+        ]
+
+    def add(self, *issues: Diagnostic) -> None:
+        self.issues.extend(issues)
 
     def extend(self, other: "CheckResult") -> None:
-        self.errors.extend(other.errors)
-        self.warnings.extend(other.warnings)
+        self.issues.extend(other.issues)
         self.interfaces.extend(other.interfaces)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "ok": self.ok,
-            "errors": self.errors,
-            "warnings": self.warnings,
+            "errors": list(self.errors),
+            "warnings": list(self.warnings),
             "interfaces": self.interfaces,
             "diagnostics": [diagnostic.to_dict() for diagnostic in self.diagnostics],
         }
@@ -72,20 +89,35 @@ def check_project(
 
 def _check_project(project: Project, topology: Topology) -> CheckResult:
     result = CheckResult()
-    result.errors.extend(topology.errors)
-    result.warnings.extend(topology.warnings)
+    result.add(*topology.issues)
     if not project.blocks:
-        result.errors.append("project has no blocks and cannot be exported as a SNaC case")
-    result.errors.extend(connected_component_errors(project.blocks, topology.connections))
+        result.add(error("no_blocks", "project has no blocks and cannot be exported as a SNaC case"))
+    result.add(*connected_component_errors(project.blocks, topology.connections))
     by_id = {block.id: block for block in project.blocks}
 
-    result.errors.extend(_check_block_basics(project.blocks))
-    result.errors.extend(validate_snac_project(project, topology.connections))
-    result.errors.extend(_check_connected_block_grids(by_id, topology.connections))
-    result.errors.extend(_check_decomposition_request(project))
+    result.add(*_check_block_basics(project.blocks))
+    result.add(*validate_snac_project(project, topology.connections))
+    result.add(*_check_connected_block_grids(by_id, topology.connections))
+    result.add(*_check_decomposition_request(project))
     result.interfaces, spacing_warnings = _interface_spacing_metrics(by_id, topology.connections)
-    result.warnings.extend(spacing_warnings)
+    result.add(*spacing_warnings)
     return result
+
+
+def check_export_readiness(project: Project | dict[str, Any]) -> tuple[Project, CheckResult]:
+    """Check a project exactly as ``export_project`` would write it.
+
+    When connectivity inference is enabled, friend boundaries are inferred on a
+    copy first. The returned project is that copy; the input is never changed.
+    Every problem is reported, even when some block faces do not connect
+    cleanly; those faces are simply left out of the inferred connectivity.
+    """
+
+    project = copy_project(project)
+    topology = build_topology(project.blocks, project.periodic_axes)
+    if project.infer_connectivity:
+        _connect_friend_faces(project, topology)
+    return project, _check_project(project, topology)
 
 
 def infer_project_connectivity(project: Project | dict[str, Any]) -> tuple[Project, CheckResult]:
@@ -94,10 +126,15 @@ def infer_project_connectivity(project: Project | dict[str, Any]) -> tuple[Proje
     project = copy_project(project)
     result = CheckResult()
     topology = build_topology(project.blocks, project.periodic_axes)
-    result.errors.extend(topology.errors)
-    result.warnings.extend(topology.warnings)
-    if result.errors:
+    result.add(*topology.issues)
+    if not result.ok:
         return project, result
+    _connect_friend_faces(project, topology)
+    return project, result
+
+
+def _connect_friend_faces(project: Project, topology: Topology) -> None:
+    """Replace all friend boundaries with the full-face connections in *topology*."""
 
     clear_friend_boundaries(project.blocks)
     by_id = {block.id: block for block in project.blocks}
@@ -108,7 +145,6 @@ def infer_project_connectivity(project: Project | dict[str, Any]) -> tuple[Proje
             by_id[connection.b_id],
             connection.b_face,
         )
-    return project, result
 
 
 def update_project_structure(
@@ -119,23 +155,12 @@ def update_project_structure(
 
     project = copy_project(project)
     topology = build_topology(project.blocks, project.periodic_axes)
-    result = CheckResult(
-        errors=list(topology.errors),
-        warnings=list(topology.warnings),
-    )
-    if result.errors:
+    result = CheckResult(issues=list(topology.issues))
+    if not result.ok:
         return project, result
 
-    clear_friend_boundaries(project.blocks)
-    by_id = {block.id: block for block in project.blocks}
-    for connection in topology.connections:
-        connect_friend_boundaries(
-            by_id[connection.a_id],
-            connection.a_face,
-            by_id[connection.b_id],
-            connection.b_face,
-        )
-    result.warnings.extend(_propagate_mpi_partitions(project.blocks, topology.connections, source_block_id))
+    _connect_friend_faces(project, topology)
+    result.add(*_propagate_mpi_partitions(project.blocks, topology.connections, source_block_id))
     result.extend(_check_project(project, topology))
     return project, result
 
@@ -206,29 +231,40 @@ def copy_project(project: Project | dict[str, Any]) -> Project:
     return Project.from_dict(project)
 
 
-def _check_block_basics(blocks: list[Block]) -> list[str]:
-    errors: list[str] = []
+def _check_block_basics(blocks: list[Block]) -> list[Diagnostic]:
+    errors: list[Diagnostic] = []
     for block in blocks:
         for idx, axis in enumerate(AXIS_NAMES):
             if block.dims[idx] > block.ng[idx]:
-                errors.append(f"block {block.id}: mpi partitions along {axis} exceed ng")
+                errors.append(
+                    error(
+                        "decomposition",
+                        f"block {block.id}: mpi partitions along {axis} exceed ng",
+                        block.id,
+                        axis=axis,
+                    )
+                )
             try:
                 axis_grid_arrays(block.axes[axis].to_dict(), block.lmin[idx], block.lmax[idx], block.ng[idx])
             except Exception as exc:
-                errors.append(f"block {block.id}: invalid {axis} grid ({exc})")
+                errors.append(
+                    error("invalid_grid", f"block {block.id}: invalid {axis} grid ({exc})", block.id, axis=axis)
+                )
     return errors
 
 
-def _check_decomposition_request(project: Project) -> list[str]:
+def _check_decomposition_request(project: Project) -> list[Diagnostic]:
     target = project.decomposition.target_ranks
     if target == 0:
         return []
-    errors: list[str] = []
+    errors: list[Diagnostic] = []
     if target < len(project.blocks):
-        errors.append(f"target MPI ranks must be at least the number of blocks ({len(project.blocks)})")
+        errors.append(
+            error("decomposition", f"target MPI ranks must be at least the number of blocks ({len(project.blocks)})")
+        )
     total = sum(prod(block.dims) for block in project.blocks)
     if total != target:
-        errors.append(f"MPI decomposition uses {total} ranks, expected {target}")
+        errors.append(error("decomposition", f"MPI decomposition uses {total} ranks, expected {target}"))
 
     active = set()
     min_local_cells = project.decomposition.min_local_cells
@@ -242,25 +278,37 @@ def _check_decomposition_request(project: Project) -> list[str]:
         ]
         if split_extents and min(split_extents) < min_local_cells:
             errors.append(
-                f"block {block.id}: decomposition leaves fewer than {min_local_cells} cells on a rank"
+                error(
+                    "decomposition",
+                    f"block {block.id}: decomposition leaves fewer than {min_local_cells} cells on a rank",
+                    block.id,
+                )
             )
         aspect = max(local_extents) / min(local_extents)
         if max_local_aspect and aspect > max_local_aspect:
             errors.append(
-                f"block {block.id}: local partition aspect {aspect:.3g} exceeds {max_local_aspect:.3g}"
+                error(
+                    "decomposition",
+                    f"block {block.id}: local partition aspect {aspect:.3g} exceeds {max_local_aspect:.3g}",
+                    block.id,
+                )
             )
     for axis_index, axis in enumerate(AXIS_NAMES):
         if any(block.dims[axis_index] > 1 for block in project.blocks):
             active.add(axis_index)
-        if not project.decomposition.axes[axis_index] and any(
-            block.dims[axis_index] > 1 for block in project.blocks
-        ):
-            errors.append(f"MPI decomposition uses disabled {axis} partitions")
+        split = [block.id for block in project.blocks if block.dims[axis_index] > 1]
+        if not project.decomposition.axes[axis_index] and split:
+            errors.append(
+                error("decomposition", f"MPI decomposition uses disabled {axis} partitions", *split, axis=axis)
+            )
     if project.decomposition.mode != "auto" and target > len(project.blocks):
         expected = int(project.decomposition.mode[0])
         if len(active) != expected:
             errors.append(
-                f"{project.decomposition.mode} decomposition requires {expected} active axes, found {len(active)}"
+                error(
+                    "decomposition",
+                    f"{project.decomposition.mode} decomposition requires {expected} active axes, found {len(active)}",
+                )
             )
     return errors
 
@@ -268,7 +316,7 @@ def _check_decomposition_request(project: Project) -> list[str]:
 def connected_component_errors(
     blocks: list[Block],
     connections: list[FaceConnection],
-) -> list[str]:
+) -> list[Diagnostic]:
     """Return an error when the block connection graph is disconnected."""
 
     if len(blocks) < 2:
@@ -290,28 +338,61 @@ def connected_component_errors(
                 queue.append(neighbor)
     missing = sorted(set(graph) - seen)
     if missing:
-        return [f"blocks {missing} are disconnected from block {seed}"]
+        return [
+            error(
+                "disconnected_blocks",
+                f"blocks {missing} are disconnected from block {seed}",
+                *missing,
+                seed,
+            )
+        ]
     return []
 
 
-def _check_connected_block_grids(by_id: dict[int, Block], connections: list[FaceConnection]) -> list[str]:
-    errors: list[str] = []
+def _face_pair(connection: FaceConnection) -> tuple[tuple[int, str], tuple[int, str]]:
+    return (connection.a_id, FACE_ORDER[connection.a_face]), (connection.b_id, FACE_ORDER[connection.b_face])
+
+
+def _check_connected_block_grids(by_id: dict[int, Block], connections: list[FaceConnection]) -> list[Diagnostic]:
+    errors: list[Diagnostic] = []
     for connection in connections:
         a = by_id[connection.a_id]
         b = by_id[connection.b_id]
         normal = connection.axis_index
+        faces = _face_pair(connection)
         for axis_index, axis in enumerate(AXIS_NAMES):
             if axis_index == normal:
                 continue
             if a.ng[axis_index] != b.ng[axis_index]:
-                errors.append(f"blocks {a.id} and {b.id}: touching grids have different ng along {axis}")
+                errors.append(
+                    error(
+                        "interface_cell_count",
+                        f"blocks {a.id} and {b.id}: touching grids have different ng along {axis}",
+                        *faces,
+                        axis=axis,
+                    )
+                )
             if a.dims[axis_index] != b.dims[axis_index]:
-                errors.append(f"blocks {a.id} and {b.id}: touching MPI partitions have different dims along {axis}")
+                errors.append(
+                    error(
+                        "interface_partition_mismatch",
+                        f"blocks {a.id} and {b.id}: touching MPI partitions have different dims along {axis}",
+                        *faces,
+                        axis=axis,
+                    )
+                )
             try:
                 a_faces = block_interior_faces(a, axis_index)
                 b_faces = block_interior_faces(b, axis_index)
             except Exception as exc:
-                errors.append(f"blocks {a.id} and {b.id}: could not compare {axis} grid ({exc})")
+                errors.append(
+                    error(
+                        "interface_grid_mismatch",
+                        f"blocks {a.id} and {b.id}: could not compare {axis} grid ({exc})",
+                        *faces,
+                        axis=axis,
+                    )
+                )
                 continue
             if a_faces.shape != b_faces.shape:
                 continue
@@ -327,7 +408,14 @@ def _check_connected_block_grids(by_id: dict[int, Block], connections: list[Face
                 ),
             )
             if float(np.max(np.abs(a_faces - b_faces))) > tolerance:
-                errors.append(f"blocks {a.id} and {b.id}: touching grid lines do not match along {axis}")
+                errors.append(
+                    error(
+                        "interface_grid_mismatch",
+                        f"blocks {a.id} and {b.id}: touching grid lines do not match along {axis}",
+                        *faces,
+                        axis=axis,
+                    )
+                )
     return errors
 
 
@@ -346,18 +434,26 @@ def interface_spacing_metrics(project: Project | dict[str, Any]) -> list[dict[st
 def _interface_spacing_metrics(
     by_id: dict[int, Block],
     connections: list[FaceConnection],
-) -> tuple[list[dict[str, Any]], list[str]]:
+) -> tuple[list[dict[str, Any]], list[Diagnostic]]:
     metrics: list[dict[str, Any]] = []
-    warnings: list[str] = []
+    warnings: list[Diagnostic] = []
     for connection in connections:
         a = by_id[connection.a_id]
         b = by_id[connection.b_id]
         axis = connection.axis_index
+        faces = _face_pair(connection)
         try:
             a_width = block_boundary_width(a, axis, connection.a_face)
             b_width = block_boundary_width(b, axis, connection.b_face)
         except Exception as exc:
-            warnings.append(f"blocks {a.id} and {b.id}: could not compare interface spacing ({exc})")
+            warnings.append(
+                warning(
+                    "interface_spacing_jump",
+                    f"blocks {a.id} and {b.id}: could not compare interface spacing ({exc})",
+                    *faces,
+                    axis=AXIS_NAMES[axis],
+                )
+            )
             continue
         ratio = max(a_width, b_width) / min(a_width, b_width)
         metrics.append(
@@ -368,13 +464,19 @@ def _interface_spacing_metrics(
                 "neighborFace": FACE_ORDER[connection.b_face],
                 "axis": AXIS_NAMES[axis],
                 "ratio": ratio,
+                "exceedsWarning": ratio > SPACING_JUMP_WARNING_RATIO,
                 "spacing": a_width,
                 "neighborSpacing": b_width,
             }
         )
         if ratio > SPACING_JUMP_WARNING_RATIO:
             warnings.append(
-                f"blocks {a.id} and {b.id}: {AXIS_NAMES[axis]} interface spacing jumps by {ratio:.3g}"
+                warning(
+                    "interface_spacing_jump",
+                    f"blocks {a.id} and {b.id}: {AXIS_NAMES[axis]} interface spacing jumps by {ratio:.3g}",
+                    *faces,
+                    axis=AXIS_NAMES[axis],
+                )
             )
     return metrics, warnings
 
@@ -383,8 +485,8 @@ def _propagate_mpi_partitions(
     blocks: list[Block],
     connections: list[FaceConnection],
     source_block_id: int | None,
-) -> list[str]:
-    warnings: list[str] = []
+) -> list[Diagnostic]:
+    warnings: list[Diagnostic] = []
     by_id = {block.id: block for block in blocks}
     source_id = source_block_id if source_block_id in by_id else None
 
@@ -423,8 +525,14 @@ def _propagate_mpi_partitions(
                 block = by_id[block_id]
                 if block.dims[axis_index] != target:
                     warnings.append(
-                        f"block {block_id}: mpi {axis} partition changed from {block.dims[axis_index]} "
-                        f"to {target} to match block {owner}"
+                        warning(
+                            "partition_propagated",
+                            f"block {block_id}: mpi {axis} partition changed from {block.dims[axis_index]} "
+                            f"to {target} to match block {owner}",
+                            block_id,
+                            owner,
+                            axis=axis,
+                        )
                     )
                     block.dims[axis_index] = target
     return warnings

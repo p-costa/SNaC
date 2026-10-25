@@ -58,7 +58,7 @@ program snac
   use mod_rk             , only: rk_mom,rk_scal
   use mod_post           , only: cmpt_wall_forces, updt_wall_forces
   use mod_scal           , only: scalar,initialize_scalars,bulk_forcing_s
-  use mod_sanity         , only: test_sanity
+  use mod_sanity         , only: test_sanity,test_sanity_grid_mapping
   use mod_solver         , only: init_bc_rhs,init_matrix_3d,create_solver,setup_solver, &
                                  solve_helmholtz,finalize_matrix,hypre_solver,configure_hypre_options
 #ifdef _IMPDIFF
@@ -72,7 +72,7 @@ program snac
   use mod_solver         , only: alltoallw,init_comm_slab,init_transpose_slab_uneven,transpose_slab
 #endif
   use mod_fft            , only: fft,fftend
-  use mod_sanity         , only: test_sanity_fft
+  use mod_sanity         , only: test_sanity_fft,test_sanity_fft_grid
 #endif
   use mod_types
   !$ use omp_lib
@@ -183,6 +183,7 @@ program snac
   real(rp) :: twi,tw
   integer  :: savecounter,ichkptnum
   logical  :: is_done,kill,exists
+  logical, dimension(3) :: grid_file
 #ifdef _TIMING
   real(rp) :: dt12,dt12av,dt12min,dt12max
 #endif
@@ -424,19 +425,38 @@ end if
   !
   ! generate grid
   !
+  ! an axis with a grid file in grid/ is read from it; the others use initgrid
+  !
   write(cblock,'(i3.3)') my_block
-  call initgrid(lo_g(1),hi_g(1),gt(1),gr(1),lmin(1),lmax(1),dxc_g,dxf_g,xc_g,xf_g)
-  call initgrid(lo_g(2),hi_g(2),gt(2),gr(2),lmin(2),lmax(2),dyc_g,dyf_g,yc_g,yf_g)
-  call initgrid(lo_g(3),hi_g(3),gt(3),gr(3),lmin(3),lmax(3),dzc_g,dzf_g,zc_g,zf_g)
-  filename = 'grid/grid_x_b_'//cblock
-  inquire(file=trim(filename)//'.bin',exist=exists)
-  if(exists) call load_grid(trim(filename),lo_g(1),hi_g(1),xf_g,xc_g,dxf_g,dxc_g)
-  filename = 'grid/grid_y_b_'//cblock
-  inquire(file=trim(filename)//'.bin',exist=exists)
-  if(exists) call load_grid(trim(filename),lo_g(2),hi_g(2),yf_g,yc_g,dyf_g,dyc_g)
-  filename = 'grid/grid_z_b_'//cblock
-  inquire(file=trim(filename)//'.bin',exist=exists)
-  if(exists) call load_grid(trim(filename),lo_g(3),hi_g(3),zf_g,zc_g,dzf_g,dzc_g)
+  inquire(file='grid/grid_x_b_'//cblock//'.bin',exist=grid_file(1))
+  inquire(file='grid/grid_y_b_'//cblock//'.bin',exist=grid_file(2))
+  inquire(file='grid/grid_z_b_'//cblock//'.bin',exist=grid_file(3))
+  call test_sanity_grid_mapping(gt,gr,grid_file)
+  if(grid_file(1)) then
+    call load_grid('grid/grid_x_b_'//cblock,lo_g(1),hi_g(1),xf_g,xc_g,dxf_g,dxc_g)
+  else
+    call initgrid(lo_g(1),hi_g(1),gt(1),gr(1),lmin(1),lmax(1),dxc_g,dxf_g,xc_g,xf_g)
+  end if
+  if(grid_file(2)) then
+    call load_grid('grid/grid_y_b_'//cblock,lo_g(2),hi_g(2),yf_g,yc_g,dyf_g,dyc_g)
+  else
+    call initgrid(lo_g(2),hi_g(2),gt(2),gr(2),lmin(2),lmax(2),dyc_g,dyf_g,yc_g,yf_g)
+  end if
+  if(grid_file(3)) then
+    call load_grid('grid/grid_z_b_'//cblock,lo_g(3),hi_g(3),zf_g,zc_g,dzf_g,dzc_g)
+  else
+    call initgrid(lo_g(3),hi_g(3),gt(3),gr(3),lmin(3),lmax(3),dzc_g,dzf_g,zc_g,zf_g)
+  end if
+#if defined(_FFT_X) || defined(_FFT_Y) || defined(_FFT_Z)
+  select case(idir)
+  case(1)
+    call test_sanity_fft_grid(dxf_g(lo_g(1):hi_g(1)),lmin(1),lmax(1))
+  case(2)
+    call test_sanity_fft_grid(dyf_g(lo_g(2):hi_g(2)),lmin(2),lmax(2))
+  case(3)
+    call test_sanity_fft_grid(dzf_g(lo_g(3):hi_g(3)),lmin(3),lmax(3))
+  end select
+#endif
   if(myid_block == 0) then
     call save_grid(trim(datadir)//'grid_x_b_'//cblock,lo_g(1),hi_g(1),xf_g,xc_g,dxf_g,dxc_g)
     call save_grid(trim(datadir)//'grid_y_b_'//cblock,lo_g(2),hi_g(2),yf_g,yc_g,dyf_g,dyc_g)

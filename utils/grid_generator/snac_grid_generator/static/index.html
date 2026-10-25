@@ -46,8 +46,7 @@
         <button id="undo-project" class="button icon" title="Undo" disabled><i data-lucide="undo-2"></i></button>
         <button id="redo-project" class="button icon" title="Redo" disabled><i data-lucide="redo-2"></i></button>
       </div>
-      <button id="reset-project" class="button icon danger" title="Erase all blocks"><i data-lucide="rotate-ccw"></i></button>
-      <div id="status" class="status"></div>
+      <button id="reset-project" class="button icon danger" title="New empty project (Undo restores the current one)"><i data-lucide="rotate-ccw"></i></button>
     </header>
 
     <main class="workspace">
@@ -116,6 +115,15 @@
             <label class="check"><input type="checkbox" data-axis="1" checked /><span>Y</span></label>
             <label class="check"><input type="checkbox" data-axis="2" checked /><span>Z</span></label>
           </div>
+          <label class="field" title="Match SNaC's FFT_AXIS build option. The FFT axis is never split and must have a uniform grid that is identical in every block.">
+            <span>FFT axis</span>
+            <select id="fft-axis">
+              <option value="">None</option>
+              <option value="x">X</option>
+              <option value="y">Y</option>
+              <option value="z">Z</option>
+            </select>
+          </label>
           <div class="tool-row two">
             <label class="field"><span>Min cells/split</span><input id="min-local-cells" type="number" value="4" min="1" step="1" /></label>
             <label class="field"><span>Max local aspect</span><input id="max-local-aspect" type="number" value="0" min="0" step="any" /></label>
@@ -176,6 +184,15 @@
           </div>
           <input id="clip-position" type="range" min="0" max="1" step="0.001" value="0.5" aria-label="Clipping position" />
           <button id="flip-clipping" class="button icon" title="Flip clipping direction"><i data-lucide="flip-horizontal-2"></i></button>
+        </div>
+        <div class="viewport-feedback">
+          <section id="issues-panel" class="issues-panel" aria-label="Check issues" hidden>
+            <button id="toggle-issues" class="issues-head" type="button" aria-expanded="true" aria-controls="check-results">
+              <span id="issues-title"></span><i data-lucide="chevron-down"></i>
+            </button>
+            <div id="check-results" class="check-results"></div>
+          </section>
+          <div id="status" class="status" role="status" aria-live="polite"></div>
         </div>
       </section>
 
@@ -238,7 +255,6 @@
             <button id="apply-bc-preset" class="button"><i data-lucide="paint-bucket"></i><span>Apply preset</span></button>
           </div>
           <div id="boundary-table" class="boundary-table"></div>
-          <div id="check-results" class="check-results"></div>
         </section>
       </aside>
     </main>
@@ -299,6 +315,10 @@
       </div>
     </dialog>
 
-    <script type="module" src="/app.js"></script>
+    <script
+      type="module"
+      src="/app.js"
+      onerror="document.getElementById('status').textContent = 'The editor failed to load. Reload the page.'"
+    ></script>
   </body>
 </html>

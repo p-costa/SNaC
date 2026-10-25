@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from contextlib import redirect_stdout
 from io import StringIO
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -13,6 +14,8 @@ import numpy as np
 
 from snac_grid_generator import (
     MIN_LOCAL_CELLS,
+    check_export_readiness,
+    PROJECT_SCHEMA_VERSION,
     Project,
     align_blocks,
     analyze_grid_quality,
@@ -165,8 +168,8 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertEqual(metrics["n"], 15)
         self.assertAlmostEqual(metrics["expansion"], 4.0)
         self.assertAlmostEqual(metrics["idealN"], 15.236778, places=5)
-        self.assertAlmostEqual(metrics["residuals"]["width_start"], 0.015599, places=5)
-        self.assertAlmostEqual(metrics["residuals"]["width_end"], 0.015599, places=5)
+        self.assertAlmostEqual(metrics["residuals"]["widthStart"], 0.015599, places=5)
+        self.assertAlmostEqual(metrics["residuals"]["widthEnd"], 0.015599, places=5)
         arrays = axis_grid_arrays(
             {
                 "kind": "simple_ratio",
@@ -319,8 +322,8 @@ class GridGeneratorTests(unittest.TestCase):
                 ]
             }
         ).blocks[0].axes["x"]
-        self.assertEqual(lower.kind, "simple_ratio")
-        self.assertEqual(lower.controls, ["width_start", "width_end"])
+        self.assertEqual(lower.kind, "monotone")
+        self.assertEqual(lower.controls, ["widthStart", "widthEnd"])
         self.assertEqual((lower.width_start, lower.width_end), (0.01, 0.04))
 
         upper = Project.from_dict(
@@ -346,7 +349,7 @@ class GridGeneratorTests(unittest.TestCase):
                 ]
             }
         ).blocks[0].axes["x"]
-        self.assertEqual(symmetric.kind, "max_min")
+        self.assertEqual(symmetric.kind, "symmetric")
         self.assertEqual(symmetric.side, "both")
 
     def test_export_writes_block_and_external_grids(self) -> None:
@@ -586,7 +589,8 @@ class GridGeneratorTests(unittest.TestCase):
 
             result = import_case(root)
 
-        self.assertEqual(result.project.blocks[0].axes["x"].kind, "explicit")
+        # The valid data/ copy matches the saved uniform grading, which is kept.
+        self.assertEqual(result.project.blocks[0].axes["x"].kind, "native")
         self.assertTrue(any("ignored invalid grid/ grid" in warning for warning in result.warnings))
 
     def test_case_round_trip_preserves_namelist_and_binary_grids(self) -> None:
@@ -626,6 +630,228 @@ class GridGeneratorTests(unittest.TestCase):
                     (first_path / relative).read_bytes(),
                     (second_path / relative).read_bytes(),
                 )
+
+    def test_mapped_profile_fits_evaluate_only_the_grid_ends(self) -> None:
+        from snac_grid_generator import grid
+
+        for cache in (
+            grid._fit_monotone_spacing_cached,
+            grid._solve_mapping_alpha,
+            grid._solve_profile_ratio_from_endpoint,
+        ):
+            cache.cache_clear()
+        axis = {"kind": "simple_ratio", "profile": "tanh", "controls": ["n", "width_start"], "width_start": 1.0e-3}
+        with patch.object(grid, "_map_one_end", wraps=grid._map_one_end) as mapped:
+            fit = fit_monotone_spacing(axis, 1.0, 4096)
+            calls = mapped.call_count
+            fit_monotone_spacing(axis, 1.0, 4096)
+            self.assertEqual(mapped.call_count, calls)  # cached
+
+        self.assertAlmostEqual(fit.width_start, 1.0e-3, delta=1.0e-12)
+        # Nested root finding over the full 4097-face grid took millions of evaluations.
+        self.assertLess(calls, 50_000)
+
+    def test_random_cases_survive_export_and_import(self) -> None:
+        import random
+
+        def axis_spec(rng):
+            kind = rng.choice(["native", "monotone", "symmetric", "multi"])
+            if kind == "native":
+                gt = rng.randrange(8)
+                gr = rng.choice([1.0, 2.5]) if gt >= 4 else rng.choice([0.0, 2.0])
+                return {"kind": "native", "gt": gt, "gr": gr}
+            if kind == "monotone":
+                return {
+                    "kind": "monotone",
+                    "profile": rng.choice(["geometric", "tanh", "erf"]),
+                    "controls": rng.choice([["n", "ratio"], ["n", "widthStart"]]),
+                    "ratio": rng.choice([0.3, 1.0, 4.0]),
+                    "widthStart": 0.03,
+                }
+            if kind == "symmetric":
+                return {"kind": "symmetric", "side": rng.choice(["both", "middle"]), "min": 0.02, "max": 0.08}
+            return {
+                "kind": "multi",
+                "segments": [
+                    {"length": 1, "cells": 1, "ratio": 3},
+                    {"length": 2, "cells": 1, "ratio": 1, "continuous": True},
+                ],
+            }
+
+        def random_project(rng):
+            counts = [rng.randint(1, 3) for _ in range(3)]
+            offset = rng.choice([0.0, -2.0, 100.0])
+            edges = [np.cumsum([offset] + [rng.choice([0.5, 1.0, 1.5]) for _ in range(c)]) for c in counts]
+            cells = [[rng.choice([4, 6]) for _ in range(c)] for c in counts]
+            dims = [[rng.choice([1, 2]) for _ in range(c)] for c in counts]
+            specs = [[axis_spec(rng) for _ in range(c)] for c in counts]
+            blocks = []
+            for i, j, k in np.ndindex(*counts):
+                index = (i, j, k)
+                blocks.append(
+                    {
+                        "id": 2 * len(blocks) + rng.choice([1, 2]),  # IDs with gaps
+                        "ng": [cells[a][index[a]] for a in range(3)],
+                        "dims": [dims[a][index[a]] for a in range(3)],
+                        "lmin": [float(edges[a][index[a]]) for a in range(3)],
+                        "lmax": [float(edges[a][index[a] + 1]) for a in range(3)],
+                        "axes": {name: specs[a][index[a]] for a, name in enumerate("xyz")},
+                    }
+                )
+            rng.shuffle(blocks)
+            project = Project.from_dict(
+                {
+                    "nscal": rng.randint(0, 2),
+                    "periodicAxes": [rng.random() < 0.4 for _ in range(3)],
+                    "externalGridPrecision": rng.choice(["double", "single"]),
+                    "blocks": blocks,
+                }
+            )
+            project, result = update_project_structure(project)
+            self.assertTrue(result.ok, result.errors)
+            return project
+
+        def written(root):
+            return {
+                path.relative_to(root).as_posix(): path.read_bytes()
+                for path in root.rglob("*")
+                if path.is_file() and not path.name.startswith(".")
+            }
+
+        rng = random.Random(20261024)
+        for case in range(25):
+            project = random_project(rng)
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                first, second, rebuilt = Path(tmp, "first"), Path(tmp, "second"), Path(tmp, "rebuilt")
+                export_project(project, first)
+
+                # With the saved project, the import keeps every grading and the
+                # case is written again byte for byte.
+                imported = import_case(first)
+                kinds = {block.axes[axis].kind for block in imported.project.blocks for axis in "xyz"}
+                self.assertNotIn("explicit", kinds)
+                export_project(imported.project, second)
+                self.assertEqual(written(first), written(second))
+
+                # From blocks.nml and the grid files alone, every grid is kept.
+                (first / "snac_grid_project.json").unlink()
+                (first / ".snac_grid_generator_manifest.json").unlink()
+                export_project(import_case(first).project, rebuilt)
+                dtype = "<f4" if project.external_grid_precision == "single" else "<f8"
+                for path in sorted((first / "grid").glob("*.bin")):
+                    original = np.fromfile(path, dtype=dtype).astype(float)
+                    again = np.fromfile(rebuilt / "grid" / path.name, dtype=dtype).astype(float)
+                    tolerance = 4 * np.finfo(dtype).eps * max(1.0, float(np.abs(original).max()))
+                    np.testing.assert_allclose(again, original, rtol=0, atol=tolerance, err_msg=path.name)
+                self.assertEqual(
+                    (first / "data" / "geometry_b_001.out").read_bytes(),
+                    (rebuilt / "data" / "geometry_b_001.out").read_bytes(),
+                )
+
+    def test_import_replaces_a_saved_grading_that_no_longer_matches_its_grid_file(self) -> None:
+        def single_block(ratio):
+            return Project.from_dict(
+                {"blocks": [{"id": 1, "ng": [8, 4, 2], "axes": {"x": {"kind": "monotone", "ratio": ratio}}}]}
+            )
+
+        with tempfile.TemporaryDirectory() as saved, tempfile.TemporaryDirectory() as other:
+            export_project(single_block(2.0), saved)
+            export_project(single_block(5.0), other)
+            # Someone replaced the grid file, for example with a later grid.
+            shutil.copy(Path(other) / "grid" / "grid_x_b_001.bin", Path(saved) / "grid" / "grid_x_b_001.bin")
+            imported = import_case(saved)
+
+        block = imported.project.blocks[0]
+        self.assertEqual(block.axes["x"].kind, "explicit")
+        np.testing.assert_allclose(self._x_faces(block), self._x_faces(single_block(5.0).blocks[0]), rtol=0, atol=1e-14)
+        self.assertTrue(any("differs from the saved grading" in warning for warning in imported.warnings))
+        self.assertEqual(block.axes["y"].kind, "native")
+
+    def test_block_previews_report_each_block_separately(self) -> None:
+        from snac_grid_generator.server import block_previews
+
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {"id": 1, "ng": [8, 4, 2], "axes": {"x": {"kind": "monotone", "ratio": 3.0}}},
+                    {"id": 2, "ng": [8, 4, 2], "lmin": [1, 0, 0], "lmax": [2, 1, 1],
+                     "axes": {"x": {"kind": "native", "gt": 4, "gr": 0.0}}},
+                ]
+            }
+        )
+        first, invalid, missing = block_previews(project, [1, 2, 9])
+        self.assertEqual(first["blockId"], 1)
+        np.testing.assert_allclose(first["axes"]["x"]["faces"], self._x_faces(project.blocks[0]))
+        self.assertAlmostEqual(first["axes"]["x"]["expansion"], 3.0)
+        self.assertIn("requires gr > 0", invalid["error"])
+        self.assertIn("does not exist", missing["error"])
+
+    @staticmethod
+    def _x_faces(block):
+        spec = block.axes["x"].to_dict()
+        return axis_grid_arrays(spec, block.lmin[0], block.lmax[0], block.ng[0]).faces[:-1]
+
+    def _gapped_id_project(self) -> Project:
+        """Three equal-size blocks with gaps in their IDs and distinct x gradings."""
+
+        project = Project.from_dict(
+            {
+                "name": "gapped-ids",
+                "blocks": [
+                    {
+                        "id": block_id,
+                        "ng": [8, 6, 2],
+                        "lmin": [float(index), 0.0, 0.0],
+                        "lmax": [float(index + 1), 1.0, 0.1],
+                        "axes": {"x": {"kind": "simple_ratio", "ratio": ratio}},
+                    }
+                    for index, (block_id, ratio) in enumerate(((1, 2.0), (3, 1.0), (7, 0.25)))
+                ],
+            }
+        )
+        project, _ = update_project_structure(project)
+        return project
+
+    def test_export_renumbers_the_saved_project_with_the_case(self) -> None:
+        project = self._gapped_id_project()
+        expected = {
+            new_id: axis_grid_arrays(
+                block.axes["x"].to_dict(), block.lmin[0], block.lmax[0], block.ng[0]
+            ).faces[:-1]
+            for new_id, block in enumerate(project.blocks, start=1)
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            result = export_project(project, tmp)
+            self.assertTrue(any("written as [2, 3]" in warning for warning in result.warnings))
+            saved = json.loads((Path(tmp) / "snac_grid_project.json").read_text())
+            self.assertEqual([block["id"] for block in saved["blocks"]], [1, 2, 3])
+            self.assertEqual(saved["blocks"][1]["cbcpre"][:2], ["F", "F"])
+            self.assertEqual(saved["blocks"][1]["bcpre"][:2], [1.0, 3.0])
+
+            imported = import_case(tmp)
+            self.assertEqual(imported.warnings, [])
+            self.assertEqual([block.id for block in imported.project.blocks], [1, 2, 3])
+            for block in imported.project.blocks:
+                # Each block's own grading matched its grid file, so it was kept.
+                self.assertEqual(block.axes["x"].kind, "monotone")
+                np.testing.assert_allclose(self._x_faces(block), expected[block.id], rtol=0, atol=1e-14)
+
+    def test_import_matches_legacy_gapped_project_ids_to_grid_files(self) -> None:
+        project = self._gapped_id_project()
+        with tempfile.TemporaryDirectory() as tmp:
+            export_project(project, tmp)
+            # Recreate what older exports wrote: the original, gapped IDs in the
+            # project JSON next to grid files numbered 1..N.
+            (Path(tmp) / "snac_grid_project.json").write_text(json.dumps(project.to_dict()))
+            imported = import_case(tmp)
+
+        self.assertEqual([block.id for block in imported.project.blocks], [1, 3, 7])
+        self.assertTrue(any("matched to blocks in ID order" in warning for warning in imported.warnings))
+        for block in imported.project.blocks:
+            original = next(item for item in project.blocks if item.id == block.id)
+            # A file matched to the wrong block would not reproduce its grading.
+            self.assertEqual(block.axes["x"].kind, "monotone")
+            np.testing.assert_allclose(self._x_faces(block), self._x_faces(original), rtol=0, atol=1e-14)
 
     def test_explicit_grids_require_external_grid_writing(self) -> None:
         project = Project.from_dict(
@@ -918,10 +1144,87 @@ class GridGeneratorTests(unittest.TestCase):
 
     def test_project_json_has_an_explicit_schema_version(self) -> None:
         project = Project.from_dict({"blocks": []})
-        self.assertEqual(project.to_dict()["schemaVersion"], 2)
+        self.assertEqual(project.to_dict()["schemaVersion"], PROJECT_SCHEMA_VERSION)
         self.assertEqual(project.decomposition.min_local_cells, 4)
+        self.assertIsNone(project.to_dict()["fftAxis"])
         with self.assertRaisesRegex(ValueError, "schema version"):
-            Project.from_dict({"schemaVersion": 3, "blocks": []})
+            Project.from_dict({"schemaVersion": PROJECT_SCHEMA_VERSION + 1, "blocks": []})
+        version_two = Project.from_dict({"schemaVersion": 2, "blocks": []})
+        self.assertIsNone(version_two.fft_axis)
+        self.assertEqual(Project.from_dict({"fftAxis": "Z", "blocks": []}).fft_axis, "z")
+        with self.assertRaisesRegex(ValueError, "FFT axis"):
+            Project.from_dict({"fftAxis": "w", "blocks": []})
+        # SNaC's FFT_AXIS build values are accepted as well.
+        for value, axis in ((0, None), (1, "x"), ("2", "y"), (3, "z")):
+            self.assertEqual(Project.from_dict({"fftAxis": value, "blocks": []}).fft_axis, axis)
+
+    def test_legacy_axis_names_load_as_canonical_names(self) -> None:
+        from snac_grid_generator.migrations import migrate_project_dict
+
+        legacy_axes = {
+            "x": {"kind": "simple_ratio", "controls": ["n", "width_start"], "width_start": 0.01, "cell_ratio": 1.1},
+            "y": {"kind": "max_min", "side": "both", "min": 0.02, "max": 0.08},
+            "z": {"kind": "snac", "gt": 1, "gr": 2.0},
+        }
+        canonical_axes = {
+            "x": {"kind": "monotone", "controls": ["n", "widthStart"], "widthStart": 0.01, "cellRatio": 1.1},
+            "y": {"kind": "symmetric", "side": "both", "min": 0.02, "max": 0.08},
+            "z": {"kind": "native", "gt": 1, "gr": 2.0},
+        }
+
+        def project(axes, version):
+            return {"schemaVersion": version, "blocks": [{"id": 1, "ng": [16, 16, 8], "axes": axes}]}
+
+        migrated = migrate_project_dict(project(legacy_axes, 3))
+        self.assertEqual(migrated["blocks"][0]["axes"], canonical_axes)
+
+        legacy = Project.from_dict(project(legacy_axes, 3))
+        canonical = Project.from_dict(project(canonical_axes, PROJECT_SCHEMA_VERSION))
+        self.assertEqual(legacy.to_dict(), canonical.to_dict())
+        saved = canonical.to_dict()["blocks"][0]["axes"]
+        self.assertEqual([saved[axis]["kind"] for axis in "xyz"], ["monotone", "symmetric", "native"])
+        self.assertEqual(saved["x"]["controls"], ["n", "widthStart"])
+        self.assertTrue({"cellRatio", "widthStart", "widthEnd"} <= set(saved["x"]))
+        self.assertFalse({"cell_ratio", "width_start", "width_end"} & set(saved["x"]))
+
+        # The dictionary API accepts both spellings and builds the same grids.
+        for axis in "xyz":
+            with self.subTest(axis=axis):
+                np.testing.assert_array_equal(
+                    axis_grid_arrays(legacy_axes[axis], 0.0, 1.0, 16).faces,
+                    axis_grid_arrays(canonical_axes[axis], 0.0, 1.0, 16).faces,
+                )
+
+    def test_mirroring_reverses_monotone_grids_for_every_control_pair(self) -> None:
+        pairs = [
+            ("n", "ratio"), ("n", "cellRatio"), ("n", "widthStart"), ("n", "widthEnd"),
+            ("ratio", "widthStart"), ("cellRatio", "widthEnd"), ("widthStart", "widthEnd"),
+        ]
+        for profile in ("geometric", "tanh"):
+            for pair in pairs:
+                if profile != "geometric" and "cellRatio" in pair:
+                    continue
+                with self.subTest(profile=profile, controls=pair):
+                    axis = {
+                        "kind": "monotone",
+                        "profile": profile,
+                        "controls": list(pair),
+                        "ratio": 6.0,
+                        "cellRatio": 1.1,
+                        "widthStart": 0.01,
+                        "widthEnd": 0.12,
+                    }
+                    block = {"id": 1, "ng": [16, 4, 2], "lmin": [0, 0, 0], "lmax": [1, 1, 1], "axes": {"x": axis}}
+                    project = Project.from_dict({"blocks": [block]})
+                    mirrored, _ = mirror_blocks(project, [1], "x", 0.0)
+                    original, copy = mirrored.blocks
+
+                    def widths(block):
+                        spec = block.axes["x"].to_dict()
+                        return np.diff(axis_grid_arrays(spec, block.lmin[0], block.lmax[0], block.ng[0]).faces[:-1])
+
+                    self.assertEqual(copy.ng[0], original.ng[0])
+                    np.testing.assert_allclose(widths(copy), widths(original)[::-1], rtol=1e-9)
 
     def test_project_json_preserves_decomposition_and_axis_locks(self) -> None:
         project = Project.from_dict(
@@ -944,6 +1247,47 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertEqual(saved["decomposition"]["maxLocalAspect"], 8.0)
         self.assertEqual(saved["blocks"][0]["axisLocks"], [False, True, False])
         self.assertEqual(Project.from_dict(saved).to_dict(), saved)
+
+    def test_export_readiness_check_infers_friends_without_changing_the_project(self) -> None:
+        data = {
+            "blocks": [
+                {"id": 1, "ng": [4, 4, 2], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                {"id": 2, "ng": [4, 4, 2], "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+            ]
+        }
+        project = Project.from_dict(data)
+        before = project.to_dict()
+
+        self.assertFalse(check_project(project).ok)
+        prepared, result = check_export_readiness(project)
+
+        self.assertTrue(result.ok, result.errors)
+        self.assertEqual(project.to_dict(), before)
+        self.assertEqual(prepared.blocks[0].cbcpre[1], "F")
+        self.assertEqual(project.blocks[0].cbcpre[1], "N")
+
+        manual = Project.from_dict({**data, "inferConnectivity": False})
+        self.assertFalse(check_export_readiness(manual)[1].ok)
+
+    def test_export_readiness_reports_every_error_when_blocks_overlap(self) -> None:
+        project = Project.from_dict(
+            {
+                "blocks": [
+                    {
+                        "id": 1,
+                        "lmin": [0, 0, 0],
+                        "lmax": [1, 1, 1],
+                        "inivel": "bogus",
+                        "axes": {"x": {"kind": "snac", "gt": 4, "gr": 0}},
+                    },
+                    {"id": 2, "lmin": [0.5, 0, 0], "lmax": [1.5, 1, 1]},
+                ]
+            }
+        )
+        codes = {item.code for item in check_export_readiness(project)[1].diagnostics}
+        self.assertTrue({"block_overlap", "invalid_grid", "initial_velocity"} <= codes, codes)
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(ValueError, "overlap.*initial velocity"):
+            export_project(project, tmp)
 
     def test_check_rejects_disconnected_blocks(self) -> None:
         project = Project.from_dict(
@@ -975,6 +1319,53 @@ class GridGeneratorTests(unittest.TestCase):
             diagnostic["locations"],
             [{"blockId": 1, "face": "x+"}, {"blockId": 2, "face": "x-"}],
         )
+
+    def test_diagnostics_are_located_where_they_are_created(self) -> None:
+        def located(result, code: str) -> list[dict]:
+            return [item for item in result.to_dict()["diagnostics"] if item["code"] == code]
+
+        unmarked = Project.from_dict(
+            {
+                "inferConnectivity": False,
+                "blocks": [
+                    {"id": 1, "ng": [4, 4, 2], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "ng": [4, 4, 2], "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+                ],
+            }
+        )
+        friend = located(check_project(unmarked), "friend_boundary")[0]
+        self.assertEqual(friend["axis"], "x")
+        self.assertEqual(friend["locations"], [{"blockId": 1, "face": "x+"}, {"blockId": 2, "face": "x-"}])
+
+        partial = Project.from_dict(
+            {
+                "blocks": [
+                    {"id": 1, "ng": [4, 4, 2], "lmin": [0, 0, 0], "lmax": [1, 1, 1]},
+                    {"id": 2, "ng": [4, 4, 2], "lmin": [1, 0.5, 0], "lmax": [2, 1.5, 1]},
+                ]
+            }
+        )
+        contact = located(check_project(partial), "partial_face_contact")[0]
+        self.assertEqual(contact["locations"], [{"blockId": 1, "face": "x+"}, {"blockId": 2, "face": "x-"}])
+
+        stretched_axis = {"z": {"kind": "simple_ratio", "ratio": 3}}
+        stretched_block = {"id": 1, "ng": [4, 4, 8], "axes": stretched_axis}
+        stretched_fft = Project.from_dict({"fftAxis": "z", "blocks": [stretched_block]})
+        fft = located(check_project(stretched_fft), "fft_axis")[0]
+        self.assertEqual((fft["axis"], fft["locations"]), ("z", [{"blockId": 1}]))
+
+        bad_pair = Project.from_dict(
+            {"inferConnectivity": False, "blocks": [{"id": 1, "cbcpre": ["D", "D", "N", "N", "N", "N"]}]}
+        )
+        boundary = located(check_project(bad_pair), "boundary_condition")[0]
+        self.assertEqual(boundary["locations"], [{"blockId": 1, "face": "x-"}, {"blockId": 1, "face": "x+"}])
+
+        # Messages are views of the diagnostics, so the two never disagree.
+        result = check_project(unmarked)
+        error_messages = [item.message for item in result.diagnostics if item.severity == "error"]
+        self.assertEqual(list(result.errors), error_messages)
+        with self.assertRaises(AttributeError):
+            result.errors.append("not allowed")
 
     def test_export_removes_stale_owned_grids_and_preserves_other_files(self) -> None:
         project = Project.from_dict({"name": "managed", "blocks": [{"id": 1, "ng": [4, 4, 4]}]})
@@ -1174,6 +1565,18 @@ class GridGeneratorTests(unittest.TestCase):
         )
         self.assertTrue(any("mapping function 99" in error for error in check_project(bad_mapping).errors))
 
+        # initgrid's geometric functions divide by gr, so gr = 0 is NaN in SNaC.
+        for gt, uniform_gr in ((4, 1.0), (5, 1.0), (6, 2.0), (7, 2.0)):
+            with self.subTest(gt=gt):
+                zero_growth = Project.from_dict(
+                    {"blocks": [{"id": 1, "ng": [8, 2, 2], "axes": {"x": {"kind": "snac", "gt": gt, "gr": 0.0}}}]}
+                )
+                self.assertTrue(
+                    any("requires gr > 0" in error for error in check_project(zero_growth).errors)
+                )
+                faces = axis_grid_arrays({"kind": "snac", "gt": gt, "gr": uniform_gr}, 0.0, 1.0, 8).faces[:-1]
+                np.testing.assert_allclose(faces, np.linspace(0.0, 1.0, 9), rtol=0, atol=1e-15)
+
         bad_initialization = Project.from_dict({"blocks": [{"id": 1, "inivel": "unknown"}]})
         self.assertTrue(
             any("initial velocity field" in error for error in check_project(bad_initialization).errors)
@@ -1181,6 +1584,65 @@ class GridGeneratorTests(unittest.TestCase):
         for field in ("kov", "pdc"):
             with self.subTest(field=field):
                 self.assertTrue(check_project(Project.from_dict({"blocks": [{"id": 1, "inivel": field}]})).ok)
+
+    def test_fft_axis_requires_a_uniform_unsplit_matching_grid(self) -> None:
+        def fft_project(**block_overrides) -> Project:
+            block = {"id": 1, "ng": [8, 8, 16], "lmin": [0, 0, 0], "lmax": [1, 1, 2]}
+            block.update(block_overrides)
+            project = Project.from_dict({"fftAxis": "z", "periodicAxes": [False, False, True], "blocks": [block]})
+            return update_project_structure(project)[0]
+
+        def fft_errors(project: Project) -> list[str]:
+            return [error for error in check_project(project).errors if "FFT axis" in error]
+
+        self.assertEqual(fft_errors(fft_project()), [])
+        self.assertEqual(
+            fft_errors(fft_project(axes={"z": {"kind": "simple_ratio", "ratio": 1.0}})), []
+        )
+
+        # The original defect: a stretched non-native grid is written with gr = 0,
+        # so SNaC's own gr check cannot see the stretching.
+        stretched = fft_project(axes={"z": {"kind": "simple_ratio", "ratio": 8.0}})
+        self.assertTrue(any("must be uniform" in error for error in fft_errors(stretched)))
+        for native in ({"gt": 0, "gr": 0.5}, {"gt": 4, "gr": 1.0}):
+            with self.subTest(native=native):
+                errors = fft_errors(fft_project(axes={"z": {"kind": "snac", **native}}))
+                self.assertTrue(any("mapping function 0 to 3 with gr = 0" in error for error in errors))
+
+        self.assertTrue(
+            any("no MPI partitions" in error for error in fft_errors(fft_project(dims=[1, 1, 2])))
+        )
+
+        mismatched = Project.from_dict(
+            {
+                "fftAxis": "z",
+                "blocks": [
+                    {"id": 1, "ng": [8, 8, 16], "lmin": [0, 0, 0], "lmax": [1, 1, 2]},
+                    {"id": 2, "ng": [8, 8, 16], "lmin": [1, 0, 0], "lmax": [2, 1, 1]},
+                ],
+            }
+        )
+        self.assertTrue(any("differ from block 1" in error for error in fft_errors(mismatched)))
+
+        # The FFT axis is never a partition axis, even if a file says otherwise.
+        for axes, expected in (([True, True, True], [True, True, False]), ([False, False, True], [True, True, False])):
+            loaded = Project.from_dict({"fftAxis": "z", "decomposition": {"axes": axes}, "blocks": []})
+            self.assertEqual(loaded.decomposition.axes, expected)
+
+        balanced = Project.from_dict(
+            {
+                "fftAxis": "z",
+                "decomposition": {"targetRanks": 4},
+                "blocks": [{"id": 1, "ng": [16, 16, 64], "lmin": [0, 0, 0], "lmax": [1, 1, 4]}],
+            }
+        )
+        balanced, result = optimize_project_decomposition(balanced)
+        self.assertTrue(result.ok, result.errors)
+        self.assertEqual(balanced.blocks[0].dims[2], 1)
+        self.assertEqual(balanced.blocks[0].dims[0] * balanced.blocks[0].dims[1], 4)
+
+        with tempfile.TemporaryDirectory() as tmp, self.assertRaisesRegex(ValueError, "must be uniform"):
+            export_project(stretched, tmp)
 
     def test_check_rejects_inflow_on_a_periodic_axis(self) -> None:
         project = Project.from_dict(
@@ -1254,11 +1716,25 @@ class GridGeneratorTests(unittest.TestCase):
         )
         repaired, result = repair_project_grids(project, source_block_id=1)
         self.assertTrue(result.ok, result.errors)
-        self.assertEqual([change.to_dict() for change in result.changes], [
+        changes = [change.to_dict() for change in result.changes]
+        summary = ("blockId", "axis", "sourceBlockId", "oldN", "newN")
+        self.assertEqual([{key: change[key] for key in summary} for change in changes], [
             {"blockId": 2, "axis": "y", "sourceBlockId": 1, "oldN": 9, "newN": 17}
         ])
+        self.assertEqual((changes[0]["oldAxis"]["kind"], changes[0]["newAxis"]["kind"]), ("native", "monotone"))
         self.assertEqual(repaired.blocks[1].ng, [20, 17, 8])
         self.assertEqual(repaired.blocks[1].axes["y"].ratio, 3.0)
+
+        # The disagreeing grids are reported, and either one can be kept.
+        (choice,) = [item.to_dict() for item in result.choices]
+        self.assertEqual((choice["axis"], choice["blockIds"], choice["sourceBlockId"]), ("y", [1, 2], 1))
+        self.assertEqual([candidate["blockIds"] for candidate in choice["candidates"]], [[1], [2]])
+        self.assertEqual([candidate["cells"] for candidate in choice["candidates"]], [17, 9])
+        kept_two, result = repair_project_grids(project, source_block_id=1, sources={"y": [2]})
+        self.assertTrue(result.ok, result.errors)
+        self.assertEqual(kept_two.blocks[0].ng, [12, 9, 8])
+        self.assertEqual(kept_two.blocks[0].axes["y"].kind, "native")
+        self.assertEqual(result.choices[0].source_block_id, 2)
 
     def test_repair_respects_locks_and_rejects_locked_conflicts(self) -> None:
         raw = {
@@ -1315,8 +1791,8 @@ class GridGeneratorTests(unittest.TestCase):
         self.assertEqual(len(changes), 1)
         self.assertEqual((changes[0].block_id, changes[0].face, changes[0].source_block_id), (2, "x-", 1))
         self.assertAlmostEqual(changes[0].new_spacing, 0.125)
-        self.assertEqual(repaired.blocks[1].axes["x"].kind, "simple_ratio")
-        self.assertEqual(repaired.blocks[1].axes["x"].controls, ["n", "width_start"])
+        self.assertEqual(repaired.blocks[1].axes["x"].kind, "monotone")
+        self.assertEqual(repaired.blocks[1].axes["x"].controls, ["n", "widthStart"])
         self.assertTrue(repaired.write_external_grid)
         self.assertFalse(any("interface spacing jumps" in warning for warning in check_project(repaired).warnings))
 
@@ -1341,7 +1817,7 @@ class GridGeneratorTests(unittest.TestCase):
         change = next(change for change in result.changes if change.kind == "spacing")
         self.assertEqual((change.block_id, change.face, change.source_block_id), (1, "x+", 2))
         self.assertEqual(repaired.blocks[0].axes["x"].kind, "explicit")
-        self.assertEqual(repaired.blocks[1].axes["x"].kind, "simple_ratio")
+        self.assertEqual(repaired.blocks[1].axes["x"].kind, "monotone")
 
     def test_repair_rejects_a_normal_jump_between_locked_grids(self) -> None:
         project = Project.from_dict(
@@ -1773,7 +2249,7 @@ class GridGeneratorTests(unittest.TestCase):
                     0,
                 )
             migrated = json.loads(migrated_path.read_text(encoding="utf-8"))
-            self.assertEqual(migrated["schemaVersion"], 2)
+            self.assertEqual(migrated["schemaVersion"], PROJECT_SCHEMA_VERSION)
 
     def test_grid_quality_reports_exact_block_and_interface_metrics(self) -> None:
         project = Project.from_dict(

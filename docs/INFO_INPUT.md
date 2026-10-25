@@ -115,7 +115,7 @@ block_inivel(1) = 'zer'
 
 `block_lmin` and `block_lmax` are the physical lower and upper corners of the block.
 
-`block_gt` selects the SNaC mapping function used by `initgrid.f90`; `block_gr` is the corresponding stretching parameter. `gr = 0` gives a uniform grid. Supported mapping-function IDs are:
+`block_gt` selects the SNaC mapping function used by `initgrid.f90`; `block_gr` is the corresponding stretching parameter. For the tanh functions `0` to `3`, `gr = 0` gives a uniform grid. The geometric functions `4` to `7` divide by `gr`, so SNaC requires `gr > 0` for them unless that axis is read from a grid file (see below); `gr = 1` gives a uniform grid for `4` and `5`, and `gr = 2` for `6` and `7`. Supported mapping-function IDs are:
 
 * `0`: tanh clustering at both lower and upper block faces.
 * `1`: tanh clustering at the lower block face.
@@ -146,7 +146,7 @@ If scalars are enabled, `block_cbcscal(0:1,1:3,is,iblock)` and `block_bcscal(0:1
 
 ## External Axis Grids
 
-After building the regular `block_gt/block_gr` grid, SNaC checks for optional binary axis grids in `grid/`. For block 1, the recognized files are:
+For each axis, SNaC first checks for an optional binary axis grid in `grid/`; an axis without one is built from `block_gt/block_gr`. For block 1, the recognized files are:
 
 ```text
 grid/grid_x_b_001.bin
@@ -159,6 +159,8 @@ When one of these files exists, SNaC loads that axis from disk. The binary layou
 The binary real precision must match the SNaC build. Use double-precision grid files for the default build and single-precision files when compiling with `SINGLE_PRECISION=1`.
 
 The GUI in `utils/grid_generator` writes `blocks.nml` and these optional grid files. This lets a block mix SNaC-native mapping functions on some axes with generated multi-grading on others.
+
+In an FFT-accelerated build, SNaC checks the spacing it actually uses along the FFT direction after loading these files, and stops if a grid file makes that direction non-uniform. The `block_gr = 0` check alone cannot see stretching that comes from a grid file.
 
 ## Connectivity
 
