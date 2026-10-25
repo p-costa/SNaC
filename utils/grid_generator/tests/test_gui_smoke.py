@@ -898,6 +898,104 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
         self.assertEqual(errors, [])
         context.close()
 
+    def test_viewport_drags_move_one_face_copy_and_snap(self) -> None:
+        context = self.browser.new_context(viewport={"width": 1440, "height": 900})
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        blocks = [
+            {"id": 1, "name": "left", "ng": [16, 16, 2], "lmin": [0, 0, 0], "lmax": [1, 1, 0.1]},
+            {"id": 2, "name": "right", "ng": [32, 16, 2], "lmin": [1, 0, 0], "lmax": [3, 1, 0.1]},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "drag.json"
+            path.write_text(json.dumps({"name": "drag", "blocks": blocks}), encoding="utf-8")
+            page.goto(self.url, wait_until="load")
+            page.wait_for_selector(".block-item")
+            page.locator("#open-json").set_input_files(str(path))
+            self.expect(page.locator("#status")).to_contain_text("Loaded")
+
+        # Frame block 1 alone, seen along z, so the gizmo sits at the canvas centre
+        # with x to the right; the other block is shown again without reframing.
+        page.locator(".block-item .block-main").first.click()
+        page.locator("#isolate-selected").click()
+        page.locator('[data-axis-view="+z"]').click()
+        page.locator("#show-all-blocks").click()
+        box = page.locator("#scene").bounding_box()
+        center_x = box["x"] + box["width"] / 2
+        center_y = box["y"] + box["height"] / 2
+        # Gizmo handles scale with the canvas height: resize handles sit about 0.1
+        # heights from the centre, and the move arrows can be grabbed within 0.12.
+        resize_handle = 0.09 * box["height"]
+        move_handle = 0.07 * box["height"]
+
+        def x_bounds() -> tuple[float, float]:
+            return tuple(
+                float(page.locator(f'#geometry-grid input[data-field="{field}"][data-index="0"]').input_value())
+                for field in ("lmin", "lmax")
+            )
+
+        def drag(start: float, distance: float, keys=(), press_midway=None):
+            page.mouse.move(center_x + start, center_y)
+            for key in keys:
+                page.keyboard.down(key)
+            page.mouse.down()
+            page.mouse.move(center_x + start + distance / 2, center_y, steps=4)
+            if press_midway:
+                page.keyboard.down(press_midway)
+            page.mouse.move(center_x + start + distance, center_y, steps=4)
+            snapped = page.locator("#scene").get_attribute("data-snap-faces")
+            page.mouse.up()
+            for key in (*keys, *([press_midway] if press_midway else [])):
+                page.keyboard.up(key)
+            return x_bounds(), snapped
+
+        def undo() -> None:
+            page.locator("#undo-project").click()
+            self.expect(page.locator('#geometry-grid input[data-field="lmax"][data-index="0"]')).to_have_value("1")
+
+        page.locator("#tool-scale").click()
+        # A resize handle moves its own face with the pointer, in steps of the
+        # largest power of ten below a pixel (0.001 at this zoom).
+        (lower, upper), _ = drag(resize_handle, 60)
+        self.assertEqual(lower, 0)
+        self.assertGreater(upper, 1)
+        self.assertEqual(upper, round(upper, 3))
+        growth = upper - 1
+        undo()
+        (lower, upper), _ = drag(-resize_handle, -60)
+        self.assertAlmostEqual(lower, -growth, places=6)
+        self.assertEqual(upper, 1)
+        undo()
+        # Alt moves both faces, also when pressed during the drag.
+        for keys, midway in (("Alt",), None), ((), "Alt"):
+            (lower, upper), _ = drag(resize_handle, 60, keys=keys, press_midway=midway)
+            self.assertAlmostEqual(lower, -growth, places=6)
+            self.assertAlmostEqual(upper, 1 + growth, places=6)
+            undo()
+        # Shift snaps the face to the neighbour within 10 pixels.
+        (lower, upper), _ = drag(resize_handle, 5)
+        self.assertGreater(upper, 1)
+        undo()
+        (lower, upper), snapped = drag(resize_handle, 5, keys=("Shift",))
+        self.assertEqual((lower, upper, snapped), (0, 1, "x=1"))
+
+        # Alt-dragging with the move tool leaves the block and moves a copy,
+        # which Shift snaps onto the face it shares with both blocks.
+        page.locator("#tool-move").click()
+        (lower, upper), snapped = drag(move_handle, 60 / growth + 4, keys=("Alt", "Shift"))
+        self.assertEqual(snapped, "x=1")
+        self.expect(page.locator(".block-item")).to_have_count(3)
+        self.expect(page.locator("#status")).to_contain_text("Duplicated 1: left as 3: block-3")
+        self.expect(page.locator("#block-title")).to_have_text("3: block-3")
+        self.assertEqual(x_bounds(), (1, 2))
+        self.expect(page.locator(".block-item").first).to_contain_text("0, 0, 0 -> 1, 1, 0.1")
+        page.locator("#undo-project").click()
+        self.expect(page.locator(".block-item")).to_have_count(2)
+        self.assertEqual(errors, [])
+        context.close()
+
     def _download_project(self, page) -> dict:
         with page.expect_download() as download_info:
             page.locator("#download-json").click()

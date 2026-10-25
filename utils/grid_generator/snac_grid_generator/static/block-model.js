@@ -151,6 +151,16 @@ export function resetFriendBoundaries(block, nscal) {
   block.bcscal = Array.from({ length: normalizedScalarCount(nscal) }, () => [0, 0, 0, 0, 0, 0]);
 }
 
+// A copy of a block under the next free ID, with unlocked axes and default boundaries.
+export function copyBlock(source, blocks, nscal) {
+  const copy = structuredClone(source);
+  copy.id = nextBlockId(blocks);
+  copy.name = `block-${copy.id}`;
+  copy.axisLocks = [false, false, false];
+  resetFriendBoundaries(copy, nscal);
+  return copy;
+}
+
 export function renumberBlocksByOrder(blocks) {
   const idMap = new Map(blocks.map((block, index) => [block.id, index + 1]));
   for (const block of blocks) {
