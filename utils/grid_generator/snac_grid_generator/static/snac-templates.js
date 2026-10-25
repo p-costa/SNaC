@@ -1,4 +1,4 @@
-import { DEFAULT_MIN_LOCAL_CELLS, defaultBlock } from "./block-model.js";
+import { DEFAULT_MIN_LOCAL_CELLS, DEFAULT_NG_TOLERANCE, defaultBlock } from "./block-model.js";
 
 export function builtInAxisPresets() {
   return [
@@ -65,7 +65,7 @@ export function emptyProject() {
 
 function projectDefaults(name, blocks) {
   return {
-    schemaVersion: 3,
+    schemaVersion: 5,
     name,
     nscal: 0,
     periodicAxes: [false, false, false],
@@ -75,6 +75,7 @@ function projectDefaults(name, blocks) {
       axes: [true, true, true],
       minLocalCells: DEFAULT_MIN_LOCAL_CELLS,
       maxLocalAspect: 0,
+      ngTolerance: DEFAULT_NG_TOLERANCE,
     },
     inferConnectivity: true,
     writeExternalGrid: true,

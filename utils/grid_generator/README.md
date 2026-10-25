@@ -17,6 +17,8 @@ model. It includes:
 - previewed grid-congruence repair with per-axis authority locks;
 - existing-case import from `blocks.nml`, project JSON, and binary grids;
 - exact-rank MPI decomposition balancing in automatic, 1D, 2D, or 3D mode;
+- proposed cell-count changes, within a set tolerance, that balance a rank
+  count better;
 - FFT-axis checks that match SNaC's `FFT_AXIS` build option;
 - array, mirror, align, and face-snap tools for multi-block selections;
 - common SNaC velocity/pressure boundary presets;
@@ -140,6 +142,41 @@ offered as buttons that can be balanced immediately. When the exact solution
 balances poorly, because interface constraints leave few choices, nearby totals
 that balance clearly better are offered the same way. Setting the target to zero
 disables this additional export check.
+
+Balance never changes cell counts by itself, but it can propose changes that
+balance the requested rank count better. `Max cell-count change %` (project
+setting `ngTolerance`, default 10%) bounds the relative change of each cell
+count; zero turns the proposals off. Blocks that share an axis grid keep sharing
+one count, and every proposal keeps block extents and grading types, passes the
+project check, adds no interface-spacing warning, and keeps boundary cell widths
+close to what a uniform refinement would give. Counts that the grading derives
+(explicit faces, min/max spacing, and monotone grading without `n`), locked
+axes, and the FFT axis stay fixed; the panel lists them with the reason.
+
+The proposals are the trade-off between the largest change and the load
+imbalance: walking by increasing change, each one removes at least a quarter of
+the remaining excess load, and the best balance within the tolerance is always
+listed. A proposal changes as few counts as it can, giving up at most 0.5% of its
+imbalance and a tenth of its remaining excess load to do so. Each shows its
+imbalance, whether every split divides its cells exactly, the changed counts,
+and the change in total cells. `Apply` sets those counts and the matching
+partitions.
+
+Blocks remember their counts from before the first applied proposal
+(`ngOriginal`, with the applied counts in `ngBalanced`), and later proposals
+measure the tolerance from those original counts, so applying proposals for
+several rank counts never drifts further than the tolerance. Editing a count by
+hand makes it the original for that axis. For a backward-facing step (inlet 32x24x32,
+upper and lower 96x24x32, FFT along z) on 9 ranks, the exact decomposition has a
+load imbalance of 1.29; changes of at most 4.2%, 6.3%, 8.3%, and 9.4% reach 1.16,
+1.11, 1.07, and 1.06.
+
+For fixed partitions, only the largest cell count with a given local extent
+`ceil(n/d)` can balance best, so each shared axis grid has few candidate counts.
+The search collects the partition sets whose best case could beat the unchanged
+balance, then runs a branch and bound over those counts for each; a randomized
+test checks it against brute force. Large projects stop at a time limit and say
+that better changes may exist.
 
 The Grid quality panel is populated by `Check` and `Update`. It reports total
 cells and ranks, the exact minimum and maximum local cell counts under SNaC's
@@ -359,10 +396,14 @@ python3 -m snac_grid_generator.cli check project.json --json
 python3 -m snac_grid_generator.cli update project.json -o updated.json
 python3 -m snac_grid_generator.cli repair project.json -o repaired.json
 python3 -m snac_grid_generator.cli decompose project.json -o decomposed.json
+python3 -m snac_grid_generator.cli decompose project.json --ng-tolerance 0.05 --apply-alternative 1 -o balanced.json
 python3 -m snac_grid_generator.cli migrate old-project.json -o project.json
 python3 -m snac_grid_generator.cli report project.json --format json -o grid-report.json
 python3 -m snac_grid_generator.cli report project.json --format markdown -o grid-report.md
 ```
+
+`decompose` lists the cell-count proposals; `--apply-alternative K` applies the
+K-th, and `--ng-tolerance` overrides the project's tolerance.
 
 Without `-o`, `report` writes the selected representation to standard output.
 It still writes a report for an invalid project and returns a nonzero status,

@@ -1,5 +1,6 @@
 """Interactive multi-block grid generation helpers for SNaC."""
 
+from .balance import apply_balance_alternative
 from .case_import import ImportResult, import_case
 from .diagnostics import Diagnostic, DiagnosticLocation
 from .export import export_project
@@ -7,6 +8,7 @@ from .decomposition import (
     MIN_LOCAL_CELLS,
     BlockDecomposition,
     DecompositionResult,
+    describe_project_decomposition,
     optimize_project_decomposition,
 )
 from .geometry import (
@@ -95,11 +97,13 @@ __all__ = [
     "align_blocks",
     "analyze_grid_quality",
     "apply_axis_to_aligned_blocks",
+    "apply_balance_alternative",
     "apply_bc_preset",
     "axis_grid_arrays",
     "axis_grid_diagnostics",
     "check_export_readiness",
     "check_project",
+    "describe_project_decomposition",
     "build_case_report",
     "duplicate_blocks",
     "export_project",

@@ -128,6 +128,9 @@
             <label class="field"><span>Min cells/split</span><input id="min-local-cells" type="number" value="4" min="1" step="1" /></label>
             <label class="field"><span>Max local aspect</span><input id="max-local-aspect" type="number" value="0" min="0" step="any" /></label>
           </div>
+          <label class="field" title="Balance also proposes cell-count changes up to this percentage per axis when they balance the ranks better. They are never applied without your choice; 0 turns them off.">
+            <span>Max cell-count change %</span><input id="ng-tolerance" type="number" value="10" min="0" max="50" step="any" />
+          </label>
           <button id="balance-decomposition" class="button"><i data-lucide="network"></i><span>Balance</span></button>
           <div id="decomposition-summary" class="decomposition-summary"></div>
         </div>

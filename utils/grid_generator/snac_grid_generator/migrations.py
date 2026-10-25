@@ -7,7 +7,7 @@ from typing import Any
 
 from .axis_format import canonical_axis
 
-PROJECT_SCHEMA_VERSION = 4
+PROJECT_SCHEMA_VERSION = 5
 
 
 def migrate_project_dict(data: dict[str, Any]) -> dict[str, Any]:
@@ -34,6 +34,9 @@ def migrate_project_dict(data: dict[str, Any]) -> dict[str, Any]:
                 for name, axis in list(axes.items()):
                     if isinstance(axis, dict):
                         axes[name] = canonical_axis(axis)
+        elif version == 4:
+            # Cell-count tolerance for balanced decompositions.
+            migrated.setdefault("decomposition", {}).setdefault("ngTolerance", 0.1)
         version += 1
 
     migrated["schemaVersion"] = PROJECT_SCHEMA_VERSION

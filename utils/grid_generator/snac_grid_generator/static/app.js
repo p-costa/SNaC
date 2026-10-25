@@ -56,7 +56,7 @@ import {
   showLibraryDialog,
 } from "./library-ui.js";
 import { scheduleGridPreviews, schedulePreview } from "./previews.js";
-import { renderCheckResults, renderDecompositionControls, renderDecompositionSummary } from "./results.js";
+import { renderCheckResults, renderDecompositionControls, renderDecompositionSummary, tolerancePercent } from "./results.js";
 import { builtInProjectTemplates } from "./snac-templates.js";
 import { els, state, ui } from "./state.js";
 import {
@@ -134,6 +134,7 @@ function bindElements() {
     "target-ranks",
     "min-local-cells",
     "max-local-aspect",
+    "ng-tolerance",
     "decomposition-mode",
     "decomposition-axes",
     "fft-axis",
@@ -328,7 +329,15 @@ function bindStaticEvents() {
       decompositionSettingEdited();
     },
   });
-  for (const input of [els.targetRanks, els.minLocalCells, els.maxLocalAspect]) {
+  bindNumberField(els.ngTolerance, {
+    valid: (value) => value >= 0 && value <= 50,
+    read: () => tolerancePercent(state.project.decomposition.ngTolerance),
+    write: (value) => {
+      state.project.decomposition.ngTolerance = value / 100;
+      decompositionSettingEdited();
+    },
+  });
+  for (const input of [els.targetRanks, els.minLocalCells, els.maxLocalAspect, els.ngTolerance]) {
     input.addEventListener("change", () => {
       clearCheckState();
       renderDecompositionSummary();

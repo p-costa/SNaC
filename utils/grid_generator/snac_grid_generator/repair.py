@@ -15,6 +15,7 @@ from .model import AxisSpec, Block, Project
 from .numeric import coordinates_close, geometry_tolerance
 from .topology import (
     FACE_INFO,
+    axis_components,
     FACE_ORDER,
     FaceConnection,
     axis_extent,
@@ -141,7 +142,7 @@ def repair_project_grids(
     selected = source_block_id if source_block_id in by_id else None
     preferred = {str(axis): [int(block_id) for block_id in ids] for axis, ids in (sources or {}).items()}
     for axis_index, axis in enumerate(AXIS_NAMES):
-        for component in _axis_components(project.blocks, topology.connections, axis_index):
+        for component in axis_components(project.blocks, topology.connections, axis_index):
             if len(component) < 2:
                 continue
             candidates = _distinct_grids(by_id, sorted(component), axis_index)
@@ -496,36 +497,6 @@ def _smooth_endpoint_match(
     repaired[-1] = upper
     repaired[1:-1] *= (length - lower - upper) / float(repaired[1:-1].sum())
     return repaired
-
-
-def _axis_components(
-    blocks: list[Block],
-    connections: list[FaceConnection],
-    axis_index: int,
-) -> list[set[int]]:
-    graph: dict[int, set[int]] = {block.id: set() for block in blocks}
-    for connection in connections:
-        if connection.axis_index == axis_index:
-            continue
-        graph[connection.a_id].add(connection.b_id)
-        graph[connection.b_id].add(connection.a_id)
-
-    result: list[set[int]] = []
-    unseen = set(graph)
-    while unseen:
-        seed = min(unseen)
-        component = {seed}
-        queue = [seed]
-        unseen.remove(seed)
-        while queue:
-            current = queue.pop(0)
-            for neighbor in graph[current]:
-                if neighbor in unseen:
-                    unseen.remove(neighbor)
-                    component.add(neighbor)
-                    queue.append(neighbor)
-        result.append(component)
-    return result
 
 
 def _same_axis_grid(a: Block, b: Block, axis_index: int) -> bool:

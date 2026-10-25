@@ -3,17 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import heapq
 from itertools import combinations
 from math import ceil, floor, gcd, log, prod
 from time import monotonic
 from typing import Any
 
+from .balance import MAX_PARTITION_SETS, BalancePoint, BalanceSearch, search_balance_alternatives
 from .diagnostics import error, warning
 from .grid import AXIS_NAMES
 from .model import DEFAULT_MIN_LOCAL_CELLS, Block, Project
-from .topology import FaceConnection, build_topology
+from .topology import FaceConnection, Topology, build_topology
 from .validation import (
     CheckResult,
+    check_project,
     connected_component_errors,
     copy_project,
 )
@@ -24,6 +27,8 @@ _COMMUNICATION_WEIGHT = 0.02
 _SPREAD_WEIGHT = 0.02
 # Above this load imbalance, nearby rank totals that balance clearly better are suggested.
 _SUGGEST_BETTER_ABOVE = 1.05
+# Relative slack when comparing imbalance bounds, against rounding.
+_BOUND_SLACK = 1.0e-12
 
 
 @dataclass(frozen=True)
@@ -72,6 +77,13 @@ class DecompositionResult(CheckResult):
     nearby_ranks: list[int] = field(default_factory=list)
     better_ranks: list[dict[str, float | int]] = field(default_factory=list)
     blocks: list[BlockDecomposition] = field(default_factory=list)
+    # Cell-count changes that balance better, by increasing change; see balance.py.
+    ng_tolerance: float = 0.0
+    alternatives: list[dict[str, Any]] = field(default_factory=list)
+    alternatives_optimal: bool = True
+    fixed_components: list[dict[str, Any]] = field(default_factory=list)
+    # Counts that earlier proposals changed; the tolerance is measured from these.
+    original_counts: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -92,6 +104,11 @@ class DecompositionResult(CheckResult):
             "nearbyRanks": self.nearby_ranks,
             "betterRanks": self.better_ranks,
             "blocks": [block.to_dict() for block in self.blocks],
+            "ngTolerance": self.ng_tolerance,
+            "alternatives": self.alternatives,
+            "alternativesOptimal": self.alternatives_optimal,
+            "fixedComponents": self.fixed_components,
+            "originalCounts": self.original_counts,
         }
 
 
@@ -112,6 +129,10 @@ class _SearchOutcome:
     score: tuple[float, float, float, int, float] | None = None
     nodes: int = 0
     truncated: bool = False
+    # Collect mode: (imbalance bound, dims per block), best bound first, and
+    # whether assignments that might have balanced well were left out.
+    collected: list[tuple[float, dict[int, tuple[int, int, int]]]] = field(default_factory=list)
+    dropped: bool = False
 
 
 def optimize_project_decomposition(
@@ -119,8 +140,15 @@ def optimize_project_decomposition(
     *,
     node_limit: int = 500_000,
     time_limit: float = 4.0,
+    alternatives: bool = False,
+    alternatives_time_limit: float = 4.0,
 ) -> tuple[Project, DecompositionResult]:
-    """Choose an exact-rank, topology-compatible MPI decomposition."""
+    """Choose an exact-rank, topology-compatible MPI decomposition.
+
+    The returned project keeps its cell counts. With *alternatives*, the result
+    also lists cell-count changes within the project's ``ng_tolerance`` that
+    balance better; ``apply_balance_alternative`` applies one.
+    """
 
     project = copy_project(project)
     target = project.decomposition.target_ranks
@@ -211,7 +239,196 @@ def optimize_project_decomposition(
             result.imbalance,
             deadline=monotonic() + min(1.5, max(0.2, time_limit / 2.0)),
         )
+    result.ng_tolerance = project.decomposition.ng_tolerance
+    if alternatives:
+        _add_balance_alternatives(project, topology, result, deadline=monotonic() + max(0.05, alternatives_time_limit))
     return project, result
+
+
+def describe_project_decomposition(project: Project | dict[str, Any]) -> DecompositionResult:
+    """Report the balance of the project's current block dims."""
+
+    project = copy_project(project)
+    target = project.decomposition.target_ranks
+    result = DecompositionResult(target_ranks=target, ng_tolerance=project.decomposition.ng_tolerance)
+    topology = build_topology(project.blocks, project.periodic_axes)
+    result.add(*topology.issues)
+    if not project.blocks or not result.ok:
+        result.add(error("decomposition", "cannot describe the decomposition of this project"))
+        return result
+    candidates = {block.id: _decomposition_candidate(block, tuple(block.dims)) for block in project.blocks}
+    split_axes = tuple(axis for axis in range(3) if any(block.dims[axis] > 1 for block in project.blocks))
+    result.target_ranks = target or sum(candidate.ranks for candidate in candidates.values())
+    _fill_decomposition_result(result, project.blocks, topology.connections, candidates, split_axes)
+    if target and result.total_ranks != target:
+        result.add(error("decomposition", f"decomposition uses {result.total_ranks} MPI ranks, expected {target}"))
+    return result
+
+
+def _add_balance_alternatives(
+    project: Project,
+    topology: Topology,
+    result: DecompositionResult,
+    *,
+    deadline: float,
+) -> None:
+    target = result.target_ranks
+    decomposition = project.decomposition
+
+    def collect(
+        windows: dict[int, tuple[tuple[int, int], ...]],
+        incumbent: float,
+        until: float,
+    ) -> tuple[list[tuple[float, dict[int, tuple[int, int, int]]]], bool]:
+        collected: list[tuple[float, dict[int, tuple[int, int, int]]]] = []
+        dropped = False
+        sets = _active_axis_sets(project, target)
+        for index, active_axes in enumerate(sets):
+            outcome = _search_decomposition(
+                project.blocks,
+                topology.connections,
+                target,
+                active_axes,
+                min_local_cells=decomposition.min_local_cells,
+                max_local_aspect=decomposition.max_local_aspect,
+                node_limit=200_000,
+                deadline=monotonic() + max(0.02, (until - monotonic()) / (2 * (len(sets) - index))),
+                collect=MAX_PARTITION_SETS + 1,
+                ng_windows=windows,
+                incumbent=incumbent,
+            )
+            collected.extend(outcome.collected)
+            dropped = dropped or outcome.dropped or outcome.truncated
+        collected.sort(key=lambda item: item[0])
+        return collected, dropped
+
+    search = search_balance_alternatives(
+        project,
+        topology.connections,
+        target,
+        result.imbalance,
+        collect,
+        deadline=deadline,
+    )
+    result.fixed_components = search.fixed_components
+    result.alternatives_optimal = search.optimal
+    result.original_counts = [
+        {
+            "axis": AXIS_NAMES[component.axis],
+            "blockIds": list(component.block_ids),
+            "original": component.origin,
+            "current": component.current,
+        }
+        for component in search.components
+        if component.origin != component.current
+    ]
+    if not search.points:
+        return
+    base_errors = set(check_project(project, topology=topology).errors)
+    seen: set[str] = set()
+    for point in search.points:
+        alternative = _balance_alternative(project, topology, search, point, base_errors, deadline)
+        if alternative is None or alternative["imbalance"] > result.imbalance - 1.0e-9:
+            continue
+        key = repr(alternative["blocks"])
+        if key not in seen:
+            seen.add(key)
+            result.alternatives.append(alternative)
+    result.alternatives.sort(key=lambda item: (item["maxChange"], item["imbalance"]))
+
+
+def _balance_alternative(
+    project: Project,
+    topology: Topology,
+    search: BalanceSearch,
+    point: BalancePoint,
+    base_errors: set[str],
+    deadline: float,
+) -> dict[str, Any] | None:
+    """Describe one balance point as the project Balance would then produce."""
+
+    candidate = copy_project(project)
+    by_id = {block.id: block for block in candidate.blocks}
+    changes = []
+    for component, count in zip(search.components, point.counts):
+        for block_id in component.block_ids:
+            by_id[block_id].ng[component.axis] = count
+        if count != component.current:
+            change = {
+                "axis": AXIS_NAMES[component.axis],
+                "blockIds": list(component.block_ids),
+                "from": component.current,
+                "to": count,
+            }
+            if component.origin != component.current:
+                change["original"] = component.origin
+            changes.append(change)
+    proposed = {block.id: list(block.ng) for block in candidate.blocks}
+    try:
+        candidate.validate()
+    except ValueError:
+        return None
+    if any(block.ng != proposed[block.id] for block in candidate.blocks):
+        return None
+
+    # Prefer what Balance itself picks for the new counts, unless it balances worse.
+    target = candidate.decomposition.target_ranks
+    chosen: dict[int, _DecompositionCandidate] | None = None
+    chosen_axes: tuple[int, ...] = ()
+    best_score = None
+    for active_axes in _active_axis_sets(candidate, target):
+        outcome = _search_decomposition(
+            candidate.blocks,
+            topology.connections,
+            target,
+            active_axes,
+            min_local_cells=candidate.decomposition.min_local_cells,
+            max_local_aspect=candidate.decomposition.max_local_aspect,
+            node_limit=50_000,
+            deadline=min(deadline, monotonic() + 0.5),
+        )
+        if outcome.candidates is not None and (best_score is None or outcome.score < best_score):
+            best_score, chosen, chosen_axes = outcome.score, outcome.candidates, active_axes
+    if chosen is None or best_score[1] > point.imbalance * (1.0 + 1.0e-9):
+        chosen = {block_id: _decomposition_candidate(by_id[block_id], dims) for block_id, dims in point.dims.items()}
+        chosen_axes = tuple(axis for axis in range(3) if any(dims[axis] > 1 for dims in point.dims.values()))
+        if any(
+            not _candidate_meets_constraints(
+                by_id[block_id],
+                item,
+                candidate.decomposition.min_local_cells,
+                candidate.decomposition.max_local_aspect,
+            )
+            for block_id, item in chosen.items()
+        ):
+            return None
+    for block_id, item in chosen.items():
+        by_id[block_id].dims = list(item.dims)
+
+    check = check_project(candidate, topology=topology)
+    if not set(check.errors) <= base_errors:
+        return None
+    metrics = DecompositionResult(target_ranks=target)
+    _fill_decomposition_result(metrics, candidate.blocks, topology.connections, chosen, chosen_axes)
+    old_cells = sum(prod(block.ng) for block in project.blocks)
+    new_cells = sum(prod(block.ng) for block in candidate.blocks)
+    return {
+        "imbalance": metrics.imbalance,
+        # Measured from the original counts, as the tolerance is.
+        "maxChange": point.change,
+        "exact": all(block.ng[axis] % block.dims[axis] == 0 for block in candidate.blocks for axis in range(3)),
+        "totalCells": new_cells,
+        "cellChange": new_cells / old_cells - 1.0,
+        "maxInterfaceRatio": max((item["ratio"] for item in check.interfaces), default=1.0),
+        "maxLocalAspect": metrics.max_local_aspect,
+        "minLocalExtent": metrics.min_local_extent,
+        "activeAxes": list(metrics.active_axes),
+        "changes": changes,
+        "blocks": [
+            {"blockId": block.id, "ng": list(block.ng), "dims": list(block.dims)}
+            for block in sorted(candidate.blocks, key=lambda item: item.id)
+        ],
+    }
 
 
 def _active_axis_sets(project: Project, target: int) -> list[tuple[int, ...]]:
@@ -238,10 +455,42 @@ def _search_decomposition(
     node_limit: int,
     deadline: float,
     first_only: bool = False,
+    collect: int = 0,
+    ng_windows: dict[int, tuple[tuple[int, int], ...]] | None = None,
+    incumbent: float = float("inf"),
 ) -> _SearchOutcome:
+    """Branch and bound over per-block dims for exactly *target* ranks.
+
+    By default this finds the best assignment for the current cell counts.
+
+    With *collect* and *ng_windows* (the lowest and highest cell count each
+    block axis may take), it instead gathers up to *collect* assignments that
+    could balance best once cell counts move within their windows, ranked by a
+    lower bound on that imbalance. Assignments whose bound exceeds an imbalance
+    already reachable without changes (*incumbent*, or a better one found on
+    the way) cannot win and are pruned. The local aspect limit is left to the
+    caller, since it depends on the final cell counts.
+    """
+
     outcome = _SearchOutcome()
     nblocks = len(blocks)
-    if not active_axes:
+    collecting = collect > 0 and ng_windows is not None
+    heap: list[tuple[float, int, dict[int, tuple[int, int, int]]]] = []
+    reachable = incumbent
+
+    def limit(block: Block, axis: int) -> int:
+        return ng_windows[block.id][axis][1] if collecting else block.ng[axis]
+
+    def load(block_id: int, candidate: _DecompositionCandidate) -> float:
+        if not collecting:
+            return candidate.max_cells
+        # The smallest largest-local-box this split can reach inside the windows.
+        return prod(
+            max(-(-low // dims), min_local_cells) if dims > 1 else low
+            for (low, _), dims in zip(ng_windows[block_id], candidate.dims)
+        )
+
+    if not active_axes and not collecting:
         if target == nblocks:
             candidates = {block.id: _decomposition_candidate(block, (1, 1, 1)) for block in blocks}
             if not all(
@@ -254,7 +503,7 @@ def _search_decomposition(
         return outcome
 
     capacity = sum(
-        prod(max(1, block.ng[axis] // min_local_cells) for axis in active_axes)
+        prod(max(1, limit(block, axis) // min_local_cells) for axis in active_axes)
         for block in blocks
     )
     if target > capacity:
@@ -263,6 +512,9 @@ def _search_decomposition(
     max_block_ranks = target - nblocks + 1
     total_cells = sum(prod(block.ng) for block in blocks)
     mean_cells = total_cells / target
+    load_scale = (
+        sum(prod(high for _, high in ng_windows[block.id]) for block in blocks) / target if collecting else mean_cells
+    )
     candidates: dict[int, list[_DecompositionCandidate]] = {}
     for block in blocks:
         ideal = target * prod(block.ng) / total_cells
@@ -272,6 +524,7 @@ def _search_decomposition(
             max_block_ranks,
             min_local_cells=min_local_cells,
             max_local_aspect=max_local_aspect,
+            ng_limit=tuple(high for _, high in ng_windows[block.id]) if collecting else None,
         )
         block_candidates.sort(key=lambda candidate: _candidate_priority(block, candidate, ideal, mean_cells))
         candidates[block.id] = block_candidates
@@ -312,7 +565,7 @@ def _search_decomposition(
                 fixed[axis] = value
             minimum_ranks = prod(fixed.values())
             maximum_ranks = minimum_ranks * prod(
-                max(1, by_id[future_id].ng[axis] // min_local_cells)
+                max(1, limit(by_id[future_id], axis) // min_local_cells)
                 for axis in active_axes
                 if axis not in fixed
             )
@@ -321,8 +574,8 @@ def _search_decomposition(
             rank_step = gcd(rank_step, minimum_ranks)
         return minimum, maximum, rank_step
 
-    def search(position: int, ranks_used: int, current_max_cells: int) -> None:
-        nonlocal stop
+    def search(position: int, ranks_used: int, current_max_cells: float) -> None:
+        nonlocal stop, reachable
         if stop:
             return
         if outcome.nodes >= node_limit or monotonic() >= deadline:
@@ -340,6 +593,26 @@ def _search_decomposition(
                 return
             if any(not any(candidate.dims[axis] > 1 for candidate in assigned.values()) for axis in active_axes):
                 return
+            if collecting:
+                if all(
+                    _candidate_meets_constraints(by_id[block_id], candidate, min_local_cells, max_local_aspect)
+                    for block_id, candidate in assigned.items()
+                ):
+                    score = _decomposition_score(blocks, connections, assigned, target)
+                    reachable = min(reachable, score[1])
+                    if outcome.score is None or score < outcome.score:
+                        outcome.score = score
+                        outcome.candidates = dict(assigned)
+                bound = current_max_cells / load_scale
+                if bound <= reachable * (1.0 + _BOUND_SLACK):
+                    entry = (-bound, -outcome.nodes, {block_id: c.dims for block_id, c in assigned.items()})
+                    if len(heap) < collect:
+                        heapq.heappush(heap, entry)
+                    else:
+                        outcome.dropped = True
+                        if bound < -heap[0][0]:
+                            heapq.heapreplace(heap, entry)
+                return
             score = _decomposition_score(blocks, connections, assigned, target)
             if outcome.score is None or score < outcome.score:
                 outcome.score = score
@@ -347,7 +620,14 @@ def _search_decomposition(
             if first_only:
                 stop = True
             return
-        if outcome.score is not None and current_max_cells / mean_cells > outcome.score[0]:
+        if collecting:
+            bound = current_max_cells / load_scale
+            if bound > reachable * (1.0 + _BOUND_SLACK):
+                return
+            if len(heap) >= collect and bound >= -heap[0][0]:
+                outcome.dropped = True
+                return
+        elif outcome.score is not None and current_max_cells / mean_cells > outcome.score[0]:
             return
 
         block_id = order[position]
@@ -360,13 +640,17 @@ def _search_decomposition(
             search(
                 position + 1,
                 ranks_used + candidate.ranks,
-                max(current_max_cells, candidate.max_cells),
+                max(current_max_cells, load(block_id, candidate)),
             )
             assigned.pop(block_id, None)
             if stop and (first_only or outcome.truncated):
                 return
 
     search(0, 0, 0)
+    kept = sorted(
+        (-negative, -order, dims) for negative, order, dims in heap if -negative <= reachable * (1.0 + _BOUND_SLACK)
+    )
+    outcome.collected = [(bound, dims) for bound, _, dims in kept]
     return outcome
 
 
@@ -377,18 +661,28 @@ def _block_decomposition_candidates(
     *,
     min_local_cells: int,
     max_local_aspect: float,
+    ng_limit: tuple[int, int, int] | None = None,
 ) -> list[_DecompositionCandidate]:
     dims = [1, 1, 1]
     result: list[_DecompositionCandidate] = []
+    cells = block.ng if ng_limit is None else ng_limit
+
+    def admissible(candidate: _DecompositionCandidate) -> bool:
+        if ng_limit is None:
+            return _candidate_meets_constraints(block, candidate, min_local_cells, max_local_aspect)
+        # With adjustable cell counts, only the largest allowed counts matter here.
+        return all(
+            cells[axis] // candidate.dims[axis] >= min_local_cells for axis in range(3) if candidate.dims[axis] > 1
+        )
 
     def visit(position: int, ranks: int) -> None:
         if position == len(active_axes):
             candidate = _decomposition_candidate(block, tuple(dims))
-            if _candidate_meets_constraints(block, candidate, min_local_cells, max_local_aspect):
+            if admissible(candidate):
                 result.append(candidate)
             return
         axis = active_axes[position]
-        partition_limit = max(1, block.ng[axis] // min_local_cells)
+        partition_limit = max(1, cells[axis] // min_local_cells)
         upper = min(partition_limit, max_ranks // ranks)
         for value in range(1, upper + 1):
             dims[axis] = value

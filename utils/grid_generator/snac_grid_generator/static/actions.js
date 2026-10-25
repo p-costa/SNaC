@@ -196,6 +196,35 @@ export async function balanceDecomposition() {
   }
 }
 
+// Applies one cell-count alternative from the last Balance: the server sets
+// the proposed cell counts and partitions and reports the new balance.
+export async function applyBalanceAlternative(alternative) {
+  if (!alternative) return;
+  setStatus("Changing cell counts...");
+  const requestProject = projectRequestSnapshot();
+  try {
+    const payload = await postJson("/api/decompose", { project: state.project, alternative }, { allowInvalid: true });
+    if (!projectResponseIsCurrent(requestProject, "Cell-count change")) return;
+    if (!payload.ok) {
+      setStatus(payload.errors?.[0] ?? "Could not apply the cell-count change");
+      return;
+    }
+    state.project = payload.project;
+    state.decompositionResult = payload;
+    previewCache.clear();
+    state.previewSequence += 1;
+    state.lastCheck = null;
+    renderAll();
+    scheduleHistoryCommit();
+    const count = alternative.changes?.length ?? 0;
+    setStatus(`Changed ${count} cell count${count === 1 ? "" : "s"}; imbalance ${formatNumber(payload.imbalance)}`);
+    if (state.project.inferConnectivity) await updateStructure({ silent: true });
+    else await checkProject({ silent: true });
+  } catch (error) {
+    setStatus(error.message);
+  }
+}
+
 export async function applyBoundaryPreset() {
   const blockIds = selectedBlockIds();
   if (!blockIds.length) return;

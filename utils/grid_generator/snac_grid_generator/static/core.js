@@ -117,6 +117,9 @@ export function decompositionSettingEdited() {
   state.pendingRepair = null;
   state.decompositionResult = null;
   state.lastCheck = null;
+  // Settle the shorter summary while typing: re-rendering it only on change,
+  // when the field loses focus, would move the Balance button under a click.
+  renderDecompositionSummary();
 }
 
 export function projectRequestSnapshot() {

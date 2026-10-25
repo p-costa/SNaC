@@ -15,6 +15,13 @@ from snac_grid_generator import Project, export_project
 from snac_grid_generator.server import GridServer, _Handler
 
 
+def np_prod(values) -> int:
+    result = 1
+    for value in values:
+        result *= value
+    return result
+
+
 class _QuietHandler(_Handler):
     def log_message(self, fmt: str, *args) -> None:
         pass
@@ -830,6 +837,66 @@ class GridGeneratorGuiSmokeTests(unittest.TestCase):
 
         context.close()
         self.assertEqual(errors, [])
+
+    def test_balance_offers_and_applies_cell_count_changes(self) -> None:
+        context = self.browser.new_context(viewport={"width": 1440, "height": 900}, accept_downloads=True)
+        page = context.new_page()
+        errors: list[str] = []
+        page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        blocks = [
+            {"id": 1, "name": "inlet", "ng": [32, 24, 32], "lmin": [0, 1, 0], "lmax": [2, 2, 2]},
+            {"id": 2, "name": "upper", "ng": [96, 24, 32], "lmin": [2, 1, 0], "lmax": [10, 2, 2]},
+            {"id": 3, "name": "lower", "ng": [96, 24, 32], "lmin": [2, 0, 0], "lmax": [10, 1, 2]},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "step.json"
+            path.write_text(
+                json.dumps({"name": "step", "fftAxis": "z", "periodicAxes": [False, False, True], "blocks": blocks}),
+                encoding="utf-8",
+            )
+            page.goto(self.url, wait_until="load")
+            page.wait_for_selector(".block-item")
+            page.locator("#open-json").set_input_files(str(path))
+            self.expect(page.locator("#status")).to_contain_text("Loaded")
+
+        self.expect(page.locator("#ng-tolerance")).to_have_value("10")
+        page.locator("#target-ranks").fill("9")
+        page.locator("#balance-decomposition").click()
+        summary = page.locator("#decomposition-summary")
+        self.expect(summary).to_contain_text("Adjust cell counts (within 10%)")
+        self.expect(page.locator(".balance-alternative")).to_have_count(4)
+        self.expect(page.locator(".balance-alternative").nth(2)).to_contain_text("≤8.33% · imbalance 1.0707 · exact")
+        self.expect(page.locator(".balance-alternative").nth(2)).to_contain_text("upper, lower: 96 → 104")
+        page.locator(".balance-fixed summary").click()
+        self.expect(page.locator(".balance-fixed")).to_contain_text("z · all blocks · 32 · FFT axis")
+
+        page.locator(".apply-alternative").nth(2).click()
+        self.expect(page.locator("#status")).to_contain_text("Changed 4 cell counts; imbalance 1.0707")
+        self.expect(summary).to_contain_text("Cell counts changed")
+        saved = self._download_project(page)
+        self.assertEqual(sum(np_prod(block["dims"]) for block in saved["blocks"]), 9)
+        for before, after in zip(blocks, saved["blocks"]):
+            for old, new in zip(before["ng"], after["ng"]):
+                self.assertLessEqual(abs(new - old), 0.1 * old)
+        self.assertEqual([block["ng"][0] for block in saved["blocks"]], [30, 104, 104])
+
+        # Later proposals measure the tolerance from the original counts.
+        page.locator("#target-ranks").fill("6")
+        page.locator("#balance-decomposition").click()
+        self.expect(summary).to_contain_text("Adjust cell counts (within 10% of the original counts)")
+        self.expect(page.locator(".balance-alternative").first).to_contain_text("Original counts · imbalance 1.2857")
+        self.expect(summary).to_contain_text("upper, lower: 104 → 87 (original 96)")
+        page.locator("#target-ranks").fill("9")
+
+        # A zero tolerance turns the proposals off.
+        page.locator("#ng-tolerance").fill("0")
+        page.locator("#balance-decomposition").click()
+        self.expect(page.locator("#status")).to_contain_text("Balanced 9 MPI ranks")
+        self.expect(page.locator(".balance-alternative")).to_have_count(0)
+        self.assertEqual(self._download_project(page)["decomposition"]["ngTolerance"], 0)
+        self.assertEqual(errors, [])
+        context.close()
 
     def _download_project(self, page) -> dict:
         with page.expect_download() as download_info:

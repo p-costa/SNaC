@@ -13,7 +13,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from .case_import import import_case
-from .decomposition import optimize_project_decomposition
+from .balance import apply_balance_alternative
+from .decomposition import describe_project_decomposition, optimize_project_decomposition
 from .export import export_project
 from .geometry import align_blocks, duplicate_blocks, mirror_blocks, snap_block_to_face
 from .grid import AXIS_NAMES, axis_grid_arrays, axis_grid_diagnostics
@@ -209,7 +210,14 @@ class _Handler(BaseHTTPRequestHandler):
                 self._send_json({**result.to_dict(), "project": project.to_dict()})
                 return
             if path == "/api/decompose":
-                project, result = optimize_project_decomposition(project)
+                alternative = payload.get("alternative")
+                if alternative is not None:
+                    # Apply a cell-count alternative from an earlier Balance.
+                    project = apply_balance_alternative(project, alternative)
+                    result = describe_project_decomposition(project)
+                    self._send_json({**result.to_dict(), "project": project.to_dict(), "applied": True})
+                    return
+                project, result = optimize_project_decomposition(project, alternatives=True)
                 self._send_json({**result.to_dict(), "project": project.to_dict()})
                 return
             if path == "/api/preview":

@@ -9,7 +9,13 @@ import shutil
 import sys
 from pathlib import Path
 
-from snac_grid_generator import Project, export_project
+from snac_grid_generator import (
+    Project,
+    apply_balance_alternative,
+    export_project,
+    optimize_project_decomposition,
+    update_project_structure,
+)
 
 
 def two_block_project(z_axis, x_axis=None, fft_axis=None):
@@ -30,6 +36,29 @@ def two_block_project(z_axis, x_axis=None, fft_axis=None):
             }
         )
     return Project.from_dict({"periodicAxes": [False, False, True], "fftAxis": fft_axis, "blocks": blocks})
+
+
+def balanced_step(ranks):
+    """A backward-facing step whose cell counts were adjusted to balance *ranks* ranks."""
+
+    project = Project.from_dict(
+        {
+            "name": "balanced-step",
+            "fftAxis": "z",
+            "periodicAxes": [False, False, True],
+            "decomposition": {"targetRanks": ranks},
+            "blocks": [
+                {"id": 1, "name": "inlet", "ng": [32, 24, 16], "lmin": [0, 1, 0], "lmax": [2, 2, 2]},
+                {"id": 2, "name": "upper", "ng": [96, 24, 16], "lmin": [2, 1, 0], "lmax": [10, 2, 2]},
+                {"id": 3, "name": "lower", "ng": [96, 24, 16], "lmin": [2, 0, 0], "lmax": [10, 1, 2]},
+            ],
+        }
+    )
+    project, _ = update_project_structure(project)
+    project, result = optimize_project_decomposition(project, alternatives=True)
+    best = min(result.alternatives, key=lambda item: item["imbalance"])
+    assert best["imbalance"] < result.imbalance - 0.1, (result.imbalance, best)
+    return apply_balance_alternative(project, best)
 
 
 def main(root):
@@ -55,6 +84,10 @@ def main(root):
     shutil.copytree(legacy, no_file)
     for path in (no_file / "grid").glob("grid_x_*"):
         path.unlink()
+
+    # Cell counts changed so that 9 ranks share the load almost evenly; SNaC
+    # must run it on exactly 9 ranks with the generated grids.
+    export_project(balanced_step(9), root / "balanced_step")
 
 
 if __name__ == "__main__":
